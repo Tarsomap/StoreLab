@@ -4,7 +4,9 @@
 > Para todo mundo do squad que vai escrever código. Você não precisa saber tudo de Git para começar — só siga esse guia.
 >
 > **O que você vai aprender:**
-> Como criar uma branch, commitar seu código, abrir um Pull Request e trabalhar sem bagunçar o repositório dos outros.
+> Como criar uma branch, commitar seu código, abrir um Pull Request e trabalhar sem bagançar o repositório dos outros.
+
+> ⚠️ **Importante:** este guia é uma versão didática do [`CONTRIBUTING.md`](../../CONTRIBUTING.md), que fica na raiz do repositório. O CONTRIBUTING.md é a referência oficial — em caso de conflito entre os dois documentos, ele prevalece.
 
 ---
 
