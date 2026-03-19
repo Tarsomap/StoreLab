@@ -21,7 +21,7 @@
 | RF-09 | Real-time collaborative PO filling via WebSocket | 🔴 Essential |
 | RF-10 | Real-time cash balance calculation during PO filling | 🔴 Essential |
 | RF-11 | Real-time projected EBITDA during PO filling | 🔴 Essential |
-| RF-12 | Alert and interest (12%/month) when cash exceeds R$700k | 🔴 Essential |
+| RF-12 | Alert and interest (1%/month) when cash exceeds R$700k | 🔴 Essential |
 | RF-13 | Store manager confirms PO to unlock round | 🔴 Essential |
 | RF-14 | Engine calculates CSAT from operators + quiz score | 🔴 Essential |
 | RF-15 | Engine distributes demand based on Price, Availability and CSAT ranking (1-4) | 🔴 Essential |
@@ -32,11 +32,12 @@
 | RF-20 | Display full PO breakdown at end of session | 🔴 Essential |
 | RF-21 | Facilitator moves up to 2 players between stores after round 1 | 🔴 Essential |
 | RF-22 | Reconfiguration with cash constraints (no sales revenue reuse) | 🔴 Essential |
-| RF-23 | Pricing scenario simulator before confirming PO | 🟡 Desirable |
-| RF-24 | Configurable random event probabilities | 🟡 Desirable |
-| RF-25 | Alerts for high aging or critical cash level | 🟡 Desirable |
-| RF-26 | Export results to PDF or Excel | 🟡 Desirable |
-| RF-27 | Session history for facilitator | 🟡 Desirable |
+| RF-23 | Facilitator creates quiz questions per session; players answer before confirming PO | 🔴 Essential |
+| RF-24 | Pricing scenario simulator before confirming PO | 🟡 Desirable |
+| RF-25 | Configurable random event probabilities | 🟡 Desirable |
+| RF-26 | Alerts for high aging or critical cash level | 🟡 Desirable |
+| RF-27 | Export results to PDF or Excel | 🟡 Desirable |
+| RF-28 | Session history for facilitator | 🟡 Desirable |
 
 ---
 
@@ -79,7 +80,7 @@
 ### Epic 3 — Operational Plan (PO)
 | ID | User Story | Priority |
 |---|---|---|
-| US-10 | As supply manager, I want to define stock purchased per category | 🔴 MVP |
+| US-10 | As supply manager, I want to define stock purchased per category (in units) | 🔴 MVP |
 | US-11 | As commercial manager, I want to define pricing margin per category | 🔴 MVP |
 | US-12 | As operational manager, I want to define number of cashier and service operators | 🔴 MVP |
 | US-13 | As service manager, I want to select which CAPEXs to implement | 🔴 MVP |
@@ -87,28 +88,34 @@
 | US-15 | As store manager, I want to see projected EBITDA in real time | 🔴 MVP |
 | US-16 | As store manager, I want to confirm the configuration to unlock the round | 🔴 MVP |
 
-### Epic 4 — Calculation Engine & Rounds
+### Epic 4 — Quiz
 | ID | User Story | Priority |
 |---|---|---|
-| US-17 | System must calculate CSAT from operators and quiz | 🔴 MVP |
-| US-18 | System must distribute demand between stores based on Price, Availability and CSAT | 🔴 MVP |
-| US-19 | System must calculate Breakage and Aging on unsold stock | 🔴 MVP |
-| US-20 | System must calculate taxes, payroll, maintenance and licenses for EBITDA | 🔴 MVP |
-| US-21 | System must apply SLA events for unimplemented CAPEXs | 🔴 MVP |
-| US-22 | System must process player transfer between stores (max 2 per store) | 🔴 MVP |
+| US-17 | As a facilitator, I want to create quiz questions for a session so players can be evaluated on business knowledge | 🔴 MVP |
+| US-18 | As a player, I want to answer the quiz questions before confirming the PO so my score impacts the store's CSAT | 🔴 MVP |
 
-### Epic 5 — Results & Ranking
+### Epic 5 — Calculation Engine & Rounds
 | ID | User Story | Priority |
 |---|---|---|
-| US-23 | As a player, I want to see my store's partial results after each round | 🔴 MVP |
-| US-24 | As a player, I want to see comparative ranking of all stores by % EBITDA | 🔴 MVP |
-| US-25 | As a facilitator, I want to see full PO breakdown per store at the end | 🔴 MVP |
+| US-19 | System must calculate CSAT from operators and quiz score | 🔴 MVP |
+| US-20 | System must distribute demand between stores based on Price, Availability and CSAT | 🔴 MVP |
+| US-21 | System must calculate Breakage and Aging on unsold stock | 🔴 MVP |
+| US-22 | System must calculate taxes, payroll, maintenance and licenses for EBITDA | 🔴 MVP |
+| US-23 | System must apply SLA events for unimplemented CAPEXs | 🔴 MVP |
+| US-24 | System must process player transfer between stores (max 2 per store) | 🔴 MVP |
 
-### Epic 6 — Differentiators (Post-MVP)
+### Epic 6 — Results & Ranking
 | ID | User Story | Priority |
 |---|---|---|
-| US-26 | As store manager, I want to simulate pricing scenarios before confirming PO | 🟡 Differentiator |
-| US-27 | As facilitator, I want to configure random event probabilities | 🟡 Differentiator |
-| US-28 | As player, I want alerts for high aging or critical cash | 🟡 Differentiator |
-| US-29 | As facilitator, I want to export final results to PDF/Excel | 🟡 Differentiator |
-| US-30 | As facilitator, I want to access previous session history | 🟡 Differentiator |
+| US-25 | As a player, I want to see my store's partial results after each round | 🔴 MVP |
+| US-26 | As a player, I want to see comparative ranking of all stores by % EBITDA | 🔴 MVP |
+| US-27 | As a facilitator, I want to see full PO breakdown per store at the end | 🔴 MVP |
+
+### Epic 7 — Differentiators (Post-MVP)
+| ID | User Story | Priority |
+|---|---|---|
+| US-28 | As store manager, I want to simulate pricing scenarios before confirming PO | 🟡 Differentiator |
+| US-29 | As facilitator, I want to configure random event probabilities | 🟡 Differentiator |
+| US-30 | As player, I want alerts for high aging or critical cash | 🟡 Differentiator |
+| US-31 | As facilitator, I want to export final results to PDF/Excel | 🟡 Differentiator |
+| US-32 | As facilitator, I want to access previous session history | 🟡 Differentiator |
