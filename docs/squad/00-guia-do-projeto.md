@@ -23,9 +23,14 @@ Pensa assim: é como um **SimCity, mas de supermercado**, e com várias equipes 
 O jogo é dividido em **etapas bem definidas**. Veja o fluxo completo:
 
 ### Etapa 1 — Configuração inicial
-Cada equipe recebe uma loja virtual com **R$ 700.000 de caixa** (dinheiro disponível para gastar). Com esse dinheiro, elas decidem:
-- Quanto estoque comprar (de 4 categorias de produtos)
-- Que preço cobrar por cada categoria
+Antes do jogo começar, o **Facilitador** cria a sessão e define os parâmetros iniciais:
+- **Caixa inicial** de cada loja (padrão: R$ 700.000, mas configurável)
+- **Estoque disponível** por categoria (o teto máximo que cada loja pode comprar)
+- **Demanda esperada** por categoria (quantos clientes serão distribuídos na sessão)
+
+Com esses parâmetros definidos, cada equipe então decide **como usar** o caixa disponível:
+- Quanto estoque comprar de cada categoria (em unidades)
+- Que margem de preço aplicar em cada categoria
 - Quantos funcionários contratar
 - Se vão fazer investimentos na loja (chamados de **CAPEX** — explicado abaixo)
 
@@ -51,11 +56,11 @@ O sistema exibe o **ranking final** com o % de lucro de cada loja. A loja com ma
 
 | Termo | O que significa em português simples |
 |---|---|
-| **Facilitador** | A pessoa que organiza e controla o jogo. Cria as salas, inicia as rodadas, vê tudo. Pense como um "mestre do jogo". |
+| **Facilitador** | A pessoa que organiza e controla o jogo. Cria as salas, define os parâmetros da sessão, inicia as rodadas, vê tudo. Pense como um "mestre do jogo". |
 | **Jogador** | Participante do jogo. Cada jogador tem um papel específico dentro da loja. |
 | **Sessão** | Uma partida completa do jogo, com início, meio e fim. Pode ter até 4 lojas disputando. |
 | **Loja** | A equipe do jogo. Cada loja tem 5 jogadores, cada um com um papel diferente. |
-| **PO (Plano Operacional)** | O formulário de decisões de cada rodada. É onde cada jogador registra suas escolhas (estoque, preço, equipe). |
+| **PO (Plano Operacional)** | O formulário de decisões de cada rodada. É onde cada jogador registra suas escolhas (estoque, preço, equipe). Os valores digitados são reais e definidos pelos jogadores. |
 | **Rodada** | Um ciclo de vendas. O facilitador inicia, as lojas configuram o PO, o sistema calcula, os resultados aparecem. |
 | **EBITDA** | O "placar" do jogo — é o lucro da loja depois de pagar todas as despesas. Quem tiver maior % de EBITDA no final vence. |
 | **CSAT** | A nota de atendimento da loja. Calculada com base em quantos funcionários a loja tem e na nota do quiz de conhecimento. |
@@ -63,8 +68,9 @@ O sistema exibe o **ranking final** com o % de lucro de cada loja. A loja com ma
 | **SLA** | Penalidade por não ter feito um CAPEX. Se a loja não investiu em segurança e acontece um roubo, ela perde dinheiro — isso é o SLA. |
 | **Aging** | Prejuízo com produtos que ficaram parados no estoque por tempo demais. Ex: frutas que apodreceram porque a loja comprou mais do que vendeu. |
 | **Quebras** | Produtos perdidos ou danificados (ex: uma caixa de ovos que caiu). Comum em perecíveis. |
-| **Demanda** | A quantidade de clientes que vão comprar em cada loja. Calculada automaticamente pelo sistema com base nas decisões de cada equipe. |
-| **Seed** | Dados fixos que o sistema usa como base: custo dos produtos, taxas de imposto, taxas de quebra e aging. São os mesmos para todas as lojas. |
+| **Demanda** | A quantidade de clientes que vão comprar em cada loja. O total da sessão é definido pelo Facilitador; o sistema distribui esse total entre as lojas com base nas decisões de cada equipe. |
+| **Seed** | Dados fixos que o sistema usa como base de cálculo: custo unitário dos produtos, taxas de imposto, taxas de quebra e aging. São os mesmos para todas as lojas e não mudam durante o jogo. |
+| **Parâmetros da Sessão** | Valores configurados pelo Facilitador ao criar a sessão: caixa inicial, estoque disponível por categoria e demanda esperada por categoria. Esses valores são reais e definem o cenário do jogo. |
 | **JWT** | Token de segurança que identifica o usuário logado. É o que garante que só quem está na sessão consegue acessar a loja. |
 | **WebSocket** | Tecnologia que permite que a tela atualize em tempo real sem precisar recarregar a página. Usamos para que todos os jogadores da loja vejam as mudanças instantaneamente. |
 | **NestJS** | O framework (estrutura) que vamos usar para construir o backend (o servidor). |
@@ -80,7 +86,7 @@ O sistema exibe o **ranking final** com o % de lucro de cada loja. A loja com ma
 É quem organiza a partida. Normalmente um professor, treinador ou líder de equipe.
 
 O que ele faz no sistema:
-- Cria a sessão e define o dinheiro inicial de cada loja
+- Cria a sessão e **define os parâmetros reais**: caixa inicial, estoque disponível e demanda esperada por categoria
 - Cria as 4 lojas e gera o código de acesso de cada uma
 - Inicia e avança as rodadas
 - Vê o status de todas as lojas em tempo real
@@ -93,8 +99,8 @@ Cada loja tem **exatamente 5 jogadores**, cada um com uma responsabilidade difer
 | Papel | O que decide no PO |
 |---|---|
 | **Gerente da Loja** | Tem a visão geral, confirma o PO para liberar a rodada |
-| **Gerente de Abastecimento** | Decide quanto estoque comprar de cada categoria |
-| **Gerente Comercial** | Define o preço de venda de cada categoria |
+| **Gerente de Abastecimento** | Decide quantas unidades de estoque comprar de cada categoria |
+| **Gerente Comercial** | Define a margem de preço (%) de cada categoria |
 | **Gerente Operacional** | Decide quantos funcionários de caixa e serviço contratar |
 | **Gerente de Serviços** | Escolhe quais CAPEXs (investimentos) serão feitos |
 
@@ -104,14 +110,19 @@ Cada loja tem **exatamente 5 jogadores**, cada um com uma responsabilidade difer
 
 ## 5. As 4 categorias de produtos
 
-Cada loja vende produtos de 4 categorias. Cada categoria tem características diferentes:
+Cada loja vende produtos de 4 categorias. Para cada categoria existem dois tipos de valor:
 
-| Categoria | Exemplos de produtos | Ponto de atenção |
-|---|---|---|
-| **Perecíveis** | Frutas, laticínios, carnes | Alta taxa de quebra e aging — comprar demais prejudica muito |
-| **Mercearia** | Arroz, feijão, massas | Baixo risco, mas margem pequena |
-| **Eletro** | Eletrodomésticos, eletrônicos | Produto caro, baixa quebra, mas aging alto (tecnologia envelhece) |
-| **Hipel** | Produtos de limpeza e higiene | Risco médio, estável |
+- **Seed (constantes do sistema):** custo unitário, taxa de imposto, taxa de quebra, taxa de aging. Esses valores são fixos e iguais para todas as lojas.
+- **Decisões dos jogadores:** quantidade de estoque a comprar (em unidades) e margem de preço (%). Esses valores são preenchidos no PO a cada rodada.
+
+| Categoria | Custo Unit. | Imposto | Quebra | Aging | Ponto de atenção |
+|---|---|---|---|---|---|
+| **Perecíveis** | R$ 8,00 | 9,25% | 3,0% | 2,0% | Alta taxa de quebra e aging — comprar demais prejudica muito |
+| **Mercearia** | R$ 5,00 | 7,65% | 1,0% | 0,0% | Baixo risco, mas margem pequena |
+| **Eletro** | R$ 120,00 | 12,50% | 0,2% | 5,0% | Produto caro, baixa quebra, mas aging alto (tecnologia envelhece) |
+| **Hipel** | R$ 45,00 | 7,65% | 0,5% | 1,0% | Risco médio, estável |
+
+> 📌 **Nota de implementação:** os valores de seed são carregados via `src/seed/seed.ts` e não devem ser hardcoded em nenhuma outra parte do sistema.
 
 ---
 
@@ -147,7 +158,7 @@ Cada CAPEX não realizado tem uma **chance de gerar um evento negativo** durante
 Uma **plataforma web** que digitaliza esse jogo. Os principais módulos são:
 
 1. **Login e acesso** — cadastro, autenticação, diferenciação de perfis
-2. **Gestão de sessão** — criar partida, criar lojas, controlar rodadas
+2. **Gestão de sessão** — criar partida com parâmetros reais, criar lojas, controlar rodadas
 3. **Plano Operacional** — a tela onde os jogadores tomam as decisões em tempo real
 4. **Motor de cálculo** — o cérebro do sistema: processa todas as decisões e calcula o resultado
 5. **Resultados e ranking** — exibe os resultados de cada rodada e o ranking final
