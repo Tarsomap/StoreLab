@@ -1,6 +1,11 @@
 # Entrega Parcial — MVP
 **Residência em Software II | Squad 14**
 
+**EMPRESA:** Varejo Simulado (Simulação de Gestão de Loja)  
+**SQUAD:** 14  
+**DATA DE ENTREGA:** 19 de março de 2026  
+**STATUS:** Entrega Parcial (Planejamento + Arquitetura + Backlog Detalhado)
+
 ---
 
 ## 1. Descrição do MVP
@@ -84,8 +89,181 @@ Plataforma gamificada de simulação de gestão de loja onde equipes tomam decis
 | US-29 | Diferenciais | Como facilitador, quero exportar o resultado final em PDF/Excel | 🟡 Diferencial |
 | US-30 | Diferenciais | Como facilitador, quero acessar o histórico de sessões anteriores | 🟡 Diferencial |
 
-### 2.2 Critérios de Aceitação
-> A ser detalhado a partir da Semana 5, com o início do desenvolvimento iterativo.
+### 2.2 Critérios de Aceitação Detalhados (MVP)
+
+#### **US-01: Facilitador criar conta**
+- [ ] Formulário com campos: nome, e-mail, senha (min 8 caracteres)
+- [ ] Validação de e-mail único (erro se duplicado)
+- [ ] Senha armazenada com hash bcrypt (nunca plain text)
+- [ ] Redirecionamento para dashboard após sucesso
+- [ ] Mensagem de erro clara em caso de falha
+
+#### **US-02: Usuário fazer login**
+- [ ] Login com e-mail + senha
+- [ ] JWT gerado válido por 24h, Refresh Token válido por 7 dias
+- [ ] Redirect para `/dashboard` se facilitador, `/lobby` se jogador
+- [ ] Mensagem de erro se credenciais inválidas
+- [ ] Botão "Lembrar-me" opcional (14 dias)
+
+#### **US-03: Facilitador convidar jogadores**
+- [ ] Gera código único de 6 caracteres (ex: ABC123) por sessão
+- [ ] Link shareable: `https://game.com/join?code=ABC123`
+- [ ] Exibe QR code com o link
+- [ ] Contador de jogadores já inscritos
+- [ ] Opção de revogar código e gerar novo
+
+#### **US-04: Jogador entrar em sessão**
+- [ ] Acessa via link/código ou manualmente
+- [ ] Exibe nome da sessão e facilitador
+- [ ] Dropdown para escolher papel (STORE_MANAGER, SUPPLY_MANAGER, etc.)
+- [ ] Validação: não pode ter 2 pessoas com mesmo papel na mesma loja
+- [ ] Após confirmar, redireciona para lobby da loja
+
+#### **US-05: Facilitador criar sessão**
+- [ ] Formulário: nome da sessão, caixa inicial (padrão R$ 700k), estoque por categoria, demanda esperada
+- [ ] Seed de categorias carregado (PERECIVEIS, MERCEARIA, ELETRO, HIPEL)
+- [ ] Validação: caixa ≥ R$ 500k, demanda ≥ 100 unidades
+- [ ] Status inicial: SETUP
+- [ ] Redirect para página de gerenciamento da sessão
+
+#### **US-06: Facilitador criar 4 lojas**
+- [ ] Interface para nomear as 4 lojas (ex: "Loja Centro", "Loja Norte")
+- [ ] Atribuição automática de IDs
+- [ ] Exibição de status de cada loja (jogadores, PO confirmado)
+- [ ] Botão para gerar novo código por loja se necessário
+
+#### **US-07: Facilitador iniciar e avançar rodadas**
+- [ ] Botão "Iniciar Rodada 1" apenas quando todas as lojas confirmaram PO
+- [ ] Progresso visível: ROUND_1 → RECONFIG → ROUND_2 → ROUND_3 → FINISHED
+- [ ] Avançar apenas após 10 segundos (para UI update)
+- [ ] Botão "Pausar" disponível durante execução
+
+#### **US-08: Facilitador visualizar status em tempo real**
+- [ ] Dashboard mostra 4 cards de loja
+- [ ] Por loja: nome, gerente, % PO confirmado, EBITDA projetado, ranking atual
+- [ ] Atualiza a cada 2 segundos via WebSocket
+- [ ] Indicadores visuais: cores (verde ✓, amarelo ⚠, vermelho ✗)
+
+#### **US-09: Facilitador encerrar sessão**
+- [ ] Exibe ranking final por % EBITDA (maior para menor)
+- [ ] Breakdown por loja: receita, custos, EBITDA, % EBITDA
+- [ ] Botão "Exportar" (PDF ou Excel)
+- [ ] Botão "Iniciar Nova Sessão"
+- [ ] Status muda para FINISHED
+
+#### **US-10: Gerente abastecimento definir estoque**
+- [ ] Tabela: [Categoria | Estoque Disponível | Comprado | Saldo]
+- [ ] Inputs numéricos para compra por categoria
+- [ ] Cálculo automático: "Caixa Consumido = Σ(Comprado × Unit_Cost)"
+- [ ] Validação: Comprado ≤ Saldo disponível
+- [ ] Atualização em tempo real no caixa do Gerente
+
+#### **US-11: Gerente comercial definir margem**
+- [ ] Tabela: [Categoria | Unit Cost | Margem Atual (%) | Novo Preço]
+- [ ] Slider ou input para margem (0-80%)
+- [ ] Cálculo automático: Preço = Unit_Cost × (1 + Margem%)
+- [ ] Indicador: "Risco de baixa demanda se margem > 50%"
+- [ ] Atualização em tempo real
+
+#### **US-12: Gerente operacional definir operadores**
+- [ ] Inputs: Operadores de Caixa (0-10), Operadores de Serviço (0-5)
+- [ ] Cálculo de custo: salário × quantidade
+- [ ] Tabela de custo por operador (seed)
+- [ ] Indicador: CSAT = (operadores / 10) × quiz_score (projeção)
+
+#### **US-13: Gerente serviços selecionar CAPEXs**
+- [ ] Checkboxes por CAPEX (SECURITY, FREEZER, NETWORK, SITE, SELF_CHECKOUT, AUTOMATION)
+- [ ] Por cada: nome, custo, impacto SLA, licença mensal
+- [ ] Total de CAPEX selected exibido
+- [ ] Impacto no caixa calculado em tempo real
+
+#### **US-14: Gerente loja ver caixa disponível**
+- [ ] Display grande: "Caixa Disponível: R$ XXX.XXX"
+- [ ] Breakdown em card: Inicial - Estoque - CAPEX - Outros = Saldo
+- [ ] Indicador visual: verde se > R$ 50k, amarelo se R$ 20-50k, vermelho se < R$ 20k
+- [ ] Atualiza a cada decisão
+
+#### **US-15: Gerente loja ver EBITDA projetado**
+- [ ] Display: "EBITDA Projetado: R$ XXX.XXX (X.XX%)"
+- [ ] Breakdown: Receita Esperada - Custos Fixos - Custos Variáveis
+- [ ] Aviso: se EBITDA < 0, mensagem "Decisões insustentáveis"
+- [ ] Atualiza a cada decisão
+
+#### **US-16: Gerente loja confirmar configuração**
+- [ ] Checklist antes de confirmar: estoque ✓, pricing ✓, operadores ✓, CAPEXs ✓
+- [ ] Botão desabilitado até todos os campos preenchidos
+- [ ] Após confirmar, status muda para "CONFIRMADO" e bloqueado
+- [ ] Notificação para facilitador
+
+#### **US-17: Sistema calcular CSAT**
+- [ ] Fórmula: CSAT = (operadores_contratados / 10) × (quiz_score_percentage / 100)
+- [ ] Quiz: 10 perguntas sobre gestão, resposta correta = +1 ponto
+- [ ] Resultado armazenado em QUIZ_ANSWER
+- [ ] Exemplo: 8 operadores + 80% quiz = CSAT = 0.64 ou 64%
+
+#### **US-18: Sistema distribuir demanda**
+- [ ] Calcula scoring para cada loja por rodada:
+  - Disponibilidade = stock_disponível / demanda_esperada
+  - Preço = (preço_competitivo / preço_loja)
+  - CSAT = (CSAT_score / 100)
+- [ ] Ranking: 4 pontos (1º lugar), 3 pontos (2º), 2 pontos (3º), 1 ponto (4º)
+- [ ] Demand Share = pontos_loja / soma_pontos_todas
+- [ ] Demanda = Demand_Share × Total_Demanda_Sessão
+
+#### **US-19: Sistema calcular Quebras e Aging**
+- [ ] Quebras = estoque_não_vendido × breakage_rate (seed por categoria)
+- [ ] Aging = estoque_não_vendido × aging_rate (seed por categoria)
+- [ ] Reduz lucro líquido por categoria
+- [ ] Registrado em PO_CATEGORY_DECISION
+
+#### **US-20: Sistema calcular EBITDA**
+- [ ] Fórmula completa:
+  ```
+  Receita Bruta = Demand × Preço_Unitário
+  Impostos = Receita × (7.65% ICMS + 1.65% PIS/COFINS)
+  Receita Líquida = Receita Bruta - Impostos
+  Custo Venda = Demand × Unit_Cost
+  Margem Bruta = Receita Líquida - Custo Venda
+  Quebras/Aging = (stock_residual × breakage/aging_rate)
+  Margem Líquida = Margem Bruta - Quebras/Aging
+  Folha = (caixa_operators + service_operators) × salary
+  Manutenção = R$ 5k (fixo)
+  Licenças = Σ(CAPEX × monthly_license)
+  Juros = max(0, caixa_excedente × 1% a.m.)
+  SLA = demanda_perdida × preço_médio (se CAPEX não implementado)
+  EBITDA = Margem Líquida - Folha - Manutenção - Licenças - Juros - SLA
+  % EBITDA = EBITDA / Receita Bruta
+  ```
+- [ ] Armazenado em ROUND_RESULT
+
+#### **US-21: Sistema aplicar eventos SLA**
+- [ ] Se SECURITY não contratado: 15% sorteio de falha → 2% receita perdida
+- [ ] Se FREEZER não contratado: 10% sorteio → aging +30%
+- [ ] Se NETWORK não contratado: 5% sorteio → 1 hora downtime
+- [ ] Eventos registrados em SLA_EVENT
+
+#### **US-22: Sistema processar transferência de jogadores**
+- [ ] Máximo 2 jogadores transferência entre lojas na reconfiguração
+- [ ] Valida: não pode tirar gerente de loja
+- [ ] Registrado em PLAYER_TRANSFER
+- [ ] UI: dropdown de origem/destino
+
+#### **US-23: Jogador ver resultados parciais**
+- [ ] Exibe após cada rodada: EBITDA, % EBITDA, Demand_Share, CSAT_Score
+- [ ] Comparação com round anterior: ↑ / ↓ / → indicador
+- [ ] Breakdown: Receita | Custos | Lucro em cards separados
+- [ ] Atualiza via WebSocket em tempo real
+
+#### **US-24: Jogador ver ranking**
+- [ ] Tabela: [Ranking | Loja | EBITDA | % EBITDA | Demand_Share]
+- [ ] Ordenado por EBITDA descendente
+- [ ] Cor: 1º lugar 🥇, 2º lugar 🥈, 3º lugar 🥉, 4º lugar
+- [ ] Atualiza a cada rodada
+
+#### **US-25: Facilitador ver breakdown completo**
+- [ ] Por loja: todas as POs, todos os CAPEX, resultado por rodada
+- [ ] Consolidação: média de 3 rodadas
+- [ ] Exportável em PDF (relatório formal)
 
 ---
 
@@ -165,7 +343,44 @@ PLAYER_TRANSFER
 - from_store_id (FK→STORE), to_store_id (FK→STORE), transferred_at
 ```
 
-### 3.3 Lógica de Funcionamento da Solução
+### 3.3 Tabela de Valores de Seed (Constantes de Negócio)
+
+```
+CATEGORY:
+┌───────────┬───────────┬──────────┬──────────────┐
+│ Name      │ Unit Cost │ Tax Rate │ Breakage %   │
+├───────────┼───────────┼──────────┼──────────────┤
+│ PERECIVEIS│ R$ 8      │ 7.65%    │ 3% (aging 2%)│
+│ MERCEARIA │ R$ 5      │ 7.65%    │ 1% (aging 0%)│
+│ ELETRO    │ R$ 120    │ 7.65%    │ 0.2% (aging 5%)|
+│ HIPEL     │ R$ 45     │ 7.65%    │ 0.5% (aging 1%)|
+└───────────┴───────────┴──────────┴──────────────┘
+
+CAPEX_OPTION:
+┌──────────────────┬──────────┬────────────┬──────────────┐
+│ Type             │ Cost     │ Monthly Fee│ SLA % Risk   │
+├──────────────────┼──────────┼────────────┼──────────────┤
+│ SECURITY         │ R$ 30k   │ R$ 2k      │ 15% (2% rev) │
+│ FREEZER          │ R$ 80k   │ R$ 1.5k    │ 10% (aging)  │
+│ NETWORK          │ R$ 50k   │ R$ 3k      │ 5% (downtime)│
+│ SITE             │ R$ 100k  │ R$ 5k      │ N/A          │
+│ SELF_CHECKOUT    │ R$ 60k   │ R$ 2.5k    │ N/A          │
+│ AUTOMATION       │ R$ 40k   │ R$ 1k      │ N/A          │
+└──────────────────┴──────────┴────────────┴──────────────┘
+
+OPERATIONAL_COSTS:
+┌────────────────────┬─────────────┐
+│ Item               │ Value       │
+├────────────────────┼─────────────┤
+│ Manutenção Mensal  │ R$ 5.000    │
+│ Salário Caixa      │ R$ 2.000/mês│
+│ Salário Serviço    │ R$ 2.500/mês│
+│ Juros Excedente    │ 1.0% a.m.   │
+│ Base de Caixa Init │ R$ 700.000  │
+└────────────────────┴─────────────┘
+```
+
+### 3.4 Lógica de Funcionamento da Solução
 
 #### Fluxo Macro
 
@@ -186,10 +401,10 @@ PLAYER_TRANSFER
  → Motor calcula indicadores: Disponibilidade, Preço da Cesta, CSAT
  → Motor distribui demanda proporcionalmente (ranking 1-4 por indicador)
  → Motor calcula resultado financeiro:
-   Receita Bruta → (-) Impostos → Receita Líquida
-   → (-) Custo de Venda → Margem Bruta
-   → (-) Quebras e Aging → Margem Líquida
-   → (-) Folha, Manutenção, Licenças, Juros, SLA → EBITDA
+    Receita Bruta → (-) Impostos → Receita Líquida
+    → (-) Custo de Venda → Margem Bruta
+    → (-) Quebras e Aging → Margem Líquida
+    → (-) Folha, Manutenção, Licenças, Juros, SLA → EBITDA
  → Persiste ROUND_RESULT
  → Exibe ranking em tempo real para todos
 
@@ -226,3 +441,92 @@ EBITDA = Receita_Bruta
 
 % EBITDA = EBITDA / Receita_Bruta
 ```
+
+### 3.5 Eventos WebSocket (Tempo Real)
+
+```
+CLIENT → SERVER:
+- "UPDATE_STOCK" {category_id, quantity}
+- "UPDATE_PRICING" {category_id, margin}
+- "UPDATE_OPERATORS" {cashier, service}
+- "TOGGLE_CAPEX" {capex_id}
+- "CONFIRM_PO" {store_id, round}
+- "TRANSFER_PLAYER" {user_id, from_store, to_store}
+
+SERVER → ALL:
+- "PO_UPDATED" {store_id, cash_available, ebitda_projected}
+- "ROUND_STARTED" {round}
+- "RESULTS_PUBLISHED" {all_stores_results}
+- "ROUND_COMPLETED" {ranking}
+- "SESSION_FINISHED" {final_ranking}
+```
+
+### 3.6 Contratos de API REST
+
+```
+POST /auth/register
+{email, name, password} → {token, refresh_token}
+
+POST /auth/login
+{email, password} → {token, refresh_token}
+
+POST /sessions
+{name, initial_cash} → {session_id, invite_code}
+
+GET /sessions/:id/dashboard
+→ {stores[], members[], round, status}
+
+POST /stores
+{session_id, name} → {store_id}
+
+POST /operational-plans
+{store_id, round, config} → {plan_id}
+
+PUT /operational-plans/:id/category-decision
+{category_id, stock_purchased, price_margin} → {cash_used, ebitda}
+
+POST /operational-plans/:id/confirm
+→ {status: CONFIRMED}
+
+POST /rounds/:id/execute
+→ {results[], round_data}
+
+GET /rounds/:round_id/results
+→ {all_stores_results[], ranking}
+```
+
+---
+
+## 4. Cronograma Proposto (MVP)
+
+| Semana | Foco | Deliverables |
+|---|---|---|
+| **1-2** | Setup Backend + DB | Schema Prisma, seed CAPEX/CATEGORY, autenticação JWT |
+| **3-4** | Setup Frontend + Auth | Login/Signup, Dashboard layout, componentes Tailwind |
+| **5-6** | Plano Operacional | UI colaborativa de PO, cálculos em tempo real |
+| **7-8** | Motor de Cálculo | Engine de distribuição, EBITDA, SLA events |
+| **9** | WebSocket + Sync | Socket.io events, atualização em tempo real |
+| **10-11** | Testes + Refinamento | E2E tests, performance tunning, bug fixes |
+| **12** | Deploy + Documentação | Railway/Render deploy, readme, guia de uso |
+
+---
+
+## 5. Métricas de Sucesso
+
+- ✅ 4 lojas simultâneas com 5 jogadores cada, rodadas com latência < 500ms
+- ✅ Todos os cálculos de EBITDA conferem com seed values
+- ✅ Facilitador consegue gerenciar sessão do início ao fim em < 30 minutos
+- ✅ Jogadores conseguem usar a plataforma sem treinamento (UI intuitiva)
+- ✅ Deploy em produção com uptime > 99%
+
+---
+
+## 6. Riscos e Mitigation
+
+| Risco | Probabilidade | Impacto | Mitigation |
+|---|---|---|---|
+| Cálculos complexos com erro | Média | Alto | Testes unitários rigorosos em motor |
+| Latência WebSocket > 500ms | Baixa | Médio | Load tests cedo + otimização |
+| Escopo creep nos diferenciais | Alta | Médio | MVP restrito a 25 US, diferenciais em V2 |
+| Falha no seed data | Baixa | Alto | Script validação, testes de seed |
+
