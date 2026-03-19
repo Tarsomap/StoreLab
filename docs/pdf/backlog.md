@@ -109,3 +109,196 @@
 | US-28 | Como jogador, quero receber alertas de aging elevado ou caixa crítico | 🟡 Diferencial |
 | US-29 | Como facilitador, quero exportar o resultado final em PDF/Excel | 🟡 Diferencial |
 | US-30 | Como facilitador, quero acessar o histórico de sessões anteriores | 🟡 Diferencial |
+
+---
+
+## 4. Critérios de Aceitação Detalhados (Motor de Cálculo - Épico 4)
+
+### US-17: Calcular CSAT
+
+**Critérios:**
+- [ ] Fórmula: `CSAT = (operadores_caixa / 10) × (quiz_score / 100)`
+- [ ] Validação: operadores_caixa entre 0-10
+- [ ] Quiz pode ter entre 5-10 perguntas (configurável)
+- [ ] Score resultánte entre 0-100%
+- [ ] Armazenado em QUIZ_ANSWER com timestamp
+- [ ] Exemplo correto: 8 operadores + 80% quiz = 64% CSAT
+- [ ] Teste unitário: validar 10 combinações diferentes
+- [ ] Não pode ser null (padrão 0 se quiz não respondido)
+
+### US-18: Distribuir Demanda
+
+**Critérios:**
+- [ ] **Indicadores calculados por loja:**
+  - Disponibilidade = stock_disponível / demanda_esperada
+  - Preço da Cesta = (preço_competitivo_médio / preço_loja)
+  - CSAT = (CSAT_score / 100)
+
+- [ ] **Ranking por indicador (1-4 pontos):**
+  - 1º lugar (melhor): 4 pontos
+  - 2º lugar: 3 pontos
+  - 3º lugar: 2 pontos
+  - 4º lugar: 1 ponto
+
+- [ ] **Cálculo de Demand Share:**
+  - Total de pontos por loja = P1 + P2 + P3 (3 indicadores)
+  - Demand_Share (%) = (pontos_loja / sum_total_pontos) × 100
+  - Demanda Absoluta = Demand_Share × Total_Demanda_Sessão
+
+- [ ] **Casos de teste:**
+  - [ ] Loja com preço alto, CSAT baixo, disponibilidade alta → demand compartilhada
+  - [ ] Loja com preço baixo, CSAT alto, disponibilidade baixa → demand maior
+  - [ ] Todas lojas idênticas → demand distribuída igualmente (25% cada)
+  - [ ] Uma loja com 0 em tudo → recebe 1 ponto em cada indicador
+
+- [ ] Armazenado em ROUND_RESULT com todos os scores
+- [ ] Teste integrado: rodar 4 lojas diferentes e validar soma = 100%
+
+### US-19: Calcular Quebras e Aging
+
+**Critérios:**
+- [ ] **Fórmula por categoria:**
+  - Estoque_Residual = Stock_Purchased - Stock_Sold
+  - Quebras = Estoque_Residual × Breakage_Rate (seed da categoria)
+  - Aging = Estoque_Residual × Aging_Rate (seed da categoria)
+
+- [ ] **Valores de seed (tabela):**
+  - PERECIVEIS: 3% quebra, 2% aging
+  - MERCEARIA: 1% quebra, 0% aging
+  - ELETRO: 0.2% quebra, 5% aging
+  - HIPEL: 0.5% quebra, 1% aging
+
+- [ ] Cálculo em unidades (quantidade) e depois convertido para R$
+  - Custo_Quebra = Quebras (un) × Unit_Cost
+  - Custo_Aging = Aging (un) × Unit_Cost
+
+- [ ] Nunca pode ser negativo (validação)
+- [ ] Reduz margem líquida (desconto do EBITDA)
+- [ ] Armazenado em PO_CATEGORY_DECISION com breakdown
+- [ ] Teste: 100 un comprados, 70 vendidos, taxa 3% quebra → 0.9 un perdidas
+
+### US-20: Calcular EBITDA Completo
+
+**Critérios:**
+- [ ] **Componentes (em ordem):**
+  1. **Receita Bruta** = Demanda_Absoluta × Preço_Unitário (por categoria)
+  2. **Impostos** = Receita_Bruta × Tax_Rate (7.65% base, pode variar por categoria)
+  3. **Receita Líquida** = Receita_Bruta - Impostos
+  4. **Custo de Venda** = Demanda_Absoluta × Unit_Cost (por categoria)
+  5. **Margem Bruta** = Receita_Líquida - Custo_de_Venda
+  6. **Quebras + Aging** = (calcs de US-19)
+  7. **Margem Líquida** = Margem_Bruta - Quebras - Aging
+  8. **Folha de Pagamento** = (cashier_ops × 2000) + (service_ops × 2500)
+  9. **Manutenção** = R$ 5.000 (fixo)
+  10. **Licenças** = Σ(capex_option.monthly_license se implemented)
+  11. **Juros Excedente** = MAX(0, (cash_disponivel - 700000) × 1%)
+  12. **SLA Perdas** = Σ(sla_event.revenue_lost)
+  13. **EBITDA** = Margem_Líquida - Folha - Manutenção - Licenças - Juros - SLA
+  14. **% EBITDA** = EBITDA / Receita_Bruta × 100
+
+- [ ] **Validações:**
+  - Receita Bruta nunca negativa
+  - Custos não podem ser maiores que Margem Bruta
+  - EBITDA pode ser negativo (decisões ruins)
+  - % EBITDA entre -100% e +100%
+
+- [ ] **Casos de teste:**
+  - [ ] Cenario ideal: receita alta, custos baixos → EBITDA positivo alto
+  - [ ] Cenario ruim: estoque alto + preço baixo → EBITDA negativo
+  - [ ] Cenario com SLA: CAPEX não feito + evento → receita perdida descontada
+  - [ ] Cenario com juros: caixa > 700k → juros descontados
+
+- [ ] Armazenado em ROUND_RESULT com breakdown completo
+- [ ] Testes unitários: mínimo 15 casos diferentes
+- [ ] Teste de aceitação: rodar seção inteira (4 lojas, 3 rodadas) e validar somas
+
+### US-21: Aplicar Eventos de SLA
+
+**Critérios:**
+- [ ] **Mapeamento CAPEX → SLA:**
+  - SECURITY não implementado: 15% chance → roubo → 2% receita perdida
+  - FREEZER não implementado: 10% chance → estrago → +30% aging
+  - NETWORK não implementado: 5% chance → downtime → 1h sem vendas
+  - SITE: N/A (branding)
+  - SELF_CHECKOUT: N/A (agilidade)
+  - AUTOMATION: N/A (labor)
+
+- [ ] **Processamento:**
+  - Verifica cada CAPEX não implementado
+  - Sorteia randomicamente com probabilidade
+  - Se evento ocorre: registra SLA_EVENT no BD
+  - Calcula impacto (receita perdida ou aging aumentada)
+  - Desconta de EBITDA
+
+- [ ] **Validações:**
+  - Seed determinista (usar hash de round + loja para sorteio reproduzível)
+  - Apenas um evento por CAPEX por rodada
+  - Receita perdida não pode ser > 100% da receita
+
+- [ ] **Casos de teste:**
+  - [ ] Nenhum CAPEX implementado → todos verificados
+  - [ ] Todos CAPEX implementados → nenhum evento
+  - [ ] Um CAPEX não implementado + evento → SLA_EVENT registrado
+  - [ ] Sorteio: 1000 rodadas da mesma sessão → 15% aprox. com roubo
+
+- [ ] Armazenado em SLA_EVENT (capex_type, days_impacted, revenue_lost)
+- [ ] Teste: rodar 4 lojas, cada uma faltando CAPEXs diferentes
+
+### US-22: Processar Transferência de Jogadores
+
+**Critérios:**
+- [ ] **Restrições:**
+  - Máximo 2 transferências por loja de origem (na reconfig)
+  - Não pode transferir Gerente da Loja (STORE_MANAGER imovíalvel)
+  - Não pode ter 2 pessoas com mesmo papel em uma loja (validar)
+  - Apenas durante RECONFIGURATION (status da sessão)
+
+- [ ] **Processamento:**
+  - Valida origem e destino são lojas da mesma sessão
+  - Valida contagem total de transfers <= 2 por loja
+  - Move STORE_MEMBER de origem para destino
+  - Registra PLAYER_TRANSFER no BD
+  - Mantem plano operacional anterior (não reseta)
+
+- [ ] **Casos de teste:**
+  - [ ] Transfer válido: SUPPLY_MANAGER da loja A para B
+  - [ ] Transfer inválido: tentar mover STORE_MANAGER
+  - [ ] Transfer inválido: já tem 2 transfers nesta loja
+  - [ ] Transfer inválido: destino já tem SUPPLY_MANAGER
+
+- [ ] Armazenado em PLAYER_TRANSFER
+- [ ] Teste: simular transfer e validar STORE_MEMBER atualizado
+
+---
+
+## 5. Estimativas Iniciais (T-shirt sizing)
+
+| Épico | Tamanho | Semanas |
+|---|---|---|
+| Autenticação | M (Medium) | 1-2 |
+| Gestão de Sessão | M | 2-3 |
+| Plano Operacional | L (Large) | 3-4 |
+| Motor de Cálculo | L | 4-5 |
+| Resultados | M | 2 |
+| Diferenciais | L | 3+ |
+
+---
+
+## 6. Riscos Identificados
+
+| Risco | Probabilidade | Impacto | Mitigation |
+|---|---|---|---|
+| Cálculos EBITDA com erro | Média | ALTO | Testes unitários rigorosos do motor |
+| Latência WebSocket > 500ms | Baixa | Médio | Load tests cedo + otimização |
+| Escopo creep | Alta | Médio | MVP restrito a 25 US, V2 para diferenciais |
+| Seed data incorreto | Baixa | ALTO | Script de validação, testes de seed |
+| Concorrência em atualizações do PO | Média | Médio | Transacionalidade no BD, versionamento |
+
+---
+
+## 7. Referências de Implementação
+
+- **Documentos de especificação:** Ver `docs/pdf/arquitetura-tecnica.md` e `docs/pdf/entrega-parcial.md`
+- **Base de cálculo:** Seed values em `src/seed/seed.ts` (CATEGORY, CAPEX_OPTION)
+- **Testes:** `src/engine/__tests__/` (motor de cálculo)
+- **Contatos:** Óbvio que será um squad, specs compartilhadas no Notion/Confluence
