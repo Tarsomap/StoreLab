@@ -28,10 +28,10 @@ Build a real-time multiplayer retail simulation platform where:
 
 ## Source of Truth
 Before writing any code, read and internalize:
-- `docs/agent/ARCHITECTURE.md` — tech decisions, DB schema, engine formulas
-- `docs/agent/BACKLOG.md` — all epics and user stories
-- `docs/agent/QUIZ.md` — quiz module specification
-- `docs/agent/CONTEXT.md` — project context and team decisions
+- `docs/agent/spec.md` — business rules, game flow, all formulas and validated seed values
+- `docs/agent/plan.md` — tech decisions, DB schema, engine formulas, API contracts, WebSocket events
+- `docs/agent/tasks.md` — all epics and user stories
+- `docs/agent/QUIZ.md` — quiz module full specification
 
 ---
 
@@ -41,13 +41,15 @@ Before writing any code, read and internalize:
 - 4 stores max per session
 - 5 roles per store: STORE_MANAGER, SUPPLY_MANAGER, COMMERCIAL_MANAGER, OPERATIONAL_MANAGER, SERVICE_MANAGER
 - Stock input is always in **units**, never in currency
-- Initial cash default is R$700.000, configurable by facilitator
-- Excess cash interest is **12% per month** on amount above R$700.000
-- Demand distributed by ranking stores on: basket price, availability, CSAT
-- CSAT formula: `CSAT = (cashierOperators / 10) * (quizScorePercentage / 100)`
+- Initial cash default is R$700,000, configurable by facilitator
+- Excess cash interest is **12% per month** on amount above R$700,000
+- Demand distributed by ranking stores on: basket price (lower=better), availability (higher=better), CSAT (higher=better)
+- Ranking is 1–4 per indicator; total points per store = sum of 3 ranks; demand share = store points / total points of all stores
+- CSAT formula: `CSAT = (cashierOperators / 10) * quizScorePercentage` (quizScorePercentage as 0–1 decimal)
 - Quiz: facilitator creates questions per session/round; players answer individually; store score = team average
 - Reconfiguration: can only use unused initial cash + unimplemented CAPEX value; cannot use sales revenue; max 2 player transfers per store; **transfers are MANDATORY (1–2 per store)**
 - **Breakage and Aging** are calculated **only once at the end of round 3**, applied to total accumulated unsold stock — NOT per round
+- STORE_MANAGER can never be transferred between stores
 
 ---
 
@@ -78,7 +80,7 @@ backend/
     sessions/
     stores/
     plans/
-    quiz/          ← quiz questions, player answers, consolidation
+    quiz/
     engine/
     results/
     gateway/
@@ -98,6 +100,51 @@ frontend/
 
 ---
 
+## Seed Data (validated — spec.md v1.1)
+
+### Categories
+
+| key | label | unit_cost | tax_rate | breakage_rate | aging_rate | stock_available |
+|---|---|---|---|---|---|---|
+| PERECIVEIS | Perecíveis | 20.00 | 0.12 | 0.020 | 0.058 | 4000 |
+| MERCEARIA | Mercearia | 30.00 | 0.07 | 0.015 | 0.008 | 6000 |
+| ELETRO | Eletro | 500.00 | 0.25 | 0.000 | 0.013 | 700 |
+| HIPEL | Hipel | 45.00 | 0.17 | 0.010 | 0.011 | 5000 |
+
+> Eletro tax_rate = 0.25 (tabela oficial). Gabarito xlsx mostra 0% por erro manual — prevalece tabela oficial.
+
+### CAPEX Options
+
+| key | label | acquisition_cost | downtime_fixed_days | monthly_license_delta | maintenance_saving |
+|---|---|---|---|---|---|
+| SECURITY | Segurança | 50000 | 2 | 100 | 0 |
+| FREEZER | Balança/Freezer | 75000 | 1 | 0 | 400 |
+| NETWORK | Redes | 80000 | 2 | 0 | 0 |
+| SITE | Melhorias no Site | 65000 | 1 | 150 | 0 |
+| SELF_CHECKOUT | Self Checkout | 80000 | 2 | 320 | 0 |
+| AUTOMATION | Melhoria Contínua | 45000 | 0 | 0 | 0 |
+
+### SLA Resolution Table
+
+```typescript
+const SLA_TABLE: Record<number, number> = { 0:6, 1:5, 2:4, 3:3, 4:2, 5:1 }
+// diasParados = capex.downtime_fixed_days + SLA_TABLE[serviceOperators]
+```
+
+### System Constants
+
+```typescript
+const IDEAL_CASHIER_OPERATORS = 10
+const INITIAL_CASH            = 700000
+const INTEREST_RATE_MONTHLY   = 0.12
+const BASE_LICENSE_COST       = 500
+const CASHIER_SALARY          = 1000
+const SERVICE_SALARY          = 1200
+const MAINTENANCE_COST        = 400  // charged only if CAPEX FREEZER not implemented
+```
+
+---
+
 ## Backend Modules to Implement
 
 ### 1 — Auth
@@ -106,54 +153,31 @@ frontend/
 
 ### 2 — Sessions
 - create session, create stores, join store
-- advance round/status state machine
+- advance round/status state machine: `SETUP → ROUND_1_CONFIG → ROUND_1 → RECONFIGURATION → ROUND_2 → ROUND_3 → FINISHED`
 - transfer players (reconfiguration) — **MANDATORY: 1–2 per store before reconfiguration unlocks**
+- STORE_MANAGER cannot be transferred
 
 ### 3 — Plans
-- category decisions (stock, pricing)
+- category decisions (stock in units, pricing margin)
 - workforce decisions (cashier/service operators)
-- CAPEX decisions
-- confirm PO (store manager only)
-- real-time projected EBITDA & cash used
+- CAPEX decisions (boolean per CAPEX)
+- confirm PO (store manager only, requires all members answered quiz)
+- real-time projected EBITDA & cash used via WebSocket
 
-### 4 — Quiz ← See `docs/agent/QUIZ.md` for full spec
-- facilitator creates questions per session/round
+### 4 — Quiz
+See `docs/agent/QUIZ.md` for full spec. Summary:
+- facilitator creates 10 questions with 4 options per session/round
 - players fetch quiz without answer keys
 - players submit answers (one submission per user per round)
-- backend consolidates score into `QuizAnswer` per store/round
-- PO confirmation must require all members answered the quiz
+- backend consolidates score: average of all members → `QuizAnswer`
+- PO confirmation blocked until all members answered
 
 ### 5 — Engine
-- `CsatService`: reads `QuizAnswer.scorePercentage`
-- `DemandService`: distributes demand by basket price, availability, CSAT
-- `FinancialService`: full EBITDA formula (see fixed costs below)
-- `SlaService`: CAPEX-based probabilistic SLA events + service operator resolution time
+- `CsatService`: `csat = (cashierOperators / 10) * (quizScore / 100)`
+- `DemandService`: rank 1–4 per store on price/availability/CSAT; demand share = store points / total points
+- `FinancialService`: full EBITDA formula (see below)
+- `SlaService`: probabilistic CAPEX events + SLA_TABLE resolution days
 - `EngineService`: orchestrates all services per round
-
-**Fixed cost constants (use these exactly):**
-```typescript
-const CASHIER_SALARY    = 1000   // R$/month per cashier operator
-const SERVICE_SALARY    = 1200   // R$/month per service operator
-const MAINTENANCE_COST  = 400    // R$/month — charged ONLY if CAPEX FREEZER is NOT implemented
-const BASE_LICENSE      = 500    // R$/month base software license
-const INTEREST_RATE     = 0.12   // 12% per month on cash > R$700k
-const IDEAL_OPERATORS   = 10     // cashier operators ideal count for CSAT
-```
-
-**License deltas per CAPEX (when implemented):**
-```typescript
-// SECURITY:      +R$100/month  (base R$500 × 20%)
-// SITE:          +R$150/month  (base R$500 × 30%)
-// SELF_CHECKOUT: +R$320/month  (R$80 × 4 units)
-// FREEZER, NETWORK, AUTOMATION: no license change
-```
-
-**Breakage and Aging timing:**
-```typescript
-// Applied ONCE at the end of round 3 only
-// On total accumulated unsold stock across all rounds
-// NOT calculated per round
-```
 
 ### 6 — Results
 - round results per store
@@ -162,73 +186,37 @@ const IDEAL_OPERATORS   = 10     // cashier operators ideal count for CSAT
 
 ### 7 — Gateway (Socket.io)
 - Rooms: `session:{id}`, `store:{id}`, `facilitator:{id}`
-- Events:
-  - `plan:updated`, `store:confirmed`
-  - `round:started`, `round:results`, `session:finished`
-  - `sla:event`, `quiz:player-answered`
+- Events: `plan:updated`, `store:confirmed`, `round:started`, `round:results`, `session:finished`, `sla:event`, `quiz:player-answered`
 
 ---
 
-## Prisma Schema — Quiz Models
+## Financial Formulas Reference
 
-Add these models to `schema.prisma` alongside existing ones:
+```typescript
+// Per category (per round):
+grossRevenue = stockSold * unitCost * (1 + priceMargin)
+taxAmount    = grossRevenue * category.taxRate
+costOfGoods  = stockSold * category.unitCost
+unsoldStock  = stockPurchased - stockSold  // accumulated across rounds
 
-```prisma
-model QuizQuestion {
-  id          String         @id @default(uuid())
-  session     Session        @relation(fields: [sessionId], references: [id])
-  sessionId   String
-  round       Int
-  prompt      String
-  order       Int
-  createdAt   DateTime       @default(now())
-  options     QuizOption[]
-  userAnswers UserQuizAnswer[]
+// Breakage and Aging: ONLY at end of round 3, on total unsold stock:
+breakageAmount = totalUnsoldStock * unitCost * category.breakageRate
+agingAmount    = totalUnsoldStock * unitCost * category.agingRate
 
-  @@unique([sessionId, round, order])
-}
+// Store totals:
+netRevenue = totalGrossRevenue - totalTax
+payroll    = cashierOperators * CASHIER_SALARY + serviceOperators * SERVICE_SALARY
+maintenance = capexFreezerImplemented ? 0 : MAINTENANCE_COST
+licenses   = BASE_LICENSE_COST + sum(capex.monthly_license_delta for implementedCapexes)
+interest   = max(0, cashUsed - INITIAL_CASH) * INTEREST_RATE_MONTHLY
+slaLoss    = sum(SlaEvent.revenueLost)
 
-model QuizOption {
-  id          String           @id @default(uuid())
-  question    QuizQuestion     @relation(fields: [questionId], references: [id])
-  questionId  String
-  label       String
-  isCorrect   Boolean          @default(false)
-  userAnswers UserQuizAnswer[]
-}
+// SLA revenue loss:
+// revenueLost = (grossRevenue / 30) * diasParados
+// diasParados = capex.downtime_fixed_days + SLA_TABLE[serviceOperators]
 
-model UserQuizAnswer {
-  id          String       @id @default(uuid())
-  session     Session      @relation(fields: [sessionId], references: [id])
-  sessionId   String
-  store       Store        @relation(fields: [storeId], references: [id])
-  storeId     String
-  user        User         @relation(fields: [userId], references: [id])
-  userId      String
-  question    QuizQuestion @relation(fields: [questionId], references: [id])
-  questionId  String
-  option      QuizOption   @relation(fields: [optionId], references: [id])
-  optionId    String
-  round       Int
-  isCorrect   Boolean
-  answeredAt  DateTime     @default(now())
-
-  @@unique([userId, questionId, round])
-}
-
-// Keep existing QuizAnswer as consolidated store-level snapshot
-model QuizAnswer {
-  id              String   @id @default(uuid())
-  store           Store    @relation(fields: [storeId], references: [id])
-  storeId         String
-  round           Int
-  totalQuestions  Int
-  correctAnswers  Int
-  scorePercentage Float
-  createdAt       DateTime @default(now())
-
-  @@unique([storeId, round])
-}
+ebitda  = netRevenue - (totalCOGS + breakage + aging + payroll + maintenance + licenses + interest + slaLoss)
+ebitda% = ebitda / totalGrossRevenue
 ```
 
 ---
@@ -254,34 +242,6 @@ model QuizAnswer {
 
 ---
 
-## Financial Formulas Reference
-
-```typescript
-// Per category (per round):
-grossRevenue   = stockSold * unitCost * (1 + priceMargin)
-taxAmount      = grossRevenue * taxRate
-costOfGoods    = stockSold * unitCost
-unsoldStock    = stockPurchased - stockSold  // accumulated across rounds
-
-// Breakage and Aging: ONLY at end of round 3, on total unsold stock:
-breakageAmount = totalUnsoldStock * unitCost * breakageRate
-agingAmount    = totalUnsoldStock * unitCost * agingRate
-
-// Store totals:
-netRevenue     = totalGrossRevenue - totalTax
-payroll        = cashierOperators * 1000 + serviceOperators * 1200
-maintenance    = capexFreezerImplemented ? 0 : 400
-licenses       = 500 + sum(capex.monthlyLicenseDelta for implemented CAPEXs)
-interest       = max(0, cashUsed - 700000) * 0.12
-slaLoss        = sum(SlaEvent.revenueLost)
-
-ebitda         = netRevenue - (totalCOGS + breakageAmount + agingAmount
-                 + payroll + maintenance + licenses + interest + slaLoss)
-ebitda%        = ebitda / totalGrossRevenue * 100
-```
-
----
-
 ## Code Quality Rules
 
 - Never use `any`
@@ -289,7 +249,12 @@ ebitda%        = ebitda / totalGrossRevenue * 100
 - Controllers must be thin — all business logic in services
 - Use DTO validation everywhere (class-validator)
 - Add unit tests for all engine services (minimum 80% coverage)
-- Use deterministic seed for SLA event randomness (hash of `sessionId + storeId + round + capexType`)
+- Use deterministic seed for SLA event randomness: `hash(\`${sessionId}-${storeId}-${round}-${capexKey}\`)`
+- Do NOT calculate EBITDA on-the-fly from historical data — always use persisted `RoundResult`
+- Do NOT allow players to access other stores' PO data during active rounds
+- Do NOT apply Breakage/Aging per round — only at end of round 3 on total unsold stock
+- Do NOT make player transfers optional — they are MANDATORY (1–2 per store) after round 1
+- Do NOT assume stock input is in R$ — it is always in **units (quantity)**
 
 ---
 
@@ -297,12 +262,12 @@ ebitda%        = ebitda / totalGrossRevenue * 100
 
 1. Set up monorepo folders and package files
 2. Implement Prisma schema and run migration
-3. Seed CATEGORY and CAPEXOPTION data
-4. Implement backend modules (auth → sessions → plans → quiz → engine → results)
+3. Seed CATEGORY and CAPEXOPTION data (use validated values from this prompt)
+4. Implement backend modules: auth → sessions → plans → quiz → engine → results
 5. Implement frontend auth + session join flows
 6. Implement PO form (role-based) + quiz UI
 7. Implement engine, results, and ranking
-8. Add unit tests for engine services
+8. Add unit tests for engine/ services
 9. Add `.env.example` files
 10. Update README with full setup instructions
 
@@ -315,5 +280,5 @@ ebitda%        = ebitda / totalGrossRevenue * 100
 - For each phase show: files created/updated, why, what remains
 - Do not skip unit tests for `engine/` services
 - Do not invent business rules not documented here
-- If a detail is missing, choose the simplest implementation consistent with this prompt
-- If a value is marked as PENDING (e.g., CAPEX acquisition costs, SLA operator table), leave a `// TODO: confirm with business partner` comment and use a placeholder constant
+- If a detail is missing, choose the simplest implementation consistent with `spec.md`
+- There are **no PENDING items** — all business values are validated in `spec.md` v1.1
