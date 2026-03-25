@@ -30,7 +30,7 @@ This is NOT a traditional CRUD management system. It is a **real-time multiplaye
 5. FACILITATOR triggers Round 1
 6. ENGINE distributes demand and calculates EBITDA for each store
 7. Results shown in real-time ranking
-8. Reconfiguration phase: player transfers + plan adjustments
+8. Reconfiguration phase: player transfers (MANDATORY: 1–2 per store) + plan adjustments
 9. Rounds 2 and 3 follow the same flow
 10. Final ranking determines winner (highest % EBITDA)
 ```
@@ -62,6 +62,8 @@ Each store fills one PO per round. The PO has these decision areas:
 | ELETRO | R$ 120.00 | 12.50% | 0.2% | 5.0% |
 | HIPEL | R$ 45.00 | 7.65% | 0.5% | 1.0% |
 
+> ⚠️ **Breakage and Aging** are calculated **only once at the end of the last round**, applied to the total unsold stock accumulated across all rounds — NOT per round.
+
 ---
 
 ## Session Parameters (set by Facilitator at session creation)
@@ -78,20 +80,25 @@ These are real values the Facilitator inputs when creating a session — they de
 
 ## CAPEX Options (6 types)
 
-| Type | Cost | Monthly License | SLA Risk if NOT implemented |
+> ⚠️ The exact acquisition costs per CAPEX are defined in the official rules document (image table).
+> The values below for Monthly License are derived from the official rules text and must be confirmed against the CAPEX summary table image before implementation.
+
+| Type | Monthly License Impact | SLA Risk if NOT implemented | Notes |
 |---|---|---|---|
-| SECURITY | R$ 30,000 | R$ 2,000 | 15% chance → 2% revenue lost |
-| FREEZER | R$ 80,000 | R$ 1,500 | 10% chance → +30% aging |
-| NETWORK | R$ 50,000 | R$ 3,000 | 5% chance → 1h downtime |
-| SITE | R$ 100,000 | R$ 5,000 | 0% (branding only) |
-| SELF_CHECKOUT | R$ 60,000 | R$ 2,500 | 0% (speed improvement) |
-| AUTOMATION | R$ 40,000 | R$ 1,000 | 0% (labor improvement) |
+| SECURITY | Base R$500 + 20% = +R$100/month | 15% chance → revenue loss proportional to downtime days | Cybersecurity monitoring |
+| FREEZER | Eliminates R$400/month maintenance fee | 10% chance → Perecíveis cannot be sold for N days | Equipment replacement |
+| NETWORK | No license change | 5% chance → store offline for N days | Network migration |
+| SITE | Base R$500 + 30% = +R$150/month | No SLA risk (branding/speed only) | Platform migration |
+| SELF_CHECKOUT | +R$80/month per unit × 4 units = +R$320/month | No SLA risk (speed improvement) | 4 self-checkout units |
+| AUTOMATION | No license change | No SLA risk (labor productivity) | Reports & process automation |
+
+> 📌 **Pending:** exact acquisition costs per CAPEX are in an image in the official rules (.docx). These must be confirmed with the business partner before seeding.
 
 ---
 
 ## Key Business Rules (implement exactly as described)
 
-**Cash limit:** R$700,000 initial (configurable by Facilitator). If exceeded, **1%/month** interest on excess amount.
+**Cash limit:** R$700,000 initial (configurable by Facilitator). If exceeded, **12%/month** interest on the excess amount.
 
 **CSAT formula:**
 ```
@@ -112,18 +119,28 @@ Gross Revenue - Taxes - COGS - Breakage - Aging - Payroll - Maintenance - Licens
 
 **Fixed costs (seed constants):**
 ```
-Cashier salary:          R$ 2,000/month
-Service operator salary: R$ 2,500/month
-Maintenance:             R$ 5,000/month (fixed)
-Excess cash interest:    1% per month on cash > R$700k
+Cashier operator salary:  R$ 1,000/month per operator
+Service operator salary:  R$ 1,200/month per operator
+Maintenance (Freezer):    R$ 400/month — charged ONLY if CAPEX FREEZER is NOT implemented
+Excess cash interest:     12% per month on cash > R$700k
+Software base license:    R$ 500/month (base, before CAPEX impacts)
 ```
 
-**Reconfiguration (after round 1):**
-- Only unused cash from initial budget
-- Can use unspent CAPEX budget
+**SLA — Service Operators:**
+The SLA for internal services is based on the number of service operators contracted.
+The more service operators, the faster issues are resolved — directly impacting downtime days when a CAPEX-related SLA event occurs.
+> 📌 **Pending:** the exact SLA table (days of resolution per number of service operators) is in an image in the official rules (.docx) and must be confirmed before implementation.
+
+**Player transfers (Reconfiguration after Round 1):**
+- **MANDATORY:** each store MUST make 1 to 2 player transfers with other stores
+- Only unused cash from initial budget can be used
+- Can use unspent CAPEX budget value
 - CANNOT use sales revenue
 - CANNOT move stock between categories
-- Max 2 player transfers per store
+
+**Breakage and Aging timing:**
+- Calculated **once at the end of the last round** on total unsold stock accumulated
+- NOT applied per round
 
 ---
 
@@ -147,3 +164,5 @@ Envs:     SCREAMING_SNAKE_CASE
 - Do NOT allow players to access other stores' PO data during active rounds
 - Do NOT skip input validation on any PO decision (negative stock, margins > 100%, etc.)
 - Do NOT assume stock input is in R$ — it is always in **units (quantity)**
+- Do NOT apply Breakage/Aging per round — apply only at the end of the last round on total unsold stock
+- Do NOT make player transfers optional — they are MANDATORY (1–2 per store) after round 1
