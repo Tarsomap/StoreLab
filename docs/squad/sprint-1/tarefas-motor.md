@@ -1,11 +1,11 @@
 # ⚙️ Sprint 1 — Tarefas: Motor de Cálculo
 
 > **Épico:** Motor de Cálculo e Rodadas
-> **User Stories:** US-17, US-18, US-19, US-20, US-21
+> **User Stories:** US-17, US-18, US-19, US-20, US-21, US-22, US-23, US-24
 > **Estimativa total:** 4–5 semanas
 >
 > Leia [`docs/agent/CONTEXT.md`](../../agent/CONTEXT.md) antes de começar.
-> Este é o módulo mais crítico do sistema. **Testes unitários são obrigatórios.**
+> Este é o módulo mais crítico do sistema. **Testes unitários são obrigatórios (cobertura mínima 80%).**
 
 ---
 
@@ -13,12 +13,14 @@
 
 O motor é o cérebro do jogo. Quando o Facilitador clica "Executar Rodada", o motor:
 
-1. Aplica eventos de SLA (penalidades por CAPEX não feito)
+1. Aplica eventos de SLA (penalidades por CAPEX não feito + tempo de resolução por operadores de serviço)
 2. Calcula o CSAT de cada loja
 3. Distribui a demanda entre as lojas
 4. Calcula o EBITDA de cada loja
 5. Persiste os resultados
 6. Emite os resultados via WebSocket para todos
+
+> ⚠️ **Quebras e Aging** são calculados **apenas uma vez, ao final da rodada 3**, sobre o estoque total não vendido acumulado. Não são calculados por rodada.
 
 Todos os cálculos devem ser **determinísticos** (mesmo input = mesmo output) e **testados isoladamente**.
 
@@ -44,13 +46,19 @@ const CATEGORIES = [
 ]
 
 // CAPEX options (constantes de negócio)
+// ⚠️ TODO: confirmar custo de aquisição (campo `cost`) com o parceiro empresarial — está em imagem no .docx de regras
+// monthlyLicenseDelta: delta sobre a licença base de R$500/mês
+//   SECURITY: +R$100 (R$500 × 20%)
+//   SITE:     +R$150 (R$500 × 30%)
+//   SELF_CHECKOUT: +R$320 (R$80 × 4 unidades)
+//   Demais: 0
 const CAPEX_OPTIONS = [
-  { name: 'Segurança',         type: 'SECURITY',      cost: 30000,  monthlyLicenseDelta: 2000, slaImpactDays: 2, slaRisk: 0.15 },
-  { name: 'Freezer/Balança',   type: 'FREEZER',       cost: 80000,  monthlyLicenseDelta: 1500, slaImpactDays: 3, slaRisk: 0.10 },
-  { name: 'Redes',             type: 'NETWORK',       cost: 50000,  monthlyLicenseDelta: 3000, slaImpactDays: 1, slaRisk: 0.05 },
-  { name: 'Site',              type: 'SITE',          cost: 100000, monthlyLicenseDelta: 5000, slaImpactDays: 0, slaRisk: 0.00 },
-  { name: 'Self Checkout',     type: 'SELF_CHECKOUT', cost: 60000,  monthlyLicenseDelta: 2500, slaImpactDays: 0, slaRisk: 0.00 },
-  { name: 'Automação',        type: 'AUTOMATION',    cost: 40000,  monthlyLicenseDelta: 1000, slaImpactDays: 0, slaRisk: 0.00 },
+  { name: 'Segurança',        type: 'SECURITY',      cost: 0 /* TODO */, monthlyLicenseDelta: 100,  slaImpactDays: 2, slaRisk: 0.15, eliminatesMaintenance: false },
+  { name: 'Freezer/Balança',  type: 'FREEZER',       cost: 0 /* TODO */, monthlyLicenseDelta: 0,    slaImpactDays: 3, slaRisk: 0.10, eliminatesMaintenance: true  },
+  { name: 'Redes',             type: 'NETWORK',       cost: 0 /* TODO */, monthlyLicenseDelta: 0,    slaImpactDays: 1, slaRisk: 0.05, eliminatesMaintenance: false },
+  { name: 'Site',              type: 'SITE',          cost: 0 /* TODO */, monthlyLicenseDelta: 150,  slaImpactDays: 0, slaRisk: 0.00, eliminatesMaintenance: false },
+  { name: 'Self Checkout',     type: 'SELF_CHECKOUT', cost: 0 /* TODO */, monthlyLicenseDelta: 320,  slaImpactDays: 0, slaRisk: 0.00, eliminatesMaintenance: false },
+  { name: 'Automação',        type: 'AUTOMATION',    cost: 0 /* TODO */, monthlyLicenseDelta: 0,    slaImpactDays: 0, slaRisk: 0.00, eliminatesMaintenance: false },
 ]
 ```
 
@@ -67,6 +75,7 @@ Os valores de negócio (custo, taxas) devem vir do banco. Se um dia mudar, basta
 - [ ] 4 categorias criadas no banco com valores corretos
 - [ ] 6 CAPEX options criados com valores corretos
 - [ ] Rodar o seed duas vezes não duplica os registros (usar `upsert`)
+- [ ] Custo de aquisição (`cost`) confirmado com parceiro antes do deploy
 
 ---
 
@@ -87,9 +96,11 @@ CSAT = (cashier_operators / 10) × (quiz_correct_answers / quiz_total_questions)
 Criar `backend/src/engine/csat.service.ts`:
 
 ```typescript
+const IDEAL_OPERATORS = 10 // constante do sistema
+
 calculateCsat(cashierOperators: number, quizCorrect: number, quizTotal: number): number {
-  const operatorRatio = cashierOperators / IDEAL_OPERATORS  // IDEAL_OPERATORS = 10
-  const quizScore    = quizCorrect / quizTotal
+  const operatorRatio = cashierOperators / IDEAL_OPERATORS
+  const quizScore    = quizTotal > 0 ? quizCorrect / quizTotal : 0
   return operatorRatio * quizScore  // resultado entre 0 e 1
 }
 ```
@@ -102,11 +113,11 @@ calculateCsat(cashierOperators: number, quizCorrect: number, quizTotal: number):
 ### Testes obrigatórios
 
 ```typescript
-// Exemplos que devem passar:
 expect(calculateCsat(10, 10, 10)).toBe(1.0)   // CSAT máximo
-expect(calculateCsat(8,  8,  10)).toBe(0.64)  // caso básico
+expect(calculateCsat(8,  8,  10)).toBeCloseTo(0.64)
 expect(calculateCsat(0,  10, 10)).toBe(0.0)   // sem operadores
 expect(calculateCsat(10, 0,  10)).toBe(0.0)   // quiz zerado
+expect(calculateCsat(5,  9,  10)).toBeCloseTo(0.45) // exemplo do .docx
 ```
 
 ### Critérios de aceite
@@ -161,34 +172,47 @@ Se duas lojas tiverem indicadores idênticos no mesmo rank, dividir os pontos ig
 **Prioridade:** 🔴 Bloqueante
 **Depende de:** TASK-14
 
+### Constantes do sistema
+
+```typescript
+const CASHIER_SALARY    = 1000   // R$/mês por operador de caixa
+const SERVICE_SALARY    = 1200   // R$/mês por operador de serviço
+const MAINTENANCE_COST  = 400    // R$/mês — cobrado APENAS se CAPEX FREEZER NÃO implementado
+const BASE_LICENSE      = 500    // R$/mês licença base de software
+const INTEREST_RATE     = 0.12   // 12% ao mês sobre caixa > R$700k
+const CASH_LIMIT        = 700000 // limite de caixa sem juros
+```
+
 ### Fórmula completa (por loja, por rodada)
 
 ```typescript
-// Por categoria:
+// Por categoria (por rodada):
 grossRevenue   = stockSold * unitCost * (1 + priceMargin)
 taxAmount      = grossRevenue * category.taxRate
 costOfGoods    = stockSold * category.unitCost
-unsoldStock    = stockPurchased - stockSold
-breakageAmount = unsoldStock * category.unitCost * category.breakageRate
-agingAmount    = unsoldStock * category.unitCost * category.agingRate
+unsoldStock    = stockPurchased - stockSold  // acumulado entre rodadas
+
+// ⚠️ ATENÇÃO: Quebras e Aging calculados APENAS ao final da rodada 3
+// sobre o estoque não vendido TOTAL acumulado — não por rodada
+breakageAmount = (round === 3) ? totalUnsoldStock * unitCost * category.breakageRate : 0
+agingAmount    = (round === 3) ? totalUnsoldStock * unitCost * category.agingRate    : 0
 
 // Totais da loja:
 totalGrossRevenue = Σ grossRevenue
 totalTax          = Σ taxAmount
 totalCOGS         = Σ costOfGoods
-totalBreakage     = Σ breakageAmount
-totalAging        = Σ agingAmount
 netRevenue        = totalGrossRevenue - totalTax
 
-// Custos fixos e variáveis:
-payroll      = (cashierOps * 2000) + (serviceOps * 2500)
-maintenance  = 5000  // fixo
-licenses     = Σ(capex.monthlyLicenseDelta para cada CAPEX implementado)
-interest     = cashUsed > 700000 ? (cashUsed - 700000) * 0.01 : 0
+// Custos:
+payroll      = (cashierOps * CASHIER_SALARY) + (serviceOps * SERVICE_SALARY)
+maintenance  = isCapexFreezerImplemented ? 0 : MAINTENANCE_COST
+licenses     = BASE_LICENSE + Σ(capex.monthlyLicenseDelta para cada CAPEX implementado)
+interest     = cashUsed > CASH_LIMIT ? (cashUsed - CASH_LIMIT) * INTEREST_RATE : 0
 slaLoss      = Σ SlaEvent.revenueLost
 
 // Resultado final:
-totalCosts       = totalCOGS + totalBreakage + totalAging + payroll + maintenance + licenses + interest + slaLoss
+totalCosts       = totalCOGS + breakageAmount + agingAmount
+                   + payroll + maintenance + licenses + interest + slaLoss
 ebitda           = netRevenue - totalCosts
 ebitdaPercentage = ebitda / totalGrossRevenue
 ```
@@ -201,8 +225,11 @@ ebitdaPercentage = ebitda / totalGrossRevenue
 ### Testes obrigatórios
 - [ ] Cenário ideal: receita alta, custos baixos → EBITDA positivo
 - [ ] Cenário ruim: estoque alto + preço baixo → EBITDA negativo
-- [ ] Cenário com juros: cashUsed > 700k → juros descontados
+- [ ] Cenário com juros: cashUsed > 700k → juros a 12% descontados
+- [ ] Cenário manuteno: CAPEX FREEZER não implementado → R$400 cobrado; implementado → R$0
+- [ ] Cenário licença: SECURITY implementado → licença = R$500 + R$100 = R$600
 - [ ] Cenário SLA: CAPEX não feito + evento → receita perdida descontada
+- [ ] Quebras/Aging aplicados apenas na rodada 3
 - [ ] Mínimo 15 casos diferentes
 
 ### Critérios de aceite
@@ -220,30 +247,49 @@ ebitdaPercentage = ebitda / totalGrossRevenue
 
 ### Lógica
 
+#### Tipo 1 — SLA por CAPEX não implementado (eventos aleatórios)
+
 Para cada CAPEX **não implementado** pela loja:
 1. Sortear com probabilidade = `capex.slaRisk`
-2. Se evento ocorre: calcular receita perdida
+2. Se evento ocorre: calcular receita perdida com base nos dias de downtime
 3. Registrar `SlaEvent` no banco
 
 ```typescript
-// Probabilidade de evento por CAPEX (do seed):
-SECURITY:  15% → perde 2% da receita bruta estimada
-FREEZER:   10% → aging +30% nos perecíveis
-NETWORK:    5% → 1 hora de downtime (perde receita proporcional)
+// Probabilidade e impacto por CAPEX (do seed):
+SECURITY:  15% → loja sem operar por N dias (receita perdida proporcional)
+FREEZER:   10% → Perecíveis não podem ser vendidos por N dias
+NETWORK:    5% → loja offline por N dias
 ```
 
 **Importante:** usar hash determinístico para o sorteio:
 ```typescript
-// sorteio reproduzível: mesmo round + store → mesmo resultado
-const seed = hash(`${roundId}-${storeId}-${capexType}`)
+// sorteio reproduzível: mesmo round + store + capex → mesmo resultado
+const seed = hash(`${sessionId}-${storeId}-${round}-${capexType}`)
 ```
-Isso garante que o resultado não muda se o engine for re-executado por engano.
+
+#### Tipo 2 — SLA por operadores de serviço (tempo de resolução)
+
+O número de operadores de serviço contratados afeta diretamente o tempo de resolução dos eventos SLA. Quanto menos operadores, mais dias de downtime quando um evento ocorre.
+
+> ⚠️ TODO: a tabela exata de dias de resolução por número de operadores está em imagem no .docx de regras oficiais. Confirmar com o parceiro empresarial antes de implementar. Usar placeholder até confirmar.
+
+```typescript
+// Placeholder — substituir pelos valores reais após confirmação
+const SLA_DAYS_BY_SERVICE_OPERATORS: Record<number, number> = {
+  1: 5, // TODO: confirmar
+  2: 4, // TODO: confirmar
+  3: 3, // TODO: confirmar
+  4: 2, // TODO: confirmar
+  5: 1, // TODO: confirmar
+}
+```
 
 ### Critérios de aceite
 - [ ] Eventos aplicados apenas para CAPEXs não implementados
 - [ ] Sorteio determinístico (mesmo input = mesmo output)
 - [ ] `SlaEvent` persistido com `capexType`, `daysImpacted`, `revenueLost`
 - [ ] Receita perdida descontada corretamente do EBITDA
+- [ ] Número de operadores de serviço impacta os dias de downtime
 - [ ] Testes com 1000 iterações validando a distribuição de probabilidade (~15% para SECURITY)
 
 ---
@@ -262,8 +308,8 @@ Criar `backend/src/engine/engine.service.ts` que orquestra todos os serviços:
 async runRound(sessionId: string, round: number): Promise<void> {
   const stores = await this.getStoresWithPlans(sessionId, round)
 
-  // 1. Aplicar SLA
-  const slaResults = await this.slaService.applyEvents(stores)
+  // 1. Aplicar SLA (CAPEX-based + operação de serviços)
+  const slaResults = await this.slaService.applyEvents(stores, round)
 
   // 2. Calcular CSAT
   const csatScores = await this.csatService.calculateAll(stores)
@@ -271,8 +317,8 @@ async runRound(sessionId: string, round: number): Promise<void> {
   // 3. Distribuir demanda
   const demandResults = await this.demandService.distribute(stores, csatScores, sessionId)
 
-  // 4. Calcular EBITDA
-  const financialResults = await this.financialService.calculateAll(stores, demandResults, slaResults)
+  // 4. Calcular EBITDA (Quebras/Aging apenas na rodada 3)
+  const financialResults = await this.financialService.calculateAll(stores, demandResults, slaResults, round)
 
   // 5. Persistir resultados
   await this.resultService.persistRoundResults(sessionId, round, financialResults)
@@ -295,6 +341,7 @@ Body: { sessionId, round }
 - [ ] WebSocket emite `round:results` após cálculo
 - [ ] Sessão avança de estado automaticamente após engine terminar
 - [ ] Engine é idempotente (re-executar não duplica resultados)
+- [ ] Quebras e Aging aplicados apenas quando `round === 3`
 
 ---
 
