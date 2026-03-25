@@ -40,6 +40,7 @@ retail-game-platform/
 │   │   ├── sessions/       # Session lifecycle & state machine
 │   │   ├── stores/         # Store & member management
 │   │   ├── plans/          # Operational Plan (PO) decisions
+│   │   ├── quiz/           # Quiz questions, player answers, consolidation
 │   │   ├── engine/         # Core calculation engine
 │   │   │   ├── csat.service.ts
 │   │   │   ├── demand.service.ts
@@ -88,7 +89,9 @@ Session
 
 **Seed data required (run before first use):**
 - 4 Categories: PERECIVEIS, MERCEARIA, ELETRO, HIPEL (with unit_cost, tax_rate, breakage_rate, aging_rate)
-- 6 CapexOptions: SECURITY, FREEZER, NETWORK, SITE, SELF_CHECKOUT, AUTOMATION (with cost, monthly_license_delta, sla_impact_days)
+- 6 CapexOptions: SECURITY, FREEZER, NETWORK, SITE, SELF_CHECKOUT, AUTOMATION
+  - Exact acquisition costs are in the official rules image table — confirm before seeding
+  - Monthly license deltas derived from rules text (see Business Rules section below)
 
 ---
 
@@ -103,11 +106,13 @@ SETUP → ROUND_1 → RECONFIGURATION → ROUND_2 → ROUND_3 → FINISHED
 **Transitions:**
 - `SETUP → ROUND_1`: All 4 stores have confirmed their OperationalPlan (round=1, config=1)
 - `ROUND_1 → RECONFIGURATION`: Engine finishes processing round 1 results
-- `RECONFIGURATION → ROUND_2`: All stores confirm OperationalPlan (round=2, config=2)
+- `RECONFIGURATION → ROUND_2`: All stores confirm OperationalPlan (round=2, config=2) after MANDATORY player transfers
 - `ROUND_2 → ROUND_3`: Engine finishes processing round 2
 - `ROUND_3 → FINISHED`: Engine finishes processing round 3
 
 Facilitator manually triggers each transition via API.
+
+> ⚠️ **Player transfers are MANDATORY** after round 1: each store must transfer 1–2 players with other stores before reconfiguration is unlocked.
 
 ---
 
@@ -117,7 +122,7 @@ Facilitator manually triggers each transition via API.
 ```typescript
 csat = (cashierOperators / IDEAL_OPERATORS) * quizScorePercentage
 // IDEAL_OPERATORS = 10 (system constant)
-// quizScorePercentage = correctAnswers / totalQuestions
+// quizScorePercentage = correctAnswers / totalQuestions (0 to 1)
 ```
 
 ### Demand Distribution
@@ -139,45 +144,77 @@ grossRevenue      = stockSold * (unitCost * (1 + priceMargin))
 taxAmount         = grossRevenue * category.taxRate
 costOfGoods       = stockSold * category.unitCost
 unsoldStock       = stockPurchased - stockSold
-breakageAmount    = unsoldStock * unitCost * category.breakageRate
-agingAmount       = unsoldStock * unitCost * category.agingRate
+
+// Breakage and Aging: applied ONLY at the end of the LAST round
+// on total accumulated unsold stock across all rounds — NOT per round
+breakageAmount    = totalUnsoldStock * unitCost * category.breakageRate  // end of round 3 only
+agingAmount       = totalUnsoldStock * unitCost * category.agingRate     // end of round 3 only
 
 // Store totals:
 totalGrossRevenue = sum(grossRevenue per category)
 totalTax          = sum(taxAmount per category)
 totalCOGS         = sum(costOfGoods per category)
-totalBreakage     = sum(breakageAmount per category)
-totalAging        = sum(agingAmount per category)
 
 // Fixed costs:
-payrollCost       = cashierOperators * CASHIER_SALARY + serviceOperators * SERVICE_SALARY
-maintenanceCost   = sum(equipment maintenance not covered by CAPEX)
-licenseCost       = base_license + sum(capex monthly_license_delta for implemented CAPEXs)
+// Cashier: R$1,000/month per operator
+// Service: R$1,200/month per operator
+payrollCost       = cashierOperators * 1000 + serviceOperators * 1200
+
+// Maintenance: R$400/month — charged ONLY if CAPEX FREEZER is NOT implemented
+maintenanceCost   = isCapexFreezerImplemented ? 0 : 400
+
+// Software license: base R$500/month + increments from implemented CAPEXs
+// SECURITY: +R$100 (base R$500 × 20%)
+// SITE:     +R$150 (base R$500 × 30%)
+// SELF_CHECKOUT: +R$320 (R$80 × 4 units)
+// Other CAPEXs: no license change
+licenseCost       = BASE_LICENSE + sum(capex.monthlyLicenseDelta for implemented CAPEXs)
+// BASE_LICENSE = 500 (system constant)
+
+// Interest: 12%/month on cash used above R$700k
 interestCost      = cashUsed > 700000 ? (cashUsed - 700000) * 0.12 : 0
+
 slaRevenueLost    = sum(SlaEvent.revenueLost for this store/round)
 
 // Final:
 netRevenue        = totalGrossRevenue - totalTax
-totalCosts        = totalCOGS + totalBreakage + totalAging + payrollCost + maintenanceCost + licenseCost + interestCost + slaRevenueLost
+totalCosts        = totalCOGS + breakageAmount + agingAmount + payrollCost
+                    + maintenanceCost + licenseCost + interestCost + slaRevenueLost
 ebitda            = netRevenue - totalCosts
 ebitdaPercentage  = ebitda / totalGrossRevenue
 ```
 
-### SLA Events
+### SLA Events — Two types
+
+#### Type 1: CAPEX-based SLA (random events)
 ```typescript
-// For each unimplemented CAPEX, roll probability of failure
-// If failure occurs:
-revenueLost = (estimatedDailyRevenue * capexOption.slaImpactDays)
+// For each unimplemented CAPEX with slaRisk > 0, roll probability of failure
+// If failure occurs: revenue lost proportional to downtime days
 // Register SlaEvent and subtract from EBITDA
+// Use deterministic hash: hash(`${sessionId}-${storeId}-${round}-${capexType}`)
+```
+
+| CAPEX not implemented | Risk | Impact |
+|---|---|---|
+| SECURITY | 15% | Revenue lost for N downtime days |
+| FREEZER | 10% | Perecíveis unsellable for N days |
+| NETWORK | 5% | Store offline for N downtime days |
+
+#### Type 2: Service Operator SLA (resolution time)
+```typescript
+// The number of service operators directly affects how quickly SLA events are resolved
+// Fewer operators = more days of downtime when an event occurs
+// The resolution days table per number of operators is defined in the official rules (.docx)
+// ⚠️ PENDING: exact table values must be confirmed from the official rules image before implementation
 ```
 
 ### Reconfiguration Constraints
 ```typescript
+// MANDATORY: 1-2 player transfers per store before reconfiguration unlocks
 // ALLOWED:
 availableCash = initialCash - cashUsedInConfig1 + unimplementedCapexValue
 // NOT ALLOWED: use revenue from completed sales
 // NOT ALLOWED: transfer stock between categories
-// MAX PLAYER TRANSFERS: 2 per store
 ```
 
 ---
@@ -197,6 +234,7 @@ round:started         → { round }          emitted to session room
 round:results         → { results[] }      emitted to session room after engine runs
 session:finished      → { finalResults[] } emitted to session room
 sla:event             → { slaEvent }       emitted to store room when SLA event occurs
+quiz:player-answered  → { userId, storeId, round, answered, total } emitted to store room
 ```
 
 ### Events (Client → Server)
@@ -229,7 +267,7 @@ GET    /sessions/:id/status         → get all stores status
 ```
 POST   /sessions/:id/stores         → create store
 POST   /stores/:id/join             → join store with role
-PATCH  /stores/:id/transfer         → transfer players (facilitator)
+PATCH  /stores/:id/transfer         → transfer players (facilitator, mandatory after round 1)
 ```
 
 ### Plans
@@ -238,7 +276,16 @@ GET    /plans/:storeId/:round       → get current plan
 PATCH  /plans/:id/category          → update category decision
 PATCH  /plans/:id/capex             → update capex decision
 PATCH  /plans/:id/workforce         → update workforce decision
-POST   /plans/:id/confirm           → confirm plan (store manager only)
+POST   /plans/:id/confirm           → confirm plan (store manager only, requires quiz answered)
+```
+
+### Quiz
+```
+POST   /sessions/:sessionId/quiz/questions        → create questions (facilitator)
+GET    /sessions/:sessionId/quiz/questions        → list questions with answer key (facilitator)
+GET    /stores/:storeId/quiz?round=N              → get quiz without answer key (player)
+POST   /stores/:storeId/quiz/submit               → submit answers (player, once per round)
+POST   /quiz/stores/:storeId/consolidate          → consolidate store score (internal/engine)
 ```
 
 ### Engine
@@ -260,7 +307,7 @@ GET    /results/:sessionId/ranking  → ranking by EBITDA%
 Performance:  REST APIs < 300ms | WebSocket updates < 500ms latency
 Security:     bcrypt cost=10 | JWT 1h | HTTPS in production
 Scalability:  Support 20 concurrent users per session (4 stores × 5 players)
-Testing:      Unit tests required for entire engine/ module
+Testing:      Unit tests required for entire engine/ module (minimum 80% coverage)
 Logging:      Structured logs with Pino or Winston
 CI/CD:        GitHub Actions → auto deploy on push to main
 ```
