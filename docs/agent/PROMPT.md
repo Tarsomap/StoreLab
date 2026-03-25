@@ -42,11 +42,12 @@ Before writing any code, read and internalize:
 - 5 roles per store: STORE_MANAGER, SUPPLY_MANAGER, COMMERCIAL_MANAGER, OPERATIONAL_MANAGER, SERVICE_MANAGER
 - Stock input is always in **units**, never in currency
 - Initial cash default is R$700.000, configurable by facilitator
-- Excess cash interest is **1% per month** on amount above R$700.000
+- Excess cash interest is **12% per month** on amount above R$700.000
 - Demand distributed by ranking stores on: basket price, availability, CSAT
 - CSAT formula: `CSAT = (cashierOperators / 10) * (quizScorePercentage / 100)`
 - Quiz: facilitator creates questions per session/round; players answer individually; store score = team average
-- Reconfiguration: can only use unused initial cash + unimplemented CAPEX value; cannot use sales revenue; max 2 player transfers per store
+- Reconfiguration: can only use unused initial cash + unimplemented CAPEX value; cannot use sales revenue; max 2 player transfers per store; **transfers are MANDATORY (1–2 per store)**
+- **Breakage and Aging** are calculated **only once at the end of round 3**, applied to total accumulated unsold stock — NOT per round
 
 ---
 
@@ -77,7 +78,7 @@ backend/
     sessions/
     stores/
     plans/
-    quiz/          ← NEW: quiz questions, player answers, consolidation
+    quiz/          ← quiz questions, player answers, consolidation
     engine/
     results/
     gateway/
@@ -106,7 +107,7 @@ frontend/
 ### 2 — Sessions
 - create session, create stores, join store
 - advance round/status state machine
-- transfer players (reconfiguration)
+- transfer players (reconfiguration) — **MANDATORY: 1–2 per store before reconfiguration unlocks**
 
 ### 3 — Plans
 - category decisions (stock, pricing)
@@ -125,9 +126,34 @@ frontend/
 ### 5 — Engine
 - `CsatService`: reads `QuizAnswer.scorePercentage`
 - `DemandService`: distributes demand by basket price, availability, CSAT
-- `FinancialService`: full EBITDA formula
-- `SlaService`: probabilistic SLA events per unimplemented CAPEX
+- `FinancialService`: full EBITDA formula (see fixed costs below)
+- `SlaService`: CAPEX-based probabilistic SLA events + service operator resolution time
 - `EngineService`: orchestrates all services per round
+
+**Fixed cost constants (use these exactly):**
+```typescript
+const CASHIER_SALARY    = 1000   // R$/month per cashier operator
+const SERVICE_SALARY    = 1200   // R$/month per service operator
+const MAINTENANCE_COST  = 400    // R$/month — charged ONLY if CAPEX FREEZER is NOT implemented
+const BASE_LICENSE      = 500    // R$/month base software license
+const INTEREST_RATE     = 0.12   // 12% per month on cash > R$700k
+const IDEAL_OPERATORS   = 10     // cashier operators ideal count for CSAT
+```
+
+**License deltas per CAPEX (when implemented):**
+```typescript
+// SECURITY:      +R$100/month  (base R$500 × 20%)
+// SITE:          +R$150/month  (base R$500 × 30%)
+// SELF_CHECKOUT: +R$320/month  (R$80 × 4 units)
+// FREEZER, NETWORK, AUTOMATION: no license change
+```
+
+**Breakage and Aging timing:**
+```typescript
+// Applied ONCE at the end of round 3 only
+// On total accumulated unsold stock across all rounds
+// NOT calculated per round
+```
 
 ### 6 — Results
 - round results per store
@@ -231,23 +257,25 @@ model QuizAnswer {
 ## Financial Formulas Reference
 
 ```typescript
-// Per category:
+// Per category (per round):
 grossRevenue   = stockSold * unitCost * (1 + priceMargin)
 taxAmount      = grossRevenue * taxRate
 costOfGoods    = stockSold * unitCost
-unsoldStock    = stockPurchased - stockSold
-breakageAmount = unsoldStock * unitCost * breakageRate
-agingAmount    = unsoldStock * unitCost * agingRate
+unsoldStock    = stockPurchased - stockSold  // accumulated across rounds
+
+// Breakage and Aging: ONLY at end of round 3, on total unsold stock:
+breakageAmount = totalUnsoldStock * unitCost * breakageRate
+agingAmount    = totalUnsoldStock * unitCost * agingRate
 
 // Store totals:
 netRevenue     = totalGrossRevenue - totalTax
-payroll        = cashierOperators * 2000 + serviceOperators * 2500
-maintenance    = 5000  // fixed
-licenses       = sum(capex.monthlyLicenseDelta) for implemented CAPEXs
-interest       = max(0, cashUsed - 700000) * 0.01
+payroll        = cashierOperators * 1000 + serviceOperators * 1200
+maintenance    = capexFreezerImplemented ? 0 : 400
+licenses       = 500 + sum(capex.monthlyLicenseDelta for implemented CAPEXs)
+interest       = max(0, cashUsed - 700000) * 0.12
 slaLoss        = sum(SlaEvent.revenueLost)
 
-ebitda         = netRevenue - (totalCOGS + totalBreakage + totalAging
+ebitda         = netRevenue - (totalCOGS + breakageAmount + agingAmount
                  + payroll + maintenance + licenses + interest + slaLoss)
 ebitda%        = ebitda / totalGrossRevenue * 100
 ```
@@ -260,8 +288,8 @@ ebitda%        = ebitda / totalGrossRevenue * 100
 - Never hardcode business constants outside `constants/` or `seed/`
 - Controllers must be thin — all business logic in services
 - Use DTO validation everywhere (class-validator)
-- Add unit tests for all engine services
-- Use deterministic seed for SLA event randomness (hash of `sessionId + storeId + round`)
+- Add unit tests for all engine services (minimum 80% coverage)
+- Use deterministic seed for SLA event randomness (hash of `sessionId + storeId + round + capexType`)
 
 ---
 
@@ -288,3 +316,4 @@ ebitda%        = ebitda / totalGrossRevenue * 100
 - Do not skip unit tests for `engine/` services
 - Do not invent business rules not documented here
 - If a detail is missing, choose the simplest implementation consistent with this prompt
+- If a value is marked as PENDING (e.g., CAPEX acquisition costs, SLA operator table), leave a `// TODO: confirm with business partner` comment and use a placeholder constant
