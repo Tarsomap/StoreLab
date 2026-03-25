@@ -21,17 +21,17 @@
 | RF-09 | Real-time collaborative PO filling via WebSocket | 🔴 Essential |
 | RF-10 | Real-time cash balance calculation during PO filling | 🔴 Essential |
 | RF-11 | Real-time projected EBITDA during PO filling | 🔴 Essential |
-| RF-12 | Alert and interest (1%/month) when cash exceeds R$700k | 🔴 Essential |
+| RF-12 | Alert and interest (12%/month) when cash used exceeds R$700k | 🔴 Essential |
 | RF-13 | Store manager confirms PO to unlock round | 🔴 Essential |
 | RF-14 | Engine calculates CSAT from operators + quiz score | 🔴 Essential |
 | RF-15 | Engine distributes demand based on Price, Availability and CSAT ranking (1-4) | 🔴 Essential |
-| RF-16 | Engine calculates Breakage and Aging on unsold stock per category | 🔴 Essential |
+| RF-16 | Engine calculates Breakage and Aging on total unsold stock at the end of the last round only | 🔴 Essential |
 | RF-17 | Engine calculates final EBITDA per store per round | 🔴 Essential |
 | RF-18 | Engine applies SLA events for unimplemented CAPEXs | 🔴 Essential |
 | RF-19 | Display store ranking by % EBITDA after each round | 🔴 Essential |
 | RF-20 | Display full PO breakdown at end of session | 🔴 Essential |
-| RF-21 | Facilitator moves up to 2 players between stores after round 1 | 🔴 Essential |
-| RF-22 | Reconfiguration with cash constraints (no sales revenue reuse) | 🔴 Essential |
+| RF-21 | Facilitator moves 1–2 players between stores after round 1 (MANDATORY — reconfiguration is locked until transfers are done) | 🔴 Essential |
+| RF-22 | Reconfiguration with cash constraints (no sales revenue reuse, no stock reallocation between categories) | 🔴 Essential |
 | RF-23 | Facilitator creates quiz questions per session; players answer before confirming PO | 🔴 Essential |
 | RF-24 | Pricing scenario simulator before confirming PO | 🟡 Desirable |
 | RF-25 | Configurable random event probabilities | 🟡 Desirable |
@@ -52,7 +52,7 @@
 | RNF-05 | Responsive UI for tablets and desktops | 🟠 Important |
 | RNF-06 | REST API response time < 300ms under normal load | 🟠 Important |
 | RNF-07 | Automatic database backups via deploy provider | 🟠 Important |
-| RNF-08 | Unit test coverage required for entire engine/ module | 🟠 Important |
+| RNF-08 | Unit test coverage ≥ 80% for entire engine/ module | 🟠 Important |
 | RNF-09 | Structured error logging (Pino or Winston) | 🟡 Desirable |
 | RNF-10 | Automated CI/CD via GitHub Actions | 🟡 Desirable |
 
@@ -99,10 +99,10 @@
 |---|---|---|
 | US-19 | System must calculate CSAT from operators and quiz score | 🔴 MVP |
 | US-20 | System must distribute demand between stores based on Price, Availability and CSAT | 🔴 MVP |
-| US-21 | System must calculate Breakage and Aging on unsold stock | 🔴 MVP |
+| US-21 | System must calculate Breakage and Aging on total unsold stock at end of last round | 🔴 MVP |
 | US-22 | System must calculate taxes, payroll, maintenance and licenses for EBITDA | 🔴 MVP |
 | US-23 | System must apply SLA events for unimplemented CAPEXs | 🔴 MVP |
-| US-24 | System must process player transfer between stores (max 2 per store) | 🔴 MVP |
+| US-24 | System must process mandatory player transfer between stores (1–2 per store after round 1) | 🔴 MVP |
 
 ### Epic 6 — Results & Ranking
 | ID | User Story | Priority |
