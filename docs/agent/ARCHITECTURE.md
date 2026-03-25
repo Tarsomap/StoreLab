@@ -3,6 +3,9 @@
 > Este documento é a fonte da verdade técnica do projeto.
 > Ao implementar qualquer feature, siga rigorosamente as decisões aqui documentadas.
 > Em caso de conflito entre este documento e qualquer outro, este prevalece.
+>
+> ⚠️ **Todos os valores de negócio foram validados e consolidados no `spec.md` v1.1 (25/03/2026).**
+> Não existem mais itens PENDING neste documento.
 
 ---
 
@@ -87,11 +90,54 @@ Session
   └── PlayerTransfer[]
 ```
 
-**Seed data required (run before first use):**
-- 4 Categories: PERECIVEIS, MERCEARIA, ELETRO, HIPEL (with unit_cost, tax_rate, breakage_rate, aging_rate)
-- 6 CapexOptions: SECURITY, FREEZER, NETWORK, SITE, SELF_CHECKOUT, AUTOMATION
-  - Exact acquisition costs are in the official rules image table — confirm before seeding
-  - Monthly license deltas derived from rules text (see Business Rules section below)
+### Seed Data (validado — spec.md v1.1)
+
+#### Categories
+
+| key | label | unit_cost | tax_rate | breakage_rate | aging_rate | stock_available |
+|---|---|---|---|---|---|---|
+| PERECIVEIS | Perecíveis | 20.00 | 0.12 | 0.020 | 0.058 | 4000 |
+| MERCEARIA | Mercearia | 30.00 | 0.07 | 0.015 | 0.008 | 6000 |
+| ELETRO | Eletro | 500.00 | 0.25 | 0.000 | 0.013 | 700 |
+| HIPEL | Hipel | 45.00 | 0.17 | 0.010 | 0.011 | 5000 |
+
+> Decisão registrada: imposto de Eletro = 25% (tabela oficial).
+> O gabarito xlsx mostra 0% por erro de preenchimento manual. Prevalece a tabela oficial.
+
+#### CAPEX Options
+
+| key | label | acquisition_cost | downtime_fixed_days | monthly_license_delta | maintenance_saving |
+|---|---|---|---|---|---|
+| SECURITY | Segurança | 50000.00 | 2 | 100.00 | 0.00 |
+| FREEZER | Balança/Freezer | 75000.00 | 1 | 0.00 | 400.00 |
+| NETWORK | Redes | 80000.00 | 2 | 0.00 | 0.00 |
+| SITE | Melhorias no Site | 65000.00 | 1 | 150.00 | 0.00 |
+| SELF_CHECKOUT | Self Checkout | 80000.00 | 2 | 320.00 | 0.00 |
+| AUTOMATION | Melhoria Contínua | 45000.00 | 0 | 0.00 | 0.00 |
+
+> `downtime_fixed_days` é o valor fixo da fórmula: **dias parados = downtime_fixed_days + SLA_TABLE[serviceOperators]**.
+> AUTOMATION tem downtime_fixed_days = 0 pois não gera evento de incidente.
+> Total possível de CAPEX: R$ 395.000 (caixa inicial: R$ 700.000).
+
+#### SLA Table
+
+| service_operators | sla_days |
+|---|---|
+| 0 | 6 |
+| 1 | 5 |
+| 2 | 4 |
+| 3 | 3 |
+| 4 | 2 |
+| 5 | 1 |
+
+#### System Constants
+
+```typescript
+IDEAL_CASHIER_OPERATORS = 10       // denominador do CSAT
+INITIAL_CASH            = 700000   // caixa inicial por loja (R$)
+INTEREST_RATE_MONTHLY   = 0.12     // juros sobre excedente de caixa
+BASE_LICENSE_COST       = 500      // licença base mensal (R$)
+```
 
 ---
 
@@ -100,19 +146,22 @@ Session
 Session progresses through these states in order:
 
 ```
-SETUP → ROUND_1 → RECONFIGURATION → ROUND_2 → ROUND_3 → FINISHED
+SETUP → ROUND_1_CONFIG → ROUND_1 → RECONFIGURATION → ROUND_2 → ROUND_3 → FINISHED
 ```
 
 **Transitions:**
-- `SETUP → ROUND_1`: All 4 stores have confirmed their OperationalPlan (round=1, config=1)
-- `ROUND_1 → RECONFIGURATION`: Engine finishes processing round 1 results
-- `RECONFIGURATION → ROUND_2`: All stores confirm OperationalPlan (round=2, config=2) after MANDATORY player transfers
-- `ROUND_2 → ROUND_3`: Engine finishes processing round 2
-- `ROUND_3 → FINISHED`: Engine finishes processing round 3
+- `SETUP → ROUND_1_CONFIG`: Facilitador cria as 4 lojas e todos os jogadores entram com seus papéis
+- `ROUND_1_CONFIG → ROUND_1`: Todas as 4 lojas confirmam o PO (round=1, config=1)
+- `ROUND_1 → RECONFIGURATION`: Motor finaliza o cálculo da rodada 1
+- `RECONFIGURATION → ROUND_2`: Transferência obrigatória concluída + todas as lojas confirmam PO (round=2, config=2)
+- `ROUND_2 → ROUND_3`: Motor finaliza o cálculo da rodada 2
+- `ROUND_3 → FINISHED`: Motor finaliza o cálculo da rodada 3 (Quebras e Aging aplicados)
 
-Facilitator manually triggers each transition via API.
+Facilitador aciona manualmente cada transição via API.
 
-> ⚠️ **Player transfers are MANDATORY** after round 1: each store must transfer 1–2 players with other stores before reconfiguration is unlocked.
+> ⚠️ **Transferência de jogadores é OBRIGATÓRIA** após a rodada 1.
+> Cada loja deve transferir 1–2 jogadores para outras lojas antes de desbloquear a 2ª Configuração.
+> O Gerente da Loja (role: STORE_MANAGER) **nunca pode ser transferido**.
 
 ---
 
@@ -120,101 +169,116 @@ Facilitator manually triggers each transition via API.
 
 ### CSAT
 ```typescript
-csat = (cashierOperators / IDEAL_OPERATORS) * quizScorePercentage
-// IDEAL_OPERATORS = 10 (system constant)
+csat = (cashierOperators / IDEAL_CASHIER_OPERATORS) * quizScorePercentage
+// IDEAL_CASHIER_OPERATORS = 10
 // quizScorePercentage = correctAnswers / totalQuestions (0 to 1)
+// Ex.: 5 operadores + 90% quiz → (5/10) * 0.90 = 0.45
 ```
 
 ### Demand Distribution
 ```typescript
-// Each indicator ranked 1-4 across stores (4 = best)
-// Basket Price: LOWER is better (invert ranking)
-// Availability: HIGHER is better
-// CSAT: HIGHER is better
+// Cada indicador recebe rank 1–4 entre as lojas (4 = melhor)
+// Preço da Cesta: MENOR é melhor (rank 4 = menor preço)
+// Disponibilidade: MAIOR é melhor (rank 4 = maior disponibilidade)
+// CSAT: MAIOR é melhor (rank 4 = maior CSAT)
 
-storeScore = priceRank + availabilityRank + csatRank  // max 12
+storeScore  = priceRank + availabilityRank + csatRank  // máximo 12, mínimo 3; soma total das 4 lojas sempre = 30
 demandShare = storeScore / totalScoreAllStores
-stockSold = availableStock * demandShare
+stockSold   = totalAvailableStock * demandShare
+
+// Disponibilidade por categoria:
+availability = storeStockPurchased / totalStockAvailableInSession
+// Disponibilidade geral = média ponderada por volume das categorias
 ```
 
 ### Financial Calculation (per store per round)
 ```typescript
-// Per category:
-grossRevenue      = stockSold * (unitCost * (1 + priceMargin))
-taxAmount         = grossRevenue * category.taxRate
-costOfGoods       = stockSold * category.unitCost
-unsoldStock       = stockPurchased - stockSold
+// --- POR CATEGORIA ---
+grossRevenue = stockSold * (unitCost * (1 + priceMargin))
+taxAmount    = grossRevenue * category.taxRate
+costOfGoods  = stockSold * category.unitCost
+unsoldStock  = stockPurchased - stockSold
 
-// Breakage and Aging: applied ONLY at the end of the LAST round
-// on total accumulated unsold stock across all rounds — NOT per round
-breakageAmount    = totalUnsoldStock * unitCost * category.breakageRate  // end of round 3 only
-agingAmount       = totalUnsoldStock * unitCost * category.agingRate     // end of round 3 only
+// --- QUEBRAS E AGING ---
+// Calculados APENAS ao final da RODADA 3
+// Sobre o estoque total não vendido acumulado nas 3 rodadas
+breakageAmount = totalUnsoldStock * unitCost * category.breakageRate  // só round 3
+agingAmount    = totalUnsoldStock * unitCost * category.agingRate      // só round 3
 
-// Store totals:
-totalGrossRevenue = sum(grossRevenue per category)
-totalTax          = sum(taxAmount per category)
-totalCOGS         = sum(costOfGoods per category)
+// --- TOTAIS DA LOJA ---
+totalGrossRevenue = sum(grossRevenue por categoria)
+totalTax          = sum(taxAmount por categoria)
+totalCOGS         = sum(costOfGoods por categoria)
 
-// Fixed costs:
-// Cashier: R$1,000/month per operator
-// Service: R$1,200/month per operator
-payrollCost       = cashierOperators * 1000 + serviceOperators * 1200
+// --- CUSTOS FIXOS ---
+payrollCost     = (cashierOperators * 1000) + (serviceOperators * 1200)
+maintenanceCost = capexFreezerImplemented ? 0 : 400
 
-// Maintenance: R$400/month — charged ONLY if CAPEX FREEZER is NOT implemented
-maintenanceCost   = isCapexFreezerImplemented ? 0 : 400
+// --- LICENÇAS ---
+// Base: R$500/mês (sempre ativo)
+// + delta de cada CAPEX implementado (ver tabela seed acima)
+licenseCost = BASE_LICENSE_COST + sum(capex.monthly_license_delta for implementedCapexes)
+// Ex.: SECURITY + SELF_CHECKOUT implementados → 500 + 100 + 320 = R$920/mês
 
-// Software license: base R$500/month + increments from implemented CAPEXs
-// SECURITY: +R$100 (base R$500 × 20%)
-// SITE:     +R$150 (base R$500 × 30%)
-// SELF_CHECKOUT: +R$320 (R$80 × 4 units)
-// Other CAPEXs: no license change
-licenseCost       = BASE_LICENSE + sum(capex.monthlyLicenseDelta for implemented CAPEXs)
-// BASE_LICENSE = 500 (system constant)
+// --- JUROS ---
+interestCost = cashUsed > INITIAL_CASH ? (cashUsed - INITIAL_CASH) * INTEREST_RATE_MONTHLY : 0
 
-// Interest: 12%/month on cash used above R$700k
-interestCost      = cashUsed > 700000 ? (cashUsed - 700000) * 0.12 : 0
+// --- PERDAS POR SLA ---
+// diasParados = capex.downtime_fixed_days + SLA_TABLE[serviceOperators]
+// revenueLost = (grossRevenue / 30) * diasParados
+slaRevenueLost = sum(slaEvent.revenueLost for this store/round)
 
-slaRevenueLost    = sum(SlaEvent.revenueLost for this store/round)
-
-// Final:
-netRevenue        = totalGrossRevenue - totalTax
-totalCosts        = totalCOGS + breakageAmount + agingAmount + payrollCost
-                    + maintenanceCost + licenseCost + interestCost + slaRevenueLost
-ebitda            = netRevenue - totalCosts
-ebitdaPercentage  = ebitda / totalGrossRevenue
+// --- RESULTADO FINAL ---
+netRevenue       = totalGrossRevenue - totalTax
+totalCosts       = totalCOGS + breakageAmount + agingAmount
+                 + payrollCost + maintenanceCost + licenseCost
+                 + interestCost + slaRevenueLost
+ebitda           = netRevenue - totalCosts
+ebitdaPercentage = ebitda / totalGrossRevenue
 ```
 
-### SLA Events — Two types
+### SLA Events
 
-#### Type 1: CAPEX-based SLA (random events)
+#### Type 1: CAPEX-based (random events per round)
 ```typescript
-// For each unimplemented CAPEX with slaRisk > 0, roll probability of failure
-// If failure occurs: revenue lost proportional to downtime days
-// Register SlaEvent and subtract from EBITDA
-// Use deterministic hash: hash(`${sessionId}-${storeId}-${round}-${capexType}`)
+// Para cada CAPEX não implementado com downtime_fixed_days > 0,
+// sorteia probabilidade de falha por rodada.
+// Usa hash determinístico para reprodutibilidade:
+// hash(`${sessionId}-${storeId}-${round}-${capexKey}`)
 ```
 
-| CAPEX not implemented | Risk | Impact |
+| CAPEX não implementado | Risco/rodada | Impacto |
 |---|---|---|
-| SECURITY | 15% | Revenue lost for N downtime days |
-| FREEZER | 10% | Perecíveis unsellable for N days |
-| NETWORK | 5% | Store offline for N downtime days |
+| SECURITY | 15% | Loja parada por (2 + SLA) dias |
+| FREEZER | 10% | Perecíveis indisponíveis por (1 + SLA) dias |
+| NETWORK | 5% | Loja parada por (2 + SLA) dias |
+| SITE | 10% | Loja parada por (1 + SLA) dias |
+| SELF_CHECKOUT | 20% | Perda de vendas por (2 + SLA) dias |
+| AUTOMATION | 0% | Sem incidente |
 
-#### Type 2: Service Operator SLA (resolution time)
+#### Type 2: SLA Resolution Table
 ```typescript
-// The number of service operators directly affects how quickly SLA events are resolved
-// Fewer operators = more days of downtime when an event occurs
-// The resolution days table per number of operators is defined in the official rules (.docx)
-// ⚠️ PENDING: exact table values must be confirmed from the official rules image before implementation
+const SLA_TABLE: Record<number, number> = {
+  0: 6,
+  1: 5,
+  2: 4,
+  3: 3,
+  4: 2,
+  5: 1,
+}
+// diasParados = capex.downtime_fixed_days + SLA_TABLE[serviceOperators]
 ```
 
 ### Reconfiguration Constraints
 ```typescript
-// MANDATORY: 1-2 player transfers per store before reconfiguration unlocks
-// ALLOWED:
+// OBRIGATÓRIO: 1–2 transferências de jogadores por loja antes de desbloquear
+// STORE_MANAGER nunca pode ser transferido
+// Loja de destino não pode ter 2 pessoas com o mesmo papel
+
+// Caixa disponível para 2ª Configuração:
 availableCash = initialCash - cashUsedInConfig1 + unimplementedCapexValue
-// NOT ALLOWED: use revenue from completed sales
-// NOT ALLOWED: transfer stock between categories
+// NÃO pode usar receita de vendas já realizadas
+// NÃO pode remanejar estoque entre categorias
 ```
 
 ---
@@ -222,19 +286,19 @@ availableCash = initialCash - cashUsedInConfig1 + unimplementedCapexValue
 ## WebSocket Events
 
 ### Rooms
-- `session:{sessionId}` — all participants of a session
-- `store:{storeId}` — all members of a specific store
-- `facilitator:{sessionId}` — facilitator only
+- `session:{sessionId}` — todos os participantes da sessão
+- `store:{storeId}` — todos os membros de uma loja específica
+- `facilitator:{sessionId}` — somente o facilitador
 
 ### Events (Server → Client)
 ```
-plan:updated          → { plan }           emitted to store room on any PO change
-store:confirmed       → { storeId }        emitted to facilitator when store confirms
-round:started         → { round }          emitted to session room
-round:results         → { results[] }      emitted to session room after engine runs
-session:finished      → { finalResults[] } emitted to session room
-sla:event             → { slaEvent }       emitted to store room when SLA event occurs
-quiz:player-answered  → { userId, storeId, round, answered, total } emitted to store room
+plan:updated          → { plan }            emitido ao store room em qualquer alteração no PO
+store:confirmed       → { storeId }         emitido ao facilitador quando loja confirma PO
+round:started         → { round }           emitido ao session room
+round:results         → { results[] }       emitido ao session room após motor rodar
+session:finished      → { finalResults[] }  emitido ao session room
+sla:event             → { slaEvent }        emitido ao store room quando evento SLA ocorre
+quiz:player-answered  → { userId, storeId, round, answered, total } emitido ao store room
 ```
 
 ### Events (Client → Server)
@@ -257,46 +321,46 @@ POST /auth/refresh      → { refreshToken } → { accessToken }
 
 ### Sessions
 ```
-POST   /sessions                    → create session
-GET    /sessions/:id                → get session details
-PATCH  /sessions/:id/advance        → advance to next state (facilitator only)
-GET    /sessions/:id/status         → get all stores status
+POST   /sessions                    → criar sessão
+GET    /sessions/:id                → detalhes da sessão
+PATCH  /sessions/:id/advance        → avançar estado (facilitador only)
+GET    /sessions/:id/status         → status de todas as lojas
 ```
 
 ### Stores
 ```
-POST   /sessions/:id/stores         → create store
-POST   /stores/:id/join             → join store with role
-PATCH  /stores/:id/transfer         → transfer players (facilitator, mandatory after round 1)
+POST   /sessions/:id/stores         → criar loja
+POST   /stores/:id/join             → entrar na loja com papel
+PATCH  /stores/:id/transfer         → transferir jogadores (facilitador, obrigatório após rodada 1)
 ```
 
 ### Plans
 ```
-GET    /plans/:storeId/:round       → get current plan
-PATCH  /plans/:id/category          → update category decision
-PATCH  /plans/:id/capex             → update capex decision
-PATCH  /plans/:id/workforce         → update workforce decision
-POST   /plans/:id/confirm           → confirm plan (store manager only, requires quiz answered)
+GET    /plans/:storeId/:round       → plano atual da loja
+PATCH  /plans/:id/category          → atualizar decisão de categoria
+PATCH  /plans/:id/capex             → atualizar decisão de CAPEX
+PATCH  /plans/:id/workforce         → atualizar decisão de equipe
+POST   /plans/:id/confirm           → confirmar PO (store manager only, requer quiz respondido)
 ```
 
 ### Quiz
 ```
-POST   /sessions/:sessionId/quiz/questions        → create questions (facilitator)
-GET    /sessions/:sessionId/quiz/questions        → list questions with answer key (facilitator)
-GET    /stores/:storeId/quiz?round=N              → get quiz without answer key (player)
-POST   /stores/:storeId/quiz/submit               → submit answers (player, once per round)
-POST   /quiz/stores/:storeId/consolidate          → consolidate store score (internal/engine)
+POST   /sessions/:sessionId/quiz/questions        → criar perguntas (facilitador)
+GET    /sessions/:sessionId/quiz/questions        → listar com gabarito (facilitador)
+GET    /stores/:storeId/quiz?round=N              → quiz sem gabarito (player)
+POST   /stores/:storeId/quiz/submit               → submeter respostas (player, 1x por rodada)
+POST   /quiz/stores/:storeId/consolidate          → consolidar score (internal/engine)
 ```
 
 ### Engine
 ```
-POST   /engine/run-round            → trigger round calculation (facilitator only)
+POST   /engine/run-round            → disparar cálculo da rodada (facilitador only)
 ```
 
 ### Results
 ```
-GET    /results/:sessionId          → all round results
-GET    /results/:sessionId/ranking  → ranking by EBITDA%
+GET    /results/:sessionId          → todos os resultados por rodada
+GET    /results/:sessionId/ranking  → ranking por % EBITDA
 ```
 
 ---
