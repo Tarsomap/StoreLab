@@ -7,42 +7,46 @@ async function main() {
 
   // ─────────────────────────────────────────
   // CATEGORIES
-  // Fonte: docs/pdf/arquitetura-tecnica.md § 6.1
+  // Fonte: docs/agent/spec.md v1.1
   // ─────────────────────────────────────────
   const categories = [
     {
       name: CategoryName.PERECIVEIS,
-      unitCost: 8.0,
-      taxRate: 0.0925,   // 9.25%
-      breakageRate: 0.03, // 3.0%
-      agingRate: 0.02,    // 2.0%
+      unitCost:     20.00,
+      taxRate:      0.12,   // 12%
+      breakageRate: 0.020,  // 2.0%
+      agingRate:    0.058,  // 5.8%
+      stockAvailable: 4000,
     },
     {
       name: CategoryName.MERCEARIA,
-      unitCost: 5.0,
-      taxRate: 0.0765,   // 7.65%
-      breakageRate: 0.01, // 1.0%
-      agingRate: 0.0,     // 0.0%
+      unitCost:     30.00,
+      taxRate:      0.07,   // 7%
+      breakageRate: 0.015,  // 1.5%
+      agingRate:    0.008,  // 0.8%
+      stockAvailable: 6000,
     },
     {
       name: CategoryName.ELETRO,
-      unitCost: 120.0,
-      taxRate: 0.125,    // 12.50%
-      breakageRate: 0.002, // 0.2%
-      agingRate: 0.05,    // 5.0%
+      unitCost:     500.00,
+      taxRate:      0.25,   // 25% — tabela oficial (gabarito xlsx mostra 0% por erro manual)
+      breakageRate: 0.000,  // 0.0%
+      agingRate:    0.013,  // 1.3%
+      stockAvailable: 700,
     },
     {
       name: CategoryName.HIPEL,
-      unitCost: 45.0,
-      taxRate: 0.0765,   // 7.65%
-      breakageRate: 0.005, // 0.5%
-      agingRate: 0.01,    // 1.0%
+      unitCost:     45.00,
+      taxRate:      0.17,   // 17%
+      breakageRate: 0.010,  // 1.0%
+      agingRate:    0.011,  // 1.1%
+      stockAvailable: 5000,
     },
   ];
 
   for (const category of categories) {
     await prisma.category.upsert({
-      where: { name: category.name },
+      where:  { name: category.name },
       update: category,
       create: category,
     });
@@ -51,62 +55,77 @@ async function main() {
 
   // ─────────────────────────────────────────
   // CAPEX OPTIONS
-  // Fonte: docs/pdf/arquitetura-tecnica.md § 6.2
+  // Fonte: docs/agent/spec.md v1.1
+  //
+  // downtimeFixedDays: valor fixo da fórmula
+  //   diasParados = downtimeFixedDays + SLA_TABLE[serviceOperators]
+  //
+  // maintenanceSaving: economia mensal gerada pelo CAPEX
+  //   (FREEZER elimina R$400/mês de manutenção)
+  //
+  // monthlyLicenseDelta: acréscimo mensal na licença de software
+  //   base = R$500/mês
   // ─────────────────────────────────────────
   const capexOptions = [
     {
-      name: 'Segurança',
-      type: CapexType.SECURITY,
-      cost: 30_000,
-      monthlyLicenseDelta: 2_000,
-      slaImpactDays: 1,
-      // Risco: 15% chance → 2% receita perdida (roubo)
+      name:                'Segurança',
+      type:                CapexType.SECURITY,
+      acquisitionCost:     50_000,
+      downtimeFixedDays:   2,
+      monthlyLicenseDelta: 100,    // +R$100/mês
+      maintenanceSaving:   0,
+      slaRiskPercent:      0.15,   // 15% chance de incidente por rodada
     },
     {
-      name: 'Câmara Fria (Freezer)',
-      type: CapexType.FREEZER,
-      cost: 80_000,
-      monthlyLicenseDelta: 1_500,
-      slaImpactDays: 2,
-      // Risco: 10% chance → +30% aging em PERECIVEIS
+      name:                'Balança / Freezer',
+      type:                CapexType.FREEZER,
+      acquisitionCost:     75_000,
+      downtimeFixedDays:   1,
+      monthlyLicenseDelta: 0,
+      maintenanceSaving:   400,    // elimina R$400/mês de manutenção
+      slaRiskPercent:      0.10,   // 10% chance de incidente por rodada
     },
     {
-      name: 'Rede / Infraestrutura',
-      type: CapexType.NETWORK,
-      cost: 50_000,
-      monthlyLicenseDelta: 3_000,
-      slaImpactDays: 1,
-      // Risco: 5% chance → 1h downtime (sem vendas)
+      name:                'Redes',
+      type:                CapexType.NETWORK,
+      acquisitionCost:     80_000,
+      downtimeFixedDays:   2,
+      monthlyLicenseDelta: 0,
+      maintenanceSaving:   0,
+      slaRiskPercent:      0.05,   // 5% chance de incidente por rodada
     },
     {
-      name: 'Site / Branding Digital',
-      type: CapexType.SITE,
-      cost: 100_000,
-      monthlyLicenseDelta: 5_000,
-      slaImpactDays: 0,
-      // Sem risco SLA — impacto em branding/demanda futura
+      name:                'Melhorias no Site',
+      type:                CapexType.SITE,
+      acquisitionCost:     65_000,
+      downtimeFixedDays:   1,
+      monthlyLicenseDelta: 150,    // +R$150/mês
+      maintenanceSaving:   0,
+      slaRiskPercent:      0.10,   // 10% chance de incidente por rodada
     },
     {
-      name: 'Self-Checkout',
-      type: CapexType.SELF_CHECKOUT,
-      cost: 60_000,
-      monthlyLicenseDelta: 2_500,
-      slaImpactDays: 0,
-      // Sem risco SLA — reduz necessidade de operadores de caixa
+      name:                'Self Checkout',
+      type:                CapexType.SELF_CHECKOUT,
+      acquisitionCost:     80_000,
+      downtimeFixedDays:   2,
+      monthlyLicenseDelta: 320,    // +R$320/mês (R$80 × 4 unidades)
+      maintenanceSaving:   0,
+      slaRiskPercent:      0.20,   // 20% chance de incidente por rodada
     },
     {
-      name: 'Automação de Estoque',
-      type: CapexType.AUTOMATION,
-      cost: 40_000,
-      monthlyLicenseDelta: 1_000,
-      slaImpactDays: 0,
-      // Sem risco SLA — reduz breakage/aging
+      name:                'Melhoria Contínua',
+      type:                CapexType.AUTOMATION,
+      acquisitionCost:     45_000,
+      downtimeFixedDays:   0,      // não gera evento de incidente
+      monthlyLicenseDelta: 0,
+      maintenanceSaving:   0,
+      slaRiskPercent:      0.00,   // sem risco de SLA
     },
   ];
 
   for (const capex of capexOptions) {
     await prisma.capexOption.upsert({
-      where: { type: capex.type },
+      where:  { type: capex.type },
       update: capex,
       create: capex,
     });
