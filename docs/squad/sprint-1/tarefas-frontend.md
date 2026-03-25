@@ -1,264 +1,125 @@
-# 🎨 Sprint 1 — Tarefas: Frontend (Plano Operacional + Resultados)
+# 🖥️ Sprint 1 — Revisão: Frontend
 
-> **Épico:** Plano Operacional + Resultados e Ranking
-> **User Stories:** US-10 a US-16, US-23, US-24, US-25
-> **Estimativa total:** 3–4 semanas
+> **Issues GitHub:**
+> - [#45 — [REVIEW] Telas de Autenticação e Sessão](https://github.com/Tarsomap/retail-game-platform/issues/45)
+> - [#46 — [REVIEW] Telas do Plano Operacional e Quiz](https://github.com/Tarsomap/retail-game-platform/issues/46)
+> - [#47 — [REVIEW] Tela de Resultados e Ranking](https://github.com/Tarsomap/retail-game-platform/issues/47)
 >
-> Leia [`docs/agent/CONTEXT.md`](../../agent/CONTEXT.md) antes de começar.
+> **Área:** Frontend (Next.js)
+>
+> Leia [`docs/agent/ARCHITECTURE.md`](../../agent/ARCHITECTURE.md) — seção Frontend Pages — antes de começar.
 
 ---
 
-## Visão geral
+## O que o agente gerou
 
-O Plano Operacional (PO) é a tela principal do jogo. É onde os 5 gerentes de cada loja preenchem suas decisões **em tempo real e simultaneamente**. Cada gerente vê apenas a sua área de decisão. O Gerente da Loja vê o sumário geral e confirma.
+O agente de IA gerou o código completo do frontend, incluindo:
+- Telas de `/register`, `/login` e `/dashboard`
+- Telas do Plano Operacional `/store/[storeId]/plan` e Quiz `/store/[storeId]/quiz`
+- Tela de resultados e ranking `/session/[id]/results`
+- Cliente HTTP centralizado com interceptor de token
+- Integração WebSocket em tempo real
+
+**Seu trabalho não é implementar — é revisar, testar e melhorar.**
 
 ---
 
-## TASK-18 — Layout base do PO (frontend)
+## Como começar
 
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-09
-
-### O que fazer
-
-Criar a página `/store/:storeId/plan` com o layout base do PO.
-
-**Estrutura da página:**
-- Header: nome da loja + papel do usuário logado + status do PO (RASCUNHO / CONFIRMADO)
-- Painel lateral: caixa disponível (grande, em destaque) + EBITDA projetado
-- Área central: conteúdo varia conforme o papel do usuário (ver tasks abaixo)
-- Footer: botão "Confirmar PO" (apenas Gerente da Loja, desabilitado até todos os campos preenchidos)
-
-**Conexão WebSocket:**
-```typescript
-// Entrar na sala da loja ao carregar a página
-socket.emit('join:store', { storeId })
-
-// Ouvir atualizações do PO
-socket.on('plan:updated', (data) => {
-  updateCashDisplay(data.cashAvailable)
-  updateEbitdaDisplay(data.projectedEbitda)
-})
+```bash
+git checkout main && git pull
+git checkout -b review/frontend-[modulo]
+cd frontend
+npm install
+cp .env.example .env.local  # preencher NEXT_PUBLIC_API_URL
+npm run dev
 ```
 
-### Critérios de aceite
-- [ ] Página carrega corretamente para cada papel
-- [ ] WebSocket conectado ao carregar
-- [ ] Caixa e EBITDA atualizam em tempo real sem recarregar
-- [ ] Papel do usuário determina qual seção é exibida
+---
+
+## Bloco 1 — Auth e Sessão (issue #45)
+
+### 🧪 O que testar
+
+**Cadastro `/register`:**
+- [ ] Formulário renderiza corretamente
+- [ ] Validação client-side antes de enviar (campos vazios, e-mail inválido, senhas diferentes)
+- [ ] E-mail duplicado mostra erro **abaixo do campo** de e-mail
+- [ ] Após cadastro: Facilitador → `/dashboard`, Jogador → `/lobby`
+
+**Login `/login`:**
+- [ ] Login com credenciais corretas redireciona conforme papel (role)
+- [ ] Credenciais erradas mostram mensagem genérica: *"E-mail ou senha incorretos"*
+- [ ] Botão mostra loading durante a requisição
+- [ ] Página `/login` redireciona para `/dashboard` se já estiver autenticado
+
+**Segurança dos tokens:**
+- [ ] Abrir DevTools → Application → LocalStorage: `accessToken` **não deve aparecer** ali
+- [ ] Confirmar que nenhuma senha aparece em `console.log` ou estado do React
+
+**Responsividade:**
+- [ ] Testar em tablet (768px) e desktop (1280px)
+- [ ] Identificar e corrigir pelo menos **1 problema visual**
 
 ---
 
-## TASK-19 — Seção de estoque (Gerente Abastecimento)
+## Bloco 2 — Plano Operacional e Quiz (issue #46)
 
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-18
+### 🧪 O que testar
 
-### O que fazer
+> 💡 Dica: abra **dois navegadores diferentes** (ou aba normal + aba anônima) para simular dois jogadores ao mesmo tempo.
 
-Renderizar a seção de estoque para o papel `SUPPLY_MANAGER`.
+**Plano Operacional `/store/[storeId]/plan`:**
+- [ ] SUPPLY_MANAGER vê e preenche **apenas** a seção de estoque
+- [ ] COMMERCIAL_MANAGER vê e preenche **apenas** a seção de pricing
+- [ ] OPERATIONAL_MANAGER vê e preenche **apenas** a seção de operadores
+- [ ] SERVICE_MANAGER vê e preenche **apenas** a seção de CAPEX
+- [ ] Caixa disponível e EBITDA projetado atualizam em tempo real ao alterar decisões
+- [ ] Alterações de um jogador aparecem para os outros **sem recarregar a página**
+- [ ] STORE_MANAGER tenta confirmar sem quiz respondido — deve **bloquear com mensagem clara**
 
-**Tabela com 4 linhas (uma por categoria):**
+**Quiz `/store/[storeId]/quiz`:**
+- [ ] Perguntas exibidas **sem o gabarito**
+- [ ] Jogador seleciona respostas e envia
+- [ ] Após envio: mensagem de confirmação e retorno à tela do PO
+- [ ] Tentativa de responder novamente — deve **bloquear**
 
-| Categoria | Custo Unit. | Estoque Disponível | Comprar (unidades) | Total (R$) |
-|---|---|---|---|---|
-| Perecíveis | R$ 8,00 | [param facilitador] | [input] | calculado |
-| Mercearia | R$ 5,00 | [param facilitador] | [input] | calculado |
-| Eletro | R$ 120,00 | [param facilitador] | [input] | calculado |
-| Hipel | R$ 45,00 | [param facilitador] | [input] | calculado |
-
-**Comportamentos:**
-- Input aceita apenas inteiros positivos
-- `Total (R$) = quantidade × custo unitário` — calculado automaticamente no frontend
-- Input maior que estoque disponível: borda vermelha + mensagem de erro
-- A cada mudança: emitir via WebSocket para atualizar caixa de todos na loja
-
-```typescript
-onChange: (categoryId, quantity) => {
-  // valida localmente
-  if (quantity > availableStock) return showError()
-  // emite para o backend
-  socket.emit('plan:decision', { planId, field: 'stockPurchased', categoryId, value: quantity })
-}
-```
-
-### Critérios de aceite
-- [ ] Input em unidades (não em R$)
-- [ ] Validação de estoque disponível funcionando
-- [ ] Total em R$ calculado e exibido em tempo real
-- [ ] Emit WebSocket a cada alteração válida
-- [ ] Campo com valor acima do disponível bloqueado visualmente
+**Responsividade:**
+- [ ] Testar em tablet (768px) e desktop (1280px)
+- [ ] Identificar e corrigir pelo menos **1 problema visual**
 
 ---
 
-## TASK-20 — Seção de precificação (Gerente Comercial)
+## Bloco 3 — Resultados e Ranking (issue #47)
 
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-18
+### 🧪 O que testar
 
-### O que fazer
-
-Renderizar a seção de pricing para o papel `COMMERCIAL_MANAGER`.
-
-**Tabela com 4 linhas:**
-
-| Categoria | Custo Unit. | Margem (%) | Preço Final |
-|---|---|---|---|
-| Perecíveis | R$ 8,00 | [slider 0–80%] | calculado |
-| ... | | | |
-
-**Comportamentos:**
-- Slider de 0% a 80% + input numérico sincronizado
-- `Preço Final = custo_unit × (1 + margem%)` — calculado no frontend
-- Indicador visual: margem > 50% exibe aviso ⚠ "Risco de baixa demanda"
-- Emit WebSocket a cada alteração
-
-### Critérios de aceite
-- [ ] Slider e input numérico sincronizados
-- [ ] Preço final calculado e exibido
-- [ ] Aviso visual para margem > 50%
-- [ ] Emit WebSocket a cada alteração
+- [ ] Ranking das lojas exibido por % EBITDA após cada rodada (maior no topo)
+- [ ] Detalhamento completo do PO de cada loja visível ao final da sessão
+- [ ] Tela atualiza automaticamente ao receber evento `round:results` via WebSocket
+- [ ] Tela exibe resultado final ao receber evento `session:finished`
+- [ ] EBITDA negativo exibido corretamente (não quebra o layout)
+- [ ] Responsividade em tablet (768px) e desktop (1280px)
 
 ---
 
-## TASK-21 — Seção de equipe (Gerente Operacional)
+## Contribuição obrigatória (todos os blocos)
 
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-18
-
-### O que fazer
-
-Renderizar a seção de equipe para `OPERATIONAL_MANAGER`.
-
-**Campos:**
-- Operadores de Caixa (0–10) — custo: R$ 2.000 cada
-- Operadores de Serviço (0–5) — custo: R$ 2.500 cada
-- Exibir: custo total da folha + projeção de CSAT (fórmula simplificada, sem quiz)
-
-**Projeção de CSAT no frontend:**
-```typescript
-// Mostra projeção parcial (quiz ainda não respondido)
-const csatProjection = (cashierOps / 10) * 100  // em %
-```
-
-### Critérios de aceite
-- [ ] Inputs numéricos com limites (0–10 caixa, 0–5 serviço)
-- [ ] Custo da folha calculado e exibido
-- [ ] Projeção de CSAT exibida
-- [ ] Emit WebSocket a cada alteração
+- [ ] Aplicar pelo menos **1 melhoria real** por bloco revisado
+- [ ] Nenhum `console.log` deixado no código
+- [ ] Nenhum uso de `any` como tipo no TypeScript
 
 ---
 
-## TASK-22 — Seção de CAPEX (Gerente Serviços)
+## Entrega
 
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-18
+Abrir um PR por bloco revisado:
 
-### O que fazer
+| Bloco | Branch | Título do PR |
+|---|---|---|
+| Auth e Sessão | `review/frontend-auth` | `review(frontend-auth): [o que foi corrigido]` |
+| PO e Quiz | `review/frontend-plan` | `review(frontend-plan): [o que foi corrigido]` |
+| Resultados | `review/frontend-results` | `review(frontend-results): [o que foi corrigido]` |
 
-Renderizar a seção de CAPEX para `SERVICE_MANAGER`.
-
-**Lista de 6 cards de CAPEX, cada um com:**
-- Nome e descrição
-- Custo de implementação
-- Licença mensal adicional
-- Risco se não implementado (ex: "15% de chance de ataque cibernético")
-- Checkbox para selecionar
-
-**Comportamentos:**
-- Selecionar um CAPEX desconta o custo do caixa disponível
-- Total de CAPEX selecionados exibido no rodapé da seção
-- Emit WebSocket a cada toggle
-
-### Critérios de aceite
-- [ ] 6 cards de CAPEX renderizados com informações do seed
-- [ ] Seleção/desseleção atualiza o caixa em tempo real
-- [ ] Emit WebSocket a cada toggle
-
----
-
-## TASK-23 — Sumário e confirmação do PO (Gerente da Loja)
-
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-19, TASK-20, TASK-21, TASK-22
-
-### O que fazer
-
-Renderizar o sumário para `STORE_MANAGER`.
-
-**Exibir:**
-- Caixa disponível (com semaforo: verde > R$50k, amarelo R$20–50k, vermelho < R$20k)
-- EBITDA projetado (com aviso se negativo)
-- Checklist de confirmação: estoque ✔ | pricing ✔ | equipe ✔ | CAPEX ✔
-- Botão "Confirmar PO" — ativo só quando checklist 100% completo
-
-**Ao confirmar:**
-```typescript
-await api.post(`/plans/${planId}/confirm`)
-// bloqueia todos os inputs da loja
-// notifica o facilitador via WebSocket
-```
-
-### Critérios de aceite
-- [ ] Semáforo de caixa funcionando
-- [ ] EBITDA projetado com aviso se negativo
-- [ ] Botão de confirmar só ativo com checklist completo
-- [ ] Após confirmar, todos os inputs são bloqueados
-- [ ] Notificação chega ao facilitador
-
----
-
-## TASK-24 — Tela de resultados e ranking (frontend)
-
-**Responsável:** Frontend
-**Prioridade:** 🔴 Bloqueante
-**Depende de:** TASK-17
-
-### O que fazer
-
-Criar a tela de resultados exibida após cada rodada.
-
-**Tabela de ranking:**
-| # | Loja | EBITDA (R$) | % EBITDA | Demand Share | Δ vs rodada anterior |
-|---|---|---|---|---|---|
-| 🥇 | Loja A | R$ 45.000 | 18% | 32% | +3% |
-| ...
-
-**Cards por loja (breakdown):**
-- Receita Bruta
-- Impostos
-- Custo de Venda
-- Quebras + Aging
-- Custos Fixos (folha + manutenção + licenças)
-- EBITDA final
-
-**Comportamentos:**
-- Atualiza via WebSocket ao receber `round:results`
-- Exibe indicação de melhora/piora vs. rodada anterior (↑/↓)
-
-### Critérios de aceite
-- [ ] Ranking ordenado por % EBITDA
-- [ ] Breakdown completo visível por loja
-- [ ] Atualiza via WebSocket sem recarregar
-- [ ] Comparação com rodada anterior exibida
-
----
-
-## Ordem de execução sugerida
-
-```
-TASK-18 (layout base)
-    ├── TASK-19 (estoque)
-    ├── TASK-20 (pricing)
-    ├── TASK-21 (equipe)
-    ├── TASK-22 (CAPEX)
-    └── TASK-23 (sumário + confirmação)
-
-TASK-24 (resultados) ── depende do motor estar pronto
-```
+- Linkar cada PR à issue correspondente (`Fecha #45`, `Fecha #46`, `Fecha #47`)
+- Pelo menos 1 aprovação antes do merge
