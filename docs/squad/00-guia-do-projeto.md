@@ -4,7 +4,7 @@
 > Para todo mundo do squad, especialmente quem está chegando agora e ainda não sabe o que vamos construir.
 >
 > **O que você vai entender ao terminar de ler:**
-> O que é o jogo, como ele funciona, quem vai usar o sistema e o que você vai construir.
+> O que é o jogo, como ele funciona, quem vai usar o sistema e qual é o seu papel no desenvolvimento.
 
 ---
 
@@ -35,11 +35,11 @@ Com esses parâmetros definidos, cada equipe então decide **como usar** o caixa
 - Se vão fazer investimentos na loja (chamados de **CAPEX** — explicado abaixo)
 
 ### Etapa 2 — Rodada de vendas
-Depois que todas as lojas configuram suas decisões, o sistema roda os cálculos automaticamente e distribui os clientes entre as lojas. A loja que tiver melhor preço, mais estoque disponível e melhor atendimento atrai mais clientes.
+Depois que todas as lojas configuram suas decisões, o sistema roda os cálculos automaticamente e distribui os clientes entre as lojas. A loja que tiver melhor preço, mais estoque disponível e melhor atendimento atraé mais clientes.
 
 ### Etapa 3 — Resultado parcial
-O sistema exibe quanto cada loja lucrou na rodada. As equipes veem onde erraram e têm a chance de:
-- Trocar até 2 jogadores com outras lojas (misturar os times)
+O sistema exibe quanto cada loja lucrou na rodada. As equipes vêem onde erraram e têm a chance de:
+- Trocar de 1 a 2 jogadores com outras lojas (obrigatório)
 - Refazer as configurações para as próximas rodadas
 
 ### Etapa 4 — Rodadas finais
@@ -90,7 +90,7 @@ O que ele faz no sistema:
 - Cria as 4 lojas e gera o código de acesso de cada uma
 - Inicia e avança as rodadas
 - Vê o status de todas as lojas em tempo real
-- Move jogadores entre lojas entre rodadas
+- Move jogadores entre lojas entre rodadas (obrigatório: 1 a 2 por loja)
 - Encerra a sessão e exibe o resultado final
 
 ### 🏪 Os Jogadores
@@ -128,11 +128,11 @@ Cada loja vende produtos de 4 categorias. Para cada categoria existem dois tipos
 
 ## 6. Como o sistema decide quem vende mais?
 
-O sistema distribui os clientes entre as lojas baseado em **3 critérios**. A loja que se sair melhor nos 3 atrai mais clientes:
+O sistema distribui os clientes entre as lojas baseado em **3 critérios**. A loja que se sair melhor nos 3 atraé mais clientes:
 
-1. **Preço** — loja com preço mais competitivo atrai mais clientes
-2. **Disponibilidade** — loja que tem mais estoque disponível atrai mais clientes
-3. **CSAT** — loja com melhor atendimento atrai mais clientes
+1. **Preço** — loja com preço mais competitivo atraé mais clientes
+2. **Disponibilidade** — loja que tem mais estoque disponível atraé mais clientes
+3. **CSAT** — loja com melhor atendimento atraé mais clientes
 
 O sistema pontua cada loja de 1 a 4 em cada critério e divide os clientes proporcionalmente à pontuação total. Se todas as lojas tiverem decisões idênticas, cada uma fica com 25% dos clientes.
 
@@ -147,21 +147,50 @@ Cada CAPEX não realizado tem uma **chance de gerar um evento negativo** durante
 | Segurança | Chance de ataque/roubo → perde % da receita |
 | Freezer/Balança | Chance de equipamento quebrar → perecíveis não podem ser vendidos |
 | Redes | Chance de queda de sistema → loja para por um tempo |
-| Site | Chance de indisponibilidade → perde vendas no digital |
-| Self-checkout | Pico de clientes sem atendimento → perde vendas |
-| Melhoria Contínua | Dificuldade de expansão → sem impacto direto no MVP |
+| Site | Sem risco de SLA (apenas branding) |
+| Self-checkout | Sem risco de SLA (melhoria de velocidade) |
+| Automação | Sem risco de SLA (produtividade) |
 
 ---
 
-## 8. O que vamos construir exatamente?
+## 8. Como vamos construir esse projeto?
 
-Uma **plataforma web** que digitaliza esse jogo. Os principais módulos são:
+Usamos uma abordagem **assistida por IA + revisão humana obrigatória**.
 
-1. **Login e acesso** — cadastro, autenticação, diferenciação de perfis
-2. **Gestão de sessão** — criar partida com parâmetros reais, criar lojas, controlar rodadas
-3. **Plano Operacional** — a tela onde os jogadores tomam as decisões em tempo real
-4. **Motor de cálculo** — o cérebro do sistema: processa todas as decisões e calcula o resultado
-5. **Resultados e ranking** — exibe os resultados de cada rodada e o ranking final
+### O fluxo de desenvolvimento
+
+```
+1. Agente de IA gera o código de um módulo
+2. Membro do squad responsável revisa linha a linha
+3. Testa localmente e identifica pelo menos 1 melhoria
+4. Abre um PR com as correções e melhorias
+5. Outro membro revisa o PR
+6. Tech Lead faz o merge
+```
+
+### Por que esse modelo?
+O agente acelera a geração do esqueleto do projeto. Mas código gerado por IA **não é código revisado** — erros de regra de negócio, segurança e performance só aparecem quando um humano lê e testa. O squad é responsável pela qualidade final.
+
+### Sua responsabilidade como revisor
+Cada membro do squad é **dono de um módulo**. Ser dono significa:
+- Entender profundamente o que aquele módulo faz
+- Garantir que está funcionando corretamente
+- Ser capaz de explicar o código na apresentação final
+- Ter pelo menos 1 commit de melhoria no histórico do Git
+
+### Os 9 módulos e suas issues no GitHub
+
+| Módulo | Issue | Área |
+|---|---|---|
+| Auth e Users | [#39](https://github.com/Tarsomap/retail-game-platform/issues/39) | Backend |
+| Sessões e Lojas | [#40](https://github.com/Tarsomap/retail-game-platform/issues/40) | Backend |
+| Plano Operacional | [#41](https://github.com/Tarsomap/retail-game-platform/issues/41) | Backend |
+| Quiz | [#42](https://github.com/Tarsomap/retail-game-platform/issues/42) | Backend |
+| Motor de Cálculo | [#43](https://github.com/Tarsomap/retail-game-platform/issues/43) | Backend |
+| Resultados e WebSocket | [#44](https://github.com/Tarsomap/retail-game-platform/issues/44) | Backend |
+| Telas de Auth e Sessão | [#45](https://github.com/Tarsomap/retail-game-platform/issues/45) | Frontend |
+| Telas do PO e Quiz | [#46](https://github.com/Tarsomap/retail-game-platform/issues/46) | Frontend |
+| Tela de Resultados | [#47](https://github.com/Tarsomap/retail-game-platform/issues/47) | Frontend |
 
 ---
 
@@ -170,9 +199,9 @@ Uma **plataforma web** que digitaliza esse jogo. Os principais módulos são:
 | Documento | O que tem lá |
 |---|---|
 | [`docs/squad/01-como-trabalhamos.md`](./01-como-trabalhamos.md) | Como criar branches, commitar e abrir PR |
-| [`docs/squad/sprint-1/tarefas-auth.md`](./sprint-1/tarefas-auth.md) | Tarefas de login e cadastro |
-| [`docs/squad/sprint-1/tarefas-sessao.md`](./sprint-1/tarefas-sessao.md) | Tarefas de sessão e lojas |
-| [`docs/squad/sprint-1/tarefas-motor.md`](./sprint-1/tarefas-motor.md) | Tarefas do motor de cálculo |
-| [`docs/squad/sprint-1/tarefas-frontend.md`](./sprint-1/tarefas-frontend.md) | Tarefas das telas |
+| [`docs/agent/CONTEXT.md`](../agent/CONTEXT.md) | Contexto completo do projeto e regras de negócio |
+| [`docs/agent/ARCHITECTURE.md`](../agent/ARCHITECTURE.md) | Arquitetura técnica, fórmulas e contratos de API |
+| [`docs/agent/BACKLOG.md`](../agent/BACKLOG.md) | Todos os requisitos funcionais e não funcionais |
+| [`docs/squad/sprint-1/tarefas-motor.md`](./sprint-1/tarefas-motor.md) | Detalhamento das tarefas do motor de cálculo |
 
 > 📌 **Dica:** se você ficou com dúvida sobre um termo técnico enquanto lia o código, volte para a seção 3 deste documento — o glossário cobre todos os termos que você vai encontrar.
