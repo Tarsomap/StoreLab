@@ -21,3 +21,12 @@ export interface StoreMembersResponse {
   storeName: string;
   members: StoreMemberEntry[];
 }
+
+export interface TransferResponse {
+  transferId: string;
+  userId: string;
+  fromStoreId: string;
+  toStoreId: string;
+  role: StoreRole;
+  transferredAt: Date;
+}

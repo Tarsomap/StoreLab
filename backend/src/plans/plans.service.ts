@@ -13,6 +13,7 @@ import {
   StoreRole,
 } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { GameGateway } from '../gateway/game.gateway';
 import { CategoryDecisionDto } from './dto/category-decision.dto';
 import { CapexDecisionDto } from './dto/capex-decision.dto';
 import { WorkforceDto } from './dto/workforce.dto';
@@ -38,7 +39,10 @@ type PlanWithRelations = OperationalPlan & {
 
 @Injectable()
 export class PlansService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gameGateway: GameGateway,
+  ) {}
 
   // ─── GET or CREATE plan ─────────────────────────────────────────────────────
   async getOrCreate(
@@ -98,7 +102,9 @@ export class PlansService {
       });
     }
 
-    return this.refreshAndRespond(planId);
+    const response = await this.refreshAndRespond(planId);
+    this.gameGateway.emitPlanUpdated(response.storeId, response);
+    return response;
   }
 
   // ─── PUT capex decision ─────────────────────────────────────────────────────
@@ -141,7 +147,9 @@ export class PlansService {
       });
     }
 
-    return this.refreshAndRespond(planId);
+    const response = await this.refreshAndRespond(planId);
+    this.gameGateway.emitPlanUpdated(response.storeId, response);
+    return response;
   }
 
   // ─── PUT workforce ──────────────────────────────────────────────────────────
@@ -159,7 +167,9 @@ export class PlansService {
       data: { cashierOperators: dto.cashierOperators, serviceOperators: dto.serviceOperators },
     });
 
-    return this.refreshAndRespond(planId);
+    const response = await this.refreshAndRespond(planId);
+    this.gameGateway.emitPlanUpdated(response.storeId, response);
+    return response;
   }
 
   // ─── POST confirm ───────────────────────────────────────────────────────────
@@ -169,14 +179,18 @@ export class PlansService {
     await this.assertStoreRole(plan.storeId, userId, StoreRole.STORE_MANAGER);
     this.assertNotConfirmed(plan);
 
-    // Quiz must be consolidated for this store + round
+    // All members must have submitted quiz answers for the current round
     const round = plan.configVersion; // config 1 → round 1, config 2 → round 2
-    const quizDone = await this.prisma.quizAnswer.findUnique({
-      where: { storeId_round: { storeId: plan.storeId, round } },
-    });
-    if (!quizDone) {
+    const [totalMembers, answeredMembers] = await Promise.all([
+      this.prisma.storeMember.count({ where: { storeId: plan.storeId } }),
+      this.prisma.userQuizAnswer.groupBy({
+        by: ['userId'],
+        where: { storeId: plan.storeId, round },
+      }),
+    ]);
+    if (answeredMembers.length < totalMembers) {
       throw new BadRequestException(
-        'O quiz da equipe ainda não foi respondido. Todos os membros devem responder antes de confirmar o PO.',
+        `${answeredMembers.length}/${totalMembers} membros responderam o quiz. Todos devem responder antes de confirmar o PO.`,
       );
     }
 
@@ -185,7 +199,17 @@ export class PlansService {
       data: { confirmed: true, confirmedAt: new Date() },
     });
 
-    return this.refreshAndRespond(planId);
+    const response = await this.refreshAndRespond(planId);
+
+    const store = await this.prisma.store.findUnique({
+      where: { id: plan.storeId },
+      select: { sessionId: true },
+    });
+    if (store) {
+      this.gameGateway.emitStoreConfirmed(store.sessionId, plan.storeId);
+    }
+
+    return response;
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────

@@ -4,13 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { StoreRole } from '@prisma/client';
+import { SessionStatus, StoreRole } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { JoinStoreDto } from './dto/join-store.dto';
+import { TransferDto } from './dto/transfer.dto';
 import {
   StoreMembersResponse,
   StoreSummary,
+  TransferResponse,
 } from './interfaces/store.interface';
 
 const MAX_STORES_PER_SESSION = 4;
@@ -104,6 +106,100 @@ export class StoresService {
         role: m.role,
         joinedAt: m.joinedAt,
       })),
+    };
+  }
+
+  async transfer(sessionId: string, dto: TransferDto): Promise<TransferResponse> {
+    // ── 1. Session must be in RECONFIGURATION ───────────────────────────────
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { stores: { select: { id: true } } },
+    });
+    if (!session) throw new NotFoundException('Sessão não encontrada');
+    if (session.status !== SessionStatus.RECONFIGURATION) {
+      throw new BadRequestException(
+        'Transferências só são permitidas durante a RECONFIGURAÇÃO',
+      );
+    }
+
+    // ── 2. Both stores must belong to this session ──────────────────────────
+    const sessionStoreIds = new Set(session.stores.map((s) => s.id));
+    if (!sessionStoreIds.has(dto.fromStoreId)) {
+      throw new BadRequestException('Loja de origem não pertence a esta sessão');
+    }
+    if (!sessionStoreIds.has(dto.toStoreId)) {
+      throw new BadRequestException('Loja de destino não pertence a esta sessão');
+    }
+    if (dto.fromStoreId === dto.toStoreId) {
+      throw new BadRequestException('Loja de origem e destino devem ser diferentes');
+    }
+
+    // ── 3. Player must be a member of fromStore ──────────────────────────────
+    const member = await this.prisma.storeMember.findUnique({
+      where: { storeId_userId: { storeId: dto.fromStoreId, userId: dto.userId } },
+    });
+    if (!member) {
+      throw new NotFoundException('Jogador não encontrado na loja de origem');
+    }
+
+    // ── 4. STORE_MANAGER cannot be transferred ───────────────────────────────
+    if (member.role === StoreRole.STORE_MANAGER) {
+      throw new BadRequestException('O Gerente da Loja não pode ser transferido');
+    }
+
+    // ── 5. Max 2 transfers OUT of fromStore in this session ──────────────────
+    const outboundCount = await this.prisma.playerTransfer.count({
+      where: { sessionId, fromStoreId: dto.fromStoreId },
+    });
+    if (outboundCount >= 2) {
+      throw new BadRequestException(
+        'Limite de 2 transferências por loja já foi atingido',
+      );
+    }
+
+    // ── 6. Role must not already exist in toStore ────────────────────────────
+    const roleConflict = await this.prisma.storeMember.findUnique({
+      where: { storeId_role: { storeId: dto.toStoreId, role: member.role } },
+    });
+    if (roleConflict) {
+      throw new ConflictException(
+        `A loja de destino já possui um membro com o papel ${member.role}`,
+      );
+    }
+
+    // ── 7. Player must not already be in toStore ─────────────────────────────
+    const alreadyInTarget = await this.prisma.storeMember.findUnique({
+      where: { storeId_userId: { storeId: dto.toStoreId, userId: dto.userId } },
+    });
+    if (alreadyInTarget) {
+      throw new ConflictException('Jogador já é membro da loja de destino');
+    }
+
+    // ── 8. Execute in transaction ────────────────────────────────────────────
+    const playerTransfer = await this.prisma.$transaction(async (tx) => {
+      await tx.storeMember.update({
+        where: { id: member.id },
+        data: { storeId: dto.toStoreId },
+      });
+
+      return tx.playerTransfer.create({
+        data: {
+          sessionId,
+          userId: dto.userId,
+          fromStoreId: dto.fromStoreId,
+          toStoreId: dto.toStoreId,
+          role: member.role,
+        },
+      });
+    });
+
+    return {
+      transferId: playerTransfer.id,
+      userId: dto.userId,
+      fromStoreId: dto.fromStoreId,
+      toStoreId: dto.toStoreId,
+      role: member.role,
+      transferredAt: playerTransfer.transferredAt,
     };
   }
 

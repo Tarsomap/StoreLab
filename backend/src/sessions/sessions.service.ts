@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { SessionStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { GameGateway } from '../gateway/game.gateway';
+import { ResultsService } from '../results/results.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import {
   SessionStatusResponse,
@@ -21,9 +23,20 @@ const NEXT_STATUS: Partial<Record<SessionStatus, SessionStatus>> = {
   [SessionStatus.ROUND_3]: SessionStatus.FINISHED,
 };
 
+// Status transitions that correspond to a round becoming active
+const ROUND_STARTED_MAP: Partial<Record<SessionStatus, number>> = {
+  [SessionStatus.ROUND_1]: 1,
+  [SessionStatus.ROUND_2]: 2,
+  [SessionStatus.ROUND_3]: 3,
+};
+
 @Injectable()
 export class SessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gameGateway: GameGateway,
+    private readonly resultsService: ResultsService,
+  ) {}
 
   async create(dto: CreateSessionDto, facilitatorId: string): Promise<SessionSummary> {
     const session = await this.prisma.session.create({
@@ -76,6 +89,17 @@ export class SessionsService {
       where: { id },
       data: { status: nextStatus },
     });
+
+    // Emit WebSocket events based on new status
+    const roundStarted = ROUND_STARTED_MAP[nextStatus];
+    if (roundStarted !== undefined) {
+      this.gameGateway.emitRoundStarted(id, roundStarted);
+    }
+
+    if (nextStatus === SessionStatus.FINISHED) {
+      const ranking = await this.resultsService.getSessionRanking(id);
+      this.gameGateway.emitSessionFinished(id, ranking);
+    }
 
     return this.toSummary(updated);
   }
