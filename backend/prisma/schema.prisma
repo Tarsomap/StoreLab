@@ -1,0 +1,366 @@
+// Fonte de verdade técnica: docs/agent/plan.md
+// Regras de negócio:       docs/agent/spec.md v1.1
+// Quiz:                    docs/agent/QUIZ.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  FACILITATOR
+  PLAYER
+}
+
+enum StoreRole {
+  STORE_MANAGER
+  SUPPLY_MANAGER
+  COMMERCIAL_MANAGER
+  OPERATIONAL_MANAGER
+  SERVICE_MANAGER
+}
+
+enum SessionStatus {
+  SETUP
+  ROUND_1_CONFIG
+  ROUND_1
+  RECONFIGURATION
+  ROUND_2
+  ROUND_3
+  FINISHED
+}
+
+enum CategoryName {
+  PERECIVEIS
+  MERCEARIA
+  ELETRO
+  HIPEL
+}
+
+enum CapexType {
+  SECURITY
+  FREEZER
+  NETWORK
+  SITE
+  SELF_CHECKOUT
+  AUTOMATION
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEED / REFERÊNCIA
+// Populados pelo seed.ts — nunca alterados por usuários em runtime.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Category {
+  id             String      @id @default(uuid())
+  name           CategoryName @unique
+  unitCost       Float
+  taxRate        Float        // ex.: 0.12 = 12%
+  breakageRate   Float        // aplicado só no fim da rodada 3
+  agingRate      Float        // aplicado só no fim da rodada 3
+  stockAvailable Int          // estoque total disponível por sessão (padrão)
+
+  sessionConfigs    SessionCategoryConfig[]
+  categoryDecisions PoCategoryDecision[]
+}
+
+model CapexOption {
+  id                   String    @id @default(uuid())
+  name                 String
+  type                 CapexType @unique
+  acquisitionCost      Float
+  downtimeFixedDays    Int       // dias fixos da fórmula: diasParados = downtimeFixedDays + SLA_TABLE[serviceOps]
+  monthlyLicenseDelta  Float     // acréscimo à licença base de R$500/mês
+  maintenanceSaving    Float     // FREEZER = 400; demais = 0
+  slaRiskPercent       Float     // probabilidade de incidente por rodada (ex.: 0.15 = 15%)
+
+  capexDecisions PoCapexDecision[]
+  slaEvents      SlaEvent[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH / USUÁRIO
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  passwordHash     String
+  role             UserRole
+  refreshTokenHash String?  // armazenado hasheado; null quando não há sessão ativa
+  createdAt        DateTime @default(now())
+
+  facilitatedSessions Session[]
+  storeMembers        StoreMember[]
+  quizAnswers         UserQuizAnswer[]
+  transfers           PlayerTransfer[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SESSÃO / JOGO
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Session {
+  id           String        @id @default(uuid())
+  name         String
+  status       SessionStatus @default(SETUP)
+  facilitatorId String
+  facilitator  User          @relation(fields: [facilitatorId], references: [id])
+  totalDemand  Float         // demanda total da sessão distribuída entre as lojas
+  initialCash  Float         @default(700000) // R$700.000 por loja; configurável pelo facilitador
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  stores          Store[]
+  categoryConfigs SessionCategoryConfig[]
+  quizQuestions   QuizQuestion[]
+  userQuizAnswers UserQuizAnswer[]
+  slaEvents       SlaEvent[]
+  playerTransfers PlayerTransfer[]
+  roundResults    RoundResult[]
+}
+
+// Sobrescreve stockAvailable padrão do Category para uma sessão específica.
+// Criado pelo facilitador na configuração da sessão.
+model SessionCategoryConfig {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id])
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id])
+  stockAvailable Int
+
+  @@unique([sessionId, categoryId])
+}
+
+model Store {
+  id         String   @id @default(uuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id])
+  name       String
+  accessCode String   @unique
+  createdAt  DateTime @default(now())
+
+  members         StoreMember[]
+  plans           OperationalPlan[]
+  quizAnswers     QuizAnswer[]
+  userQuizAnswers UserQuizAnswer[]
+  roundResults    RoundResult[]
+  slaEvents       SlaEvent[]
+  transfersFrom   PlayerTransfer[] @relation("TransferFrom")
+  transfersTo     PlayerTransfer[] @relation("TransferTo")
+}
+
+// Vínculo atual jogador ↔ loja. Atualizado na transferência de jogadores.
+model StoreMember {
+  id       String    @id @default(uuid())
+  storeId  String
+  store    Store     @relation(fields: [storeId], references: [id])
+  userId   String
+  user     User      @relation(fields: [userId], references: [id])
+  role     StoreRole
+  joinedAt DateTime  @default(now())
+
+  @@unique([storeId, role])   // cada papel existe uma única vez por loja
+  @@unique([storeId, userId]) // jogador só ocupa um papel por loja
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLANO OPERACIONAL (PO)
+// configVersion 1 → rodada 1 | configVersion 2 → rodadas 2 e 3
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OperationalPlan {
+  id               String    @id @default(uuid())
+  storeId          String
+  store            Store     @relation(fields: [storeId], references: [id])
+  configVersion    Int       // 1 ou 2
+  cashierOperators Int       // decisão do Gerente Operacional
+  serviceOperators Int       // decisão do Gerente de Serviços
+  confirmed        Boolean   @default(false)
+  confirmedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  categoryDecisions PoCategoryDecision[]
+  capexDecisions    PoCapexDecision[]
+
+  @@unique([storeId, configVersion])
+}
+
+// Decisão de estoque (unidades) e margem comercial por categoria.
+model PoCategoryDecision {
+  id             String          @id @default(uuid())
+  planId         String
+  plan           OperationalPlan @relation(fields: [planId], references: [id])
+  categoryId     String
+  category       Category        @relation(fields: [categoryId], references: [id])
+  stockPurchased Int             // SEMPRE em unidades, nunca em R$
+  priceMargin    Float           // ex.: 0.30 = 30% sobre custo unitário
+
+  @@unique([planId, categoryId])
+}
+
+// Decisão de implementar (ou não) cada CAPEX.
+model PoCapexDecision {
+  id            String          @id @default(uuid())
+  planId        String
+  plan          OperationalPlan @relation(fields: [planId], references: [id])
+  capexOptionId String
+  capexOption   CapexOption     @relation(fields: [capexOptionId], references: [id])
+  implemented   Boolean         @default(false)
+
+  @@unique([planId, capexOptionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUIZ
+// Spec completa: docs/agent/QUIZ.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+model QuizQuestion {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  round     Int
+  prompt    String
+  order     Int
+  createdAt DateTime @default(now())
+
+  options     QuizOption[]
+  userAnswers UserQuizAnswer[]
+
+  @@unique([sessionId, round, order])
+}
+
+model QuizOption {
+  id         String       @id @default(uuid())
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id])
+  label      String
+  isCorrect  Boolean      @default(false)
+
+  userAnswers UserQuizAnswer[]
+}
+
+// Resposta individual de um jogador (1 por questão por rodada).
+// isCorrect é calculado e persistido no momento da submissão.
+model UserQuizAnswer {
+  id         String       @id @default(uuid())
+  sessionId  String
+  session    Session      @relation(fields: [sessionId], references: [id])
+  storeId    String
+  store      Store        @relation(fields: [storeId], references: [id])
+  userId     String
+  user       User         @relation(fields: [userId], references: [id])
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id])
+  optionId   String
+  option     QuizOption   @relation(fields: [optionId], references: [id])
+  round      Int
+  isCorrect  Boolean
+  answeredAt DateTime     @default(now())
+
+  @@unique([userId, questionId, round])
+}
+
+// Score consolidado da loja (média dos membros). Lido pelo CsatService.
+// Gerado após todos os membros responderem; default scorePercentage = 0.
+model QuizAnswer {
+  id              String   @id @default(uuid())
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  round           Int
+  totalQuestions  Int
+  correctAnswers  Int
+  scorePercentage Float    // 0–100
+  createdAt       DateTime @default(now())
+
+  @@unique([storeId, round])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENGINE / RESULTADOS
+// RoundResult é persistido pelo engine e NUNCA recalculado a partir de histórico.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model RoundResult {
+  id        String   @id @default(uuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  round     Int
+
+  // ── Indicadores de demanda ──────────────────────────────────────────────
+  csat         Float // (cashierOperators / 10) * (quizScore / 100)
+  availability Float // média ponderada: storeStockPurchased / totalStockAvailable por categoria
+  basketPrice  Float // preço médio ponderado da cesta
+  rankScore    Int   // soma dos ranks (3–12); soma total das 4 lojas sempre = 30
+  demandShare  Float // rankScore / totalRankScore de todas as lojas
+
+  // ── DRE ─────────────────────────────────────────────────────────────────
+  grossRevenue   Float // Σ (qtdVendida × preçoDeVenda) por categoria
+  taxAmount      Float // Σ (receita bruta categoria × taxRate)
+  netRevenue     Float // grossRevenue - taxAmount
+  costOfGoods    Float // Σ (qtdVendida × unitCost)
+  breakageAmount Float // só rodada 3; sobre estoque total não vendido acumulado
+  agingAmount    Float // só rodada 3; sobre estoque total não vendido acumulado
+  payrollCost    Float // (cashierOps × 1000) + (serviceOps × 1200)
+  maintenanceCost Float // 400 se FREEZER não implementado; 0 se implementado
+  licenseCost    Float // 500 base + Σ monthlyLicenseDelta dos CAPEXs implementados
+  interestCost   Float // MAX(0, cashUsed - 700000) × 0.12
+  slaRevenueLost Float // Σ SlaEvent.revenueLost desta loja/rodada
+  ebitda         Float // netRevenue - (COGS + quebras + aging + payroll + manutenção + licenças + juros + SLA)
+  ebitdaPercentage Float // ebitda / grossRevenue
+
+  // ── Auxiliares ───────────────────────────────────────────────────────────
+  cashUsed  Float    // total gasto no PO desta configuração
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, round])
+}
+
+// Evento de incidente SLA por CAPEX não implementado, por loja, por rodada.
+// occurred pode ser false (sorteado mas não disparou) para auditoria determinística.
+model SlaEvent {
+  id            String      @id @default(uuid())
+  sessionId     String
+  session       Session     @relation(fields: [sessionId], references: [id])
+  storeId       String
+  store         Store       @relation(fields: [storeId], references: [id])
+  capexOptionId String
+  capexOption   CapexOption @relation(fields: [capexOptionId], references: [id])
+  round         Int
+  occurred      Boolean     // true = incidente disparou; false = não disparou nesta rodada
+  daysDown      Int         // downtimeFixedDays + SLA_TABLE[serviceOperators]; 0 se !occurred
+  revenueLost   Float       // (grossRevenue / 30) × daysDown; 0 se !occurred
+  createdAt     DateTime    @default(now())
+
+  @@unique([storeId, capexOptionId, round])
+}
+
+// Log histórico de transferências obrigatórias entre lojas (após rodada 1).
+// StoreMember é atualizado na transferência; este model é apenas auditoria.
+model PlayerTransfer {
+  id           String    @id @default(uuid())
+  sessionId    String
+  session      Session   @relation(fields: [sessionId], references: [id])
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  fromStoreId  String
+  fromStore    Store     @relation("TransferFrom", fields: [fromStoreId], references: [id])
+  toStoreId    String
+  toStore      Store     @relation("TransferTo", fields: [toStoreId], references: [id])
+  role         StoreRole // papel que o jogador ocupava ao ser transferido
+  transferredAt DateTime @default(now())
+}
