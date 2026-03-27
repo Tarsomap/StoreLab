@@ -31,6 +31,13 @@ export class SessionsController {
     return this.sessionsService.create(dto, user.sub);
   }
 
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  getMySessions(@CurrentUser() user: JwtPayload) {
+    return this.sessionsService.getByFacilitator(user.sub);
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.sessionsService.findById(id);

@@ -31,6 +31,11 @@ export class StoresController {
     return this.storesService.join(dto, user.sub);
   }
 
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.storesService.findById(id);
+  }
+
   @Get(':id/members')
   getMembers(@Param('id') id: string) {
     return this.storesService.getMembers(id);

@@ -84,6 +84,12 @@ export class StoresService {
     return this.toSummary(store);
   }
 
+  async findById(storeId: string): Promise<StoreSummary> {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new NotFoundException('Loja não encontrada');
+    return this.toSummary(store);
+  }
+
   async getMembers(storeId: string): Promise<StoreMembersResponse> {
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },

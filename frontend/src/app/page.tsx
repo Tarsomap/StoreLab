@@ -1,8 +1,11 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-4xl font-bold">Retail Game Platform</h1>
-      <p className="text-muted-foreground">Em construção...</p>
-    </main>
-  );
+// Middleware handles root redirect for authenticated users.
+// This server component is the fallback when middleware is not involved.
+import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
+
+export default function RootPage() {
+  const role = cookies().get('user_role')?.value;
+  if (!role) redirect('/login');
+  if (role === 'FACILITATOR') redirect('/dashboard');
+  redirect('/join');
 }
