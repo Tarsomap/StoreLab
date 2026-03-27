@@ -13,6 +13,7 @@ import {
   StoreMembersResponse,
   StoreSummary,
   TransferResponse,
+  UserStoreEntry,
 } from './interfaces/store.interface';
 
 const MAX_STORES_PER_SESSION = 4;
@@ -59,18 +60,20 @@ export class StoresService {
     });
     if (!store) throw new NotFoundException('Código de acesso inválido');
 
-    if (store.members.length >= ALL_STORE_ROLES.length) {
-      throw new BadRequestException('Loja já está com todos os papéis preenchidos');
+    // Idempotent: player already in this store → return existing membership
+    const alreadyMember = store.members.find((m) => m.userId === userId);
+    if (alreadyMember) {
+      return this.toSummary(store);
     }
 
+    // Another player already occupies this role
     const roleAlreadyTaken = store.members.some((m) => m.role === dto.role);
     if (roleAlreadyTaken) {
       throw new ConflictException(`O papel ${dto.role} já está ocupado nesta loja`);
     }
 
-    const alreadyMember = store.members.some((m) => m.userId === userId);
-    if (alreadyMember) {
-      throw new ConflictException('Você já é membro desta loja');
+    if (store.members.length >= ALL_STORE_ROLES.length) {
+      throw new BadRequestException('Loja já está com todos os papéis preenchidos');
     }
 
     await this.prisma.storeMember.create({
@@ -82,6 +85,23 @@ export class StoresService {
     });
 
     return this.toSummary(store);
+  }
+
+  async findMine(userId: string): Promise<UserStoreEntry[]> {
+    const memberships = await this.prisma.storeMember.findMany({
+      where: { userId },
+      include: {
+        store: { select: { id: true, name: true, sessionId: true } },
+      },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    return memberships.map((m) => ({
+      storeId: m.store.id,
+      storeName: m.store.name,
+      sessionId: m.store.sessionId,
+      role: m.role,
+    }));
   }
 
   async findById(storeId: string): Promise<StoreSummary> {

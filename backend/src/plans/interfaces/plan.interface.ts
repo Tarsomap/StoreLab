@@ -3,6 +3,9 @@ export interface CategoryDecisionEntry {
   categoryId: string;
   categoryName: string;
   unitCost: number;
+  taxRate: number;       // from seed
+  breakageRate: number;  // from seed
+  agingRate: number;     // from seed
   stockPurchased: number;
   priceMargin: number;
   lineCost: number; // stockPurchased × unitCost

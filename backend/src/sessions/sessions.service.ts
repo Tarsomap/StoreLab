@@ -110,7 +110,7 @@ export class SessionsService {
       include: {
         stores: {
           include: {
-            members: true,
+            members: { include: { user: { select: { id: true, name: true } } } },
             plans: {
               where: { confirmed: true },
               select: { id: true },
@@ -127,7 +127,13 @@ export class SessionsService {
       stores: session.stores.map((store) => ({
         storeId: store.id,
         storeName: store.name,
+        accessCode: store.accessCode,
         memberCount: store.members.length,
+        members: store.members.map((m) => ({
+          userId: m.userId,
+          name: m.user.name,
+          role: m.role,
+        })),
         planConfirmed: store.plans.length > 0,
       })),
     };

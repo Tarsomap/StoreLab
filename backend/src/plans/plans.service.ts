@@ -54,9 +54,35 @@ export class PlansService {
 
     let plan = await this.loadPlan(storeId, configVersion);
     if (!plan) {
+      const [categories, capexOptions] = await Promise.all([
+        this.prisma.category.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.capexOption.findMany({ orderBy: { name: 'asc' } }),
+      ]);
+
       plan = await this.prisma.operationalPlan.create({
-        data: { storeId, configVersion, cashierOperators: 0, serviceOperators: 0 },
-        include: { categoryDecisions: { include: { category: true } }, capexDecisions: { include: { capexOption: true } } },
+        data: {
+          storeId,
+          configVersion,
+          cashierOperators: 0,
+          serviceOperators: 0,
+          categoryDecisions: {
+            create: categories.map((cat) => ({
+              categoryId: cat.id,
+              stockPurchased: 0,
+              priceMargin: 0,
+            })),
+          },
+          capexDecisions: {
+            create: capexOptions.map((opt) => ({
+              capexOptionId: opt.id,
+              implemented: false,
+            })),
+          },
+        },
+        include: {
+          categoryDecisions: { include: { category: true } },
+          capexDecisions: { include: { capexOption: true } },
+        },
       });
     }
 
@@ -420,6 +446,9 @@ export class PlansService {
         categoryId: d.categoryId,
         categoryName: d.category.name,
         unitCost: d.category.unitCost,
+        taxRate: d.category.taxRate,
+        breakageRate: d.category.breakageRate,
+        agingRate: d.category.agingRate,
         stockPurchased: d.stockPurchased,
         priceMargin: d.priceMargin,
         lineCost: d.stockPurchased * d.category.unitCost,

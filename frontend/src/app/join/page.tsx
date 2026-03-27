@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
@@ -15,6 +15,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type StoreRole =
   | 'STORE_MANAGER'
@@ -37,15 +39,47 @@ interface JoinResponse {
   sessionId: string;
 }
 
+interface UserStoreEntry {
+  storeId: string;
+  storeName: string;
+  sessionId: string;
+  role: StoreRole;
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function JoinPage() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
 
+  // Existing memberships
+  const [myStores, setMyStores] = useState<UserStoreEntry[]>([]);
+  const [loadingMine, setLoadingMine] = useState(true);
+
+  // Join form
   const [accessCode, setAccessCode] = useState('');
   const [role, setRole] = useState<StoreRole>('SUPPLY_MANAGER');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [joined, setJoined] = useState<JoinResponse | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    api
+      .get<UserStoreEntry[]>('/stores/mine')
+      .then(setMyStores)
+      .catch(() => setMyStores([]))
+      .finally(() => setLoadingMine(false));
+  }, []);
+
+  // Auto-redirect after joining
+  useEffect(() => {
+    if (joined) {
+      const t = setTimeout(() => router.push(`/store/${joined.id}/plan`), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [joined, router]);
 
   function handleLogout() {
     logout();
@@ -64,15 +98,13 @@ export default function JoinPage() {
       });
       setJoined(store);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Erro ao entrar na loja');
-      }
+      setError(err instanceof ApiError ? err.message : 'Erro ao entrar na loja');
     } finally {
       setLoading(false);
     }
   }
+
+  // ── Post-join success screen ──────────────────────────────────────────────
 
   if (joined) {
     return (
@@ -85,12 +117,21 @@ export default function JoinPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>Papel: <strong>{ROLE_LABELS[role]}</strong></p>
-            <p>Aguarde o facilitador iniciar a sessão.</p>
+            <p>
+              Papel: <strong>{ROLE_LABELS[role]}</strong>
+            </p>
+            <p>Redirecionando para o Plano Operacional...</p>
           </CardContent>
-          <CardFooter className="justify-center">
+          <CardFooter className="flex-col gap-2">
+            <Button
+              className="w-full"
+              onClick={() => router.push(`/store/${joined.id}/plan`)}
+            >
+              Ir para o PO
+            </Button>
             <Button
               variant="outline"
+              className="w-full"
               onClick={() => {
                 setJoined(null);
                 setAccessCode('');
@@ -104,6 +145,8 @@ export default function JoinPage() {
     );
   }
 
+  // ── Main page ─────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-muted/40">
       {/* Header */}
@@ -112,7 +155,7 @@ export default function JoinPage() {
           <h1 className="text-lg font-semibold">Retail Game Platform</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">
-              {user?.name}
+              {mounted ? user?.name : null}
             </span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Sair
@@ -121,8 +164,38 @@ export default function JoinPage() {
         </div>
       </header>
 
-      {/* Content */}
-      <main className="max-w-2xl mx-auto px-4 py-12 flex flex-col items-center">
+      <main className="max-w-2xl mx-auto px-4 py-10 space-y-6 flex flex-col items-center">
+        {/* Existing memberships */}
+        {!loadingMine && myStores.length > 0 && (
+          <div className="w-full max-w-sm space-y-3">
+            <p className="text-sm font-medium text-center text-muted-foreground">
+              Suas lojas atuais
+            </p>
+            {myStores.map((s) => (
+              <Card key={s.storeId} className="border-primary/30 bg-primary/5">
+                <CardContent className="pt-4 pb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-sm">{s.storeName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {ROLE_LABELS[s.role]}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => router.push(`/store/${s.storeId}/plan`)}
+                  >
+                    Ir para o PO
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+            <p className="text-xs text-center text-muted-foreground pt-1">
+              Ou entre em outra loja abaixo
+            </p>
+          </div>
+        )}
+
+        {/* Join form */}
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Entrar na Loja</CardTitle>
@@ -147,9 +220,7 @@ export default function JoinPage() {
                   maxLength={6}
                   required
                   value={accessCode}
-                  onChange={(e) =>
-                    setAccessCode(e.target.value.toUpperCase())
-                  }
+                  onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                   className="tracking-widest text-center font-mono text-lg uppercase"
                 />
               </div>

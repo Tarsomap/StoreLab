@@ -5,14 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 type StoreRole =
   | 'STORE_MANAGER'
@@ -26,6 +24,9 @@ interface CategoryDecisionEntry {
   categoryId: string;
   categoryName: string;
   unitCost: number;
+  taxRate: number;
+  breakageRate: number;
+  agingRate: number;
   stockPurchased: number;
   priceMargin: number;
   lineCost: number;
@@ -71,18 +72,13 @@ interface StoreSummary {
   accessCode: string;
 }
 
-interface SessionStatus {
-  id: string;
-  status: string;
-}
-
 interface StoreMemberEntry {
   userId: string;
   name: string;
   role: StoreRole;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function configVersionFromStatus(status: string): number {
   if (status === 'ROUND_3') return 3;
@@ -90,17 +86,70 @@ function configVersionFromStatus(status: string): number {
   return 1;
 }
 
-const fmt = (n: number) => n.toLocaleString('pt-BR');
-const fmtBrl = (n: number) =>
+const brl = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
+const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+const num = (n: number) => n.toLocaleString('pt-BR');
 
-const CAN_EDIT_ESTOQUE: StoreRole[] = ['SUPPLY_MANAGER', 'STORE_MANAGER'];
-const CAN_EDIT_PRICING: StoreRole[] = ['COMMERCIAL_MANAGER', 'STORE_MANAGER'];
-const CAN_EDIT_OPERADORES: StoreRole[] = ['OPERATIONAL_MANAGER', 'STORE_MANAGER'];
-const CAN_EDIT_CAPEX: StoreRole[] = ['SERVICE_MANAGER', 'STORE_MANAGER'];
+// Compute per-category derived values
+interface CatRow extends CategoryDecisionEntry {
+  sellPrice: number;
+  totalVenda: number;
+  impostos: number;
+  totalEstoque: number;
+  quebrasR: number;
+  agingR: number;
+}
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function buildCatRows(cats: CategoryDecisionEntry[]): CatRow[] {
+  return cats.map((c) => {
+    const sellPrice = c.unitCost * (1 + c.priceMargin);
+    const totalVenda = c.stockPurchased * sellPrice;
+    const impostos = totalVenda * c.taxRate;
+    const totalEstoque = c.stockPurchased * c.unitCost;
+    const quebrasR = totalEstoque * c.breakageRate;
+    const agingR = totalEstoque * c.agingRate;
+    return { ...c, sellPrice, totalVenda, impostos, totalEstoque, quebrasR, agingR };
+  });
+}
+
+// Compute DRE from rows + financials
+interface DreLines {
+  totalVendas: number;
+  impostos: number;
+  vendaLiquida: number;
+  custoVenda: number;
+  massaMgLiquida: number;
+  quebras: number;
+  aging: number;
+  massaFinal: number;
+  folha: number;
+  manutencao: number;
+  juros: number;
+  licencas: number;
+  ebitda: number;
+  ebitdaPct: number;
+}
+
+function buildDre(rows: CatRow[], financials: PlanFinancials): DreLines {
+  const totalVendas = rows.reduce((s, r) => s + r.totalVenda, 0);
+  const impostos = rows.reduce((s, r) => s + r.impostos, 0);
+  const vendaLiquida = totalVendas - impostos;
+  const custoVenda = rows.reduce((s, r) => s + r.totalEstoque, 0);
+  const massaMgLiquida = vendaLiquida - custoVenda;
+  const quebras = rows.reduce((s, r) => s + r.quebrasR, 0);
+  const aging = rows.reduce((s, r) => s + r.agingR, 0);
+  const massaFinal = massaMgLiquida - quebras - aging;
+  const folha = financials.payrollCost;
+  const manutencao = financials.maintenanceCost;
+  const juros = financials.interestCost;
+  const licencas = financials.licenseCost;
+  const ebitda = massaFinal - folha - manutencao - juros - licencas;
+  const ebitdaPct = totalVendas > 0 ? ebitda / totalVendas : 0;
+  return { totalVendas, impostos, vendaLiquida, custoVenda, massaMgLiquida, quebras, aging, massaFinal, folha, manutencao, juros, licencas, ebitda, ebitdaPct };
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function PlanPage() {
   const params = useParams<{ storeId: string }>();
@@ -118,7 +167,7 @@ export default function PlanPage() {
 
   const { on } = useSocket(store?.sessionId, storeId);
 
-  // ── Load ────────────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
 
   const loadPlan = useCallback(
     async (sessionStatus: string) => {
@@ -139,11 +188,10 @@ export default function PlanPage() {
           ),
         ]);
         setStore(storeData);
-
         const me = membersData.members.find((m) => m.userId === user?.id);
         if (me) setMyRole(me.role);
 
-        const sessionData = await api.get<SessionStatus>(`/sessions/${storeData.sessionId}/status`);
+        const sessionData = await api.get<{ status: string }>(`/sessions/${storeData.sessionId}/status`);
         await loadPlan(sessionData.status);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : 'Erro ao carregar plano');
@@ -152,15 +200,14 @@ export default function PlanPage() {
     if (user) init();
   }, [storeId, user, loadPlan]);
 
-  // ── Socket: live plan updates ────────────────────────────────────────────────
-
+  // Socket: live plan updates
   useEffect(() => {
     return on<{ plan: PlanFullResponse }>('plan:updated', ({ plan: updated }) => {
       setPlan(updated);
     });
   }, [on]);
 
-  // ── Mutation helpers ─────────────────────────────────────────────────────────
+  // ── Mutations ─────────────────────────────────────────────────────────────
 
   async function mutate<B>(path: string, body: B) {
     if (!plan) return;
@@ -189,12 +236,7 @@ export default function PlanPage() {
     }
   }
 
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
-
-  // ── Loading / error states ───────────────────────────────────────────────────
+  // ── States ────────────────────────────────────────────────────────────────
 
   if (loadError) {
     return (
@@ -203,7 +245,6 @@ export default function PlanPage() {
       </div>
     );
   }
-
   if (!plan || !store) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -212,145 +253,278 @@ export default function PlanPage() {
     );
   }
 
-  const canEdit = (roles: StoreRole[]) => !plan.confirmed && myRole !== null && roles.includes(myRole);
+  const editable = !plan.confirmed;
+  const rows = buildCatRows(plan.categoryDecisions);
+  const dre = buildDre(rows, plan.financials);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-muted/40">
       {/* Header */}
       <header className="bg-card border-b sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold">{store.name}</h1>
-            {plan.confirmed && <Badge variant="success">Confirmado</Badge>}
+            <h1 className="text-base font-semibold">{store.name}</h1>
+            {plan.confirmed && <Badge variant="outline" className="text-green-700 border-green-400">Confirmado</Badge>}
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={() => { logout(); router.push('/login'); }}>
               Sair
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* Financial summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <SummaryCard label="Caixa usado" value={fmtBrl(plan.financials.cashUsed)} />
+      <main className="max-w-7xl mx-auto px-4 py-5 space-y-5">
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <SummaryCard label="Caixa usado" value={brl(plan.financials.cashUsed)} />
           <SummaryCard
             label="Caixa disponível"
-            value={fmtBrl(plan.financials.availableCash)}
-            highlight={plan.financials.availableCash < 0}
+            value={brl(plan.financials.availableCash)}
+            danger={plan.financials.availableCash < 0}
           />
-          <SummaryCard label="EBITDA projetado" value={fmtBrl(plan.financials.projectedEbitda)} />
+          <SummaryCard label="EBITDA projetado" value={brl(dre.ebitda)} danger={dre.ebitda < 0} />
           <SummaryCard
             label="EBITDA %"
-            value={fmtPct(plan.financials.projectedEbitdaPercentage)}
-            highlight={plan.financials.projectedEbitdaPercentage < 0}
+            value={pct(dre.ebitdaPct)}
+            danger={dre.ebitdaPct < 0}
           />
         </div>
 
-        {/* Errors */}
         {saveError && (
           <p className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">{saveError}</p>
         )}
 
-        {/* Tabs */}
-        <Tabs defaultValue="estoque">
-          <TabsList className="flex flex-wrap gap-1 h-auto">
-            <TabsTrigger value="estoque">Estoque</TabsTrigger>
-            <TabsTrigger value="pricing">Pricing</TabsTrigger>
-            <TabsTrigger value="operadores">Operadores</TabsTrigger>
-            <TabsTrigger value="capex">CAPEX</TabsTrigger>
-          </TabsList>
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5 items-start">
 
-          {/* ── Estoque ── */}
-          <TabsContent value="estoque">
+          {/* ── LEFT: DRE ─────────────────────────────────────────────────── */}
+          <Card className="xl:sticky xl:top-[72px]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Plano Operacional
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <DreLine label="Total de Vendas" value={brl(dre.totalVendas)} bold />
+              <DreLine
+                label="(-) Impostos"
+                value={brl(dre.impostos)}
+                pctVal={dre.totalVendas > 0 ? dre.impostos / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine label="Total Venda Líquida" value={brl(dre.vendaLiquida)} subtotal />
+              <DreLine
+                label="(-) Custo Venda"
+                value={brl(dre.custoVenda)}
+                pctVal={dre.totalVendas > 0 ? dre.custoVenda / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine label="Massa Mg Líquida" value={brl(dre.massaMgLiquida)} subtotal />
+              <DreLine
+                label="(-) Quebras"
+                value={brl(dre.quebras)}
+                pctVal={dre.totalVendas > 0 ? dre.quebras / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine
+                label="(-) Aging"
+                value={brl(dre.aging)}
+                pctVal={dre.totalVendas > 0 ? dre.aging / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine label="Massa Final" value={brl(dre.massaFinal)} subtotal />
+              <DreLine
+                label="(-) Folha de Pagamento"
+                value={brl(dre.folha)}
+                pctVal={dre.totalVendas > 0 ? dre.folha / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine
+                label="(-) Manutenção"
+                value={brl(dre.manutencao)}
+                pctVal={dre.totalVendas > 0 ? dre.manutencao / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine
+                label="(-) Juros s/ empréstimos"
+                value={brl(dre.juros)}
+                pctVal={dre.totalVendas > 0 ? dre.juros / dre.totalVendas : 0}
+                indent
+              />
+              <DreLine
+                label="(-) Licença de Softwares"
+                value={brl(dre.licencas)}
+                pctVal={dre.totalVendas > 0 ? dre.licencas / dre.totalVendas : 0}
+                indent
+              />
+              <div className="border-t-2 border-foreground/20 mt-1" />
+              <DreLine
+                label="EBITDA"
+                value={brl(dre.ebitda)}
+                pctVal={dre.ebitdaPct}
+                bold
+                danger={dre.ebitda < 0}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ── RIGHT: Loja ──────────────────────────────────────────────── */}
+          <div className="space-y-4">
+
+            {/* Category table */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Decisões de Estoque</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Loja — Decisões por Categoria
+                </CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-sm min-w-[640px]">
                   <thead>
-                    <tr className="border-b text-muted-foreground text-left">
-                      <th className="pb-2 pr-4">Categoria</th>
-                      <th className="pb-2 pr-4 text-right">Custo unit.</th>
-                      <th className="pb-2 pr-4 text-right">Qtd comprada</th>
-                      <th className="pb-2 text-right">Custo total</th>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground w-44">Campo</th>
+                      {rows.map((r) => (
+                        <th key={r.categoryId} className="text-right px-3 py-2 font-medium">
+                          {r.categoryName}
+                        </th>
+                      ))}
+                      <th className="text-right px-3 py-2 font-medium text-muted-foreground">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {plan.categoryDecisions.map((cat) => (
-                      <CategoryStockRow
-                        key={cat.id}
-                        cat={cat}
-                        editable={canEdit(CAN_EDIT_ESTOQUE)}
-                        saving={saving}
-                        onSave={(stockPurchased) =>
-                          mutate(`/plans/${plan.id}/category-decision`, {
-                            categoryId: cat.categoryId,
-                            stockPurchased,
-                            priceMargin: cat.priceMargin,
-                          })
-                        }
-                      />
-                    ))}
+                    {/* Custo Unit */}
+                    <CatRow label="Custo Unit." rows={rows} getValue={(r) => brl(r.unitCost)} muted />
+
+                    {/* Posição Estoque — EDITABLE */}
+                    <tr className="border-b bg-blue-50/30">
+                      <td className="px-3 py-1.5 font-medium text-blue-700 text-xs uppercase tracking-wide">
+                        Posição Estoque (un)
+                      </td>
+                      {rows.map((r) => (
+                        <td key={r.categoryId} className="px-2 py-1.5 text-right">
+                          <StockInput
+                            value={r.stockPurchased}
+                            disabled={!editable || saving}
+                            onCommit={(v) =>
+                              mutate(`/plans/${plan.id}/category-decision`, {
+                                categoryId: r.categoryId,
+                                stockPurchased: v,
+                                priceMargin: r.priceMargin,
+                              })
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td className="px-3 py-1.5 text-right font-semibold">
+                        {num(rows.reduce((s, r) => s + r.stockPurchased, 0))}
+                      </td>
+                    </tr>
+
+                    {/* Margem Comercial — EDITABLE */}
+                    <tr className="border-b bg-blue-50/30">
+                      <td className="px-3 py-1.5 font-medium text-blue-700 text-xs uppercase tracking-wide">
+                        Margem Comercial
+                      </td>
+                      {rows.map((r) => (
+                        <td key={r.categoryId} className="px-2 py-1.5 text-right">
+                          <MarginInput
+                            value={r.priceMargin}
+                            disabled={!editable || saving}
+                            onCommit={(v) =>
+                              mutate(`/plans/${plan.id}/category-decision`, {
+                                categoryId: r.categoryId,
+                                stockPurchased: r.stockPurchased,
+                                priceMargin: v,
+                              })
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td className="px-3 py-1.5 text-right text-muted-foreground text-xs">—</td>
+                    </tr>
+
+                    {/* R$ Total Venda */}
+                    <CatRow
+                      label="R$ Total Venda"
+                      rows={rows}
+                      getValue={(r) => brl(r.totalVenda)}
+                      total={(r) => r.totalVenda}
+                    />
+
+                    {/* R$ Impostos */}
+                    <CatRow
+                      label="R$ Impostos"
+                      rows={rows}
+                      getValue={(r) => brl(r.impostos)}
+                      total={(r) => r.impostos}
+                      muted
+                    />
+
+                    {/* Total Estoque R$ */}
+                    <CatRow
+                      label="Total Estoque R$"
+                      rows={rows}
+                      getValue={(r) => brl(r.totalEstoque)}
+                      total={(r) => r.totalEstoque}
+                      muted
+                    />
+
+                    {/* % Quebras */}
+                    <CatRow
+                      label="% Quebras"
+                      rows={rows}
+                      getValue={(r) => pct(r.breakageRate)}
+                      muted
+                    />
+
+                    {/* R$ Quebras */}
+                    <CatRow
+                      label="R$ Quebras"
+                      rows={rows}
+                      getValue={(r) => brl(r.quebrasR)}
+                      total={(r) => r.quebrasR}
+                      muted
+                    />
+
+                    {/* % Aging */}
+                    <CatRow
+                      label="% Aging"
+                      rows={rows}
+                      getValue={(r) => pct(r.agingRate)}
+                      muted
+                    />
+
+                    {/* R$ Aging */}
+                    <CatRow
+                      label="R$ Aging"
+                      rows={rows}
+                      getValue={(r) => brl(r.agingR)}
+                      total={(r) => r.agingR}
+                      muted
+                    />
                   </tbody>
                 </table>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* ── Pricing ── */}
-          <TabsContent value="pricing">
+            {/* Operadores */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Decisões de Preço</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Equipe Operacional
+                </CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-muted-foreground text-left">
-                      <th className="pb-2 pr-4">Categoria</th>
-                      <th className="pb-2 pr-4 text-right">Custo unit.</th>
-                      <th className="pb-2 pr-4 text-right">Margem %</th>
-                      <th className="pb-2 text-right">Preço venda</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plan.categoryDecisions.map((cat) => (
-                      <CategoryPricingRow
-                        key={cat.id}
-                        cat={cat}
-                        editable={canEdit(CAN_EDIT_PRICING)}
-                        saving={saving}
-                        onSave={(priceMargin) =>
-                          mutate(`/plans/${plan.id}/category-decision`, {
-                            categoryId: cat.categoryId,
-                            stockPurchased: cat.stockPurchased,
-                            priceMargin,
-                          })
-                        }
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── Operadores ── */}
-          <TabsContent value="operadores">
-            <Card>
-              <CardContent className="pt-6">
-                <WorkforceForm
+              <CardContent>
+                <OperadoresForm
                   cashierOperators={plan.cashierOperators}
                   serviceOperators={plan.serviceOperators}
-                  editable={canEdit(CAN_EDIT_OPERADORES)}
+                  editable={editable}
                   saving={saving}
-                  financials={plan.financials}
                   onSave={(cashier, service) =>
                     mutate(`/plans/${plan.id}/workforce`, {
                       cashierOperators: cashier,
@@ -360,33 +534,33 @@ export default function PlanPage() {
                 />
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* ── CAPEX ── */}
-          <TabsContent value="capex">
+            {/* CAPEX */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Decisões de CAPEX</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  CAPEX
+                </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground text-left">
-                      <th className="pb-2 pr-4">Investimento</th>
-                      <th className="pb-2 pr-4 text-right">Custo</th>
-                      <th className="pb-2 text-center">Implementar</th>
+                      <th className="pb-2 pr-4 font-medium">Investimento</th>
+                      <th className="pb-2 pr-4 text-right font-medium">Custo</th>
+                      <th className="pb-2 text-center font-medium">Implementar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {plan.capexDecisions.map((cx) => (
                       <tr key={cx.id} className="border-b last:border-0">
                         <td className="py-2 pr-4">{cx.capexName}</td>
-                        <td className="py-2 pr-4 text-right">{fmtBrl(cx.acquisitionCost)}</td>
+                        <td className="py-2 pr-4 text-right">{brl(cx.acquisitionCost)}</td>
                         <td className="py-2 text-center">
                           <input
                             type="checkbox"
                             checked={cx.implemented}
-                            disabled={!canEdit(CAN_EDIT_CAPEX) || saving}
+                            disabled={!editable || saving}
                             onChange={(e) =>
                               mutate(`/plans/${plan.id}/capex-decision`, {
                                 capexOptionId: cx.capexOptionId,
@@ -402,25 +576,23 @@ export default function PlanPage() {
                 </table>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
 
-        {/* Cost breakdown */}
-        <CostBreakdown financials={plan.financials} />
-
-        {/* Confirm */}
-        {myRole === 'STORE_MANAGER' && !plan.confirmed && (
-          <div className="flex justify-end">
-            <Button onClick={handleConfirm} disabled={confirming || saving}>
-              {confirming ? 'Confirmando...' : 'Confirmar Plano Operacional'}
-            </Button>
+            {/* Confirm */}
+            {myRole === 'STORE_MANAGER' && !plan.confirmed && (
+              <div className="flex justify-end">
+                <Button onClick={handleConfirm} disabled={confirming || saving} size="lg">
+                  {confirming ? 'Confirmando...' : 'Confirmar Plano Operacional'}
+                </Button>
+              </div>
+            )}
+            {plan.confirmed && (
+              <p className="text-sm text-center text-green-600">
+                Plano confirmado em{' '}
+                {plan.confirmedAt ? new Date(plan.confirmedAt).toLocaleString('pt-BR') : '—'}
+              </p>
+            )}
           </div>
-        )}
-        {plan.confirmed && (
-          <p className="text-sm text-center text-green-600">
-            Plano confirmado em {plan.confirmedAt ? new Date(plan.confirmedAt).toLocaleString('pt-BR') : '—'}
-          </p>
-        )}
+        </div>
       </main>
     </div>
   );
@@ -431,209 +603,228 @@ export default function PlanPage() {
 function SummaryCard({
   label,
   value,
-  highlight,
+  danger,
 }: {
   label: string;
   value: string;
-  highlight?: boolean;
+  danger?: boolean;
 }) {
   return (
     <Card>
       <CardContent className="pt-4 pb-4">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-lg font-bold mt-0.5 ${highlight ? 'text-destructive' : ''}`}>{value}</p>
+        <p className={`text-lg font-bold mt-0.5 ${danger ? 'text-destructive' : ''}`}>{value}</p>
       </CardContent>
     </Card>
   );
 }
 
-function CategoryStockRow({
-  cat,
-  editable,
-  saving,
-  onSave,
+// DRE line component
+function DreLine({
+  label,
+  value,
+  pctVal,
+  bold,
+  subtotal,
+  indent,
+  danger,
 }: {
-  cat: CategoryDecisionEntry;
-  editable: boolean;
-  saving: boolean;
-  onSave: (v: number) => void;
+  label: string;
+  value: string;
+  pctVal?: number;
+  bold?: boolean;
+  subtotal?: boolean;
+  indent?: boolean;
+  danger?: boolean;
 }) {
-  const [draft, setDraft] = useState(String(cat.stockPurchased));
+  return (
+    <div
+      className={`flex items-center justify-between py-1 text-sm gap-2
+        ${subtotal ? 'border-t border-border/60 mt-0.5 pt-1.5 font-semibold' : ''}
+        ${bold ? 'font-bold text-base' : ''}
+        ${indent ? 'pl-3' : ''}
+      `}
+    >
+      <span className={`flex-1 ${indent ? 'text-muted-foreground' : ''}`}>{label}</span>
+      <span className="text-right text-muted-foreground text-xs w-14 shrink-0">
+        {pctVal !== undefined ? `${(pctVal * 100).toFixed(1)}%` : ''}
+      </span>
+      <span className={`text-right font-mono w-28 shrink-0 ${danger ? 'text-destructive' : ''}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
 
-  useEffect(() => { setDraft(String(cat.stockPurchased)); }, [cat.stockPurchased]);
-
+// Read-only category table row
+interface CatRowData {
+  categoryId: string;
+}
+function CatRow<T extends CatRowData>({
+  label,
+  rows,
+  getValue,
+  total,
+  muted,
+}: {
+  label: string;
+  rows: T[];
+  getValue: (r: T) => string;
+  total?: (r: T) => number;
+  muted?: boolean;
+}) {
+  const totalVal = total ? rows.reduce((s, r) => s + total(r), 0) : null;
   return (
     <tr className="border-b last:border-0">
-      <td className="py-2 pr-4">{cat.categoryName}</td>
-      <td className="py-2 pr-4 text-right">{cat.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-      <td className="py-2 pr-4 text-right">
-        {editable ? (
-          <Input
-            type="number"
-            min={0}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => {
-              const v = Number(draft);
-              if (!isNaN(v) && v !== cat.stockPurchased) onSave(v);
-            }}
-            disabled={saving}
-            className="w-24 text-right h-8 text-sm"
-          />
-        ) : (
-          cat.stockPurchased.toLocaleString('pt-BR')
-        )}
+      <td className={`px-3 py-1.5 ${muted ? 'text-muted-foreground text-xs' : 'font-medium text-xs'}`}>
+        {label}
       </td>
-      <td className="py-2 text-right">{cat.lineCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</td>
+      {rows.map((r) => (
+        <td key={r.categoryId} className={`px-3 py-1.5 text-right text-xs ${muted ? 'text-muted-foreground' : ''}`}>
+          {getValue(r)}
+        </td>
+      ))}
+      <td className="px-3 py-1.5 text-right text-xs font-semibold">
+        {totalVal !== null
+          ? totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+          : '—'}
+      </td>
     </tr>
   );
 }
 
-function CategoryPricingRow({
-  cat,
-  editable,
-  saving,
-  onSave,
+// Editable input for stockPurchased
+function StockInput({
+  value,
+  disabled,
+  onCommit,
 }: {
-  cat: CategoryDecisionEntry;
-  editable: boolean;
-  saving: boolean;
-  onSave: (v: number) => void;
+  value: number;
+  disabled: boolean;
+  onCommit: (v: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(Math.round(cat.priceMargin * 100)));
-
-  useEffect(() => { setDraft(String(Math.round(cat.priceMargin * 100))); }, [cat.priceMargin]);
-
-  const sellPrice = cat.unitCost * (1 + cat.priceMargin);
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
 
   return (
-    <tr className="border-b last:border-0">
-      <td className="py-2 pr-4">{cat.categoryName}</td>
-      <td className="py-2 pr-4 text-right">{cat.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-      <td className="py-2 pr-4 text-right">
-        {editable ? (
-          <div className="flex items-center justify-end gap-1">
-            <Input
-              type="number"
-              min={0}
-              max={500}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => {
-                const v = Number(draft) / 100;
-                if (!isNaN(v) && v !== cat.priceMargin) onSave(v);
-              }}
-              disabled={saving}
-              className="w-20 text-right h-8 text-sm"
-            />
-            <span className="text-muted-foreground text-xs">%</span>
-          </div>
-        ) : (
-          `${Math.round(cat.priceMargin * 100)}%`
-        )}
-      </td>
-      <td className="py-2 text-right">{sellPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-    </tr>
+    <Input
+      type="number"
+      min={0}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const v = Number(draft);
+        if (!isNaN(v) && v !== value) onCommit(v);
+      }}
+      disabled={disabled}
+      className="w-24 text-right h-7 text-xs px-2"
+    />
   );
 }
 
-function WorkforceForm({
+// Editable input for priceMargin (shown as %)
+function MarginInput({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(Math.round(value * 100)));
+  useEffect(() => setDraft(String(Math.round(value * 100))), [value]);
+
+  return (
+    <div className="flex items-center justify-end gap-0.5">
+      <Input
+        type="number"
+        min={0}
+        max={500}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const v = Number(draft) / 100;
+          if (!isNaN(v) && v !== value) onCommit(v);
+        }}
+        disabled={disabled}
+        className="w-20 text-right h-7 text-xs px-2"
+      />
+      <span className="text-muted-foreground text-xs">%</span>
+    </div>
+  );
+}
+
+// Operadores form with inline save on blur
+function OperadoresForm({
   cashierOperators,
   serviceOperators,
   editable,
   saving,
-  financials,
   onSave,
 }: {
   cashierOperators: number;
   serviceOperators: number;
   editable: boolean;
   saving: boolean;
-  financials: PlanFinancials;
   onSave: (cashier: number, service: number) => void;
 }) {
   const [cashier, setCashier] = useState(String(cashierOperators));
   const [service, setService] = useState(String(serviceOperators));
 
-  useEffect(() => { setCashier(String(cashierOperators)); }, [cashierOperators]);
-  useEffect(() => { setService(String(serviceOperators)); }, [serviceOperators]);
+  useEffect(() => setCashier(String(cashierOperators)), [cashierOperators]);
+  useEffect(() => setService(String(serviceOperators)), [serviceOperators]);
 
-  function submit() {
-    const c = Number(cashier);
-    const s = Number(service);
+  function commit(newCashier: string, newService: string) {
+    const c = Number(newCashier);
+    const s = Number(newService);
     if (!isNaN(c) && !isNaN(s)) onSave(c, s);
   }
 
+  const cashierCost = Number(cashier) * 1_000;
+  const serviceCost = Number(service) * 1_200;
+
   return (
-    <div className="space-y-6">
-      <div className="grid sm:grid-cols-2 gap-6">
-        <div className="space-y-2">
-          <Label htmlFor="cashier">Operadores de Caixa</Label>
-          <p className="text-xs text-muted-foreground">CSAT ideal = 10 caixas</p>
+    <div className="space-y-3">
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <label className="text-sm text-nowrap w-44">Operadores de Caixa</label>
           <Input
-            id="cashier"
             type="number"
             min={0}
+            max={10}
             value={cashier}
             onChange={(e) => setCashier(e.target.value)}
+            onBlur={(e) => commit(e.target.value, service)}
             disabled={!editable || saving}
+            className="w-20 h-8 text-sm text-right"
           />
+          <span className="text-sm text-muted-foreground text-nowrap">
+            = {cashierCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+          </span>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="service">Operadores de Serviço</Label>
-          <p className="text-xs text-muted-foreground">Reduz risco de SLA (tabela 0–5)</p>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <label className="text-sm text-nowrap w-44">Operadores de Serviço</label>
           <Input
-            id="service"
             type="number"
             min={0}
             max={5}
             value={service}
             onChange={(e) => setService(e.target.value)}
+            onBlur={(e) => commit(cashier, e.target.value)}
             disabled={!editable || saving}
+            className="w-20 h-8 text-sm text-right"
           />
+          <span className="text-sm text-muted-foreground text-nowrap">
+            = {serviceCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+          </span>
         </div>
       </div>
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>Folha de pagamento: <strong>{financials.payrollCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</strong></p>
-        <p>Licença: <strong>{financials.licenseCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</strong></p>
-      </div>
-      {editable && (
-        <Button size="sm" onClick={submit} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar operadores'}
-        </Button>
-      )}
+      <p className="text-xs text-muted-foreground">
+        Ideal: 10 caixas para CSAT máximo · Serviço 0–5 define SLA de resolução
+      </p>
     </div>
-  );
-}
-
-function CostBreakdown({ financials }: { financials: PlanFinancials }) {
-  const fmt0 = (n: number) =>
-    n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
-  const items = [
-    { label: 'Receita bruta projetada', value: fmt0(financials.projectedGrossRevenue), positive: true },
-    { label: 'Folha de pagamento', value: fmt0(financials.payrollCost) },
-    { label: 'Manutenção', value: fmt0(financials.maintenanceCost) },
-    { label: 'Licenças', value: fmt0(financials.licenseCost) },
-    { label: 'Juros', value: fmt0(financials.interestCost) },
-    { label: 'Caixa usado', value: fmt0(financials.cashUsed) },
-  ];
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm text-muted-foreground font-medium">Detalhamento de custos</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-          {items.map((item) => (
-            <div key={item.label}>
-              <dt className="text-muted-foreground text-xs">{item.label}</dt>
-              <dd className={`font-medium ${item.positive ? 'text-green-600' : ''}`}>{item.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </CardContent>
-    </Card>
   );
 }

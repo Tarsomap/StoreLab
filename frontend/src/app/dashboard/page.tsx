@@ -51,6 +51,7 @@ const STATUS_COLOR: Record<string, string> = {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +65,7 @@ export default function DashboardPage() {
   const [createError, setCreateError] = useState('');
 
   useEffect(() => {
+    setMounted(true);
     api
       .get<Session[]>('/sessions')
       .then(setSessions)
@@ -107,7 +109,7 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold">Retail Game Platform</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">
-              {user?.name}
+              {mounted ? user?.name : null}
             </span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Sair
@@ -208,7 +210,7 @@ export default function DashboardPage() {
               <Card
                 key={s.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => router.push(`/dashboard/${s.id}`)}
+                onClick={() => router.push(`/dashboard/session/${s.id}`)}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">

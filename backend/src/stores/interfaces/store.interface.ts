@@ -1,5 +1,12 @@
 import { StoreRole } from '@prisma/client';
 
+export interface UserStoreEntry {
+  storeId: string;
+  storeName: string;
+  sessionId: string;
+  role: StoreRole;
+}
+
 export interface StoreSummary {
   id: string;
   sessionId: string;

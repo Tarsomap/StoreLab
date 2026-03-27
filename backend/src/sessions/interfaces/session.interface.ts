@@ -1,4 +1,4 @@
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus, StoreRole } from '@prisma/client';
 
 export interface SessionSummary {
   id: string;
@@ -11,10 +11,18 @@ export interface SessionSummary {
   updatedAt: Date;
 }
 
+export interface StoreMemberStatus {
+  userId: string;
+  name: string;
+  role: StoreRole;
+}
+
 export interface StoreStatusEntry {
   storeId: string;
   storeName: string;
+  accessCode: string;
   memberCount: number;
+  members: StoreMemberStatus[];
   planConfirmed: boolean;
 }
 

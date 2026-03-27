@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(claude plugin:*)"
+      "Bash(claude plugin:*)",
+      "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/app' -name *.tsx)",
+      "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform' -name *.xlsx)"
     ]
   }
 }
