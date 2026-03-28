@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import { LayoutDashboard, Store, BookOpen, ArrowLeft } from 'lucide-react';
 
 type UserRole = 'FACILITATOR' | 'PLAYER';
 
@@ -12,12 +15,29 @@ interface AppShellProps {
   userRole?: UserRole;
 }
 
-const NAV_LINKS = [{ label: 'Dashboard', href: '/dashboard' }];
+function extractSessionId(pathname: string): string | null {
+  const match = pathname.match(/^\/dashboard\/session\/([^/]+)/);
+  return match ? match[1] : null;
+}
 
 export default function AppShell({ children, userRole }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+  const [sessionName, setSessionName] = useState<string | null>(null);
+
+  const sessionId = extractSessionId(pathname);
+
+  useEffect(() => {
+    if (sessionId) {
+      api
+        .get<{ id: string; name: string }>(`/sessions/${sessionId}`)
+        .then((s) => setSessionName(s.name))
+        .catch(() => setSessionName(null));
+    } else {
+      setSessionName(null);
+    }
+  }, [sessionId]);
 
   function handleLogout() {
     logout();
@@ -25,6 +45,14 @@ export default function AppShell({ children, userRole }: AppShellProps) {
   }
 
   const showSidebar = userRole === 'FACILITATOR';
+
+  function navLinkClass(active: boolean) {
+    return `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+      active
+        ? 'bg-muted text-foreground font-medium'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+    }`;
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -53,21 +81,53 @@ export default function AppShell({ children, userRole }: AppShellProps) {
         {/* Sidebar — FACILITATOR only */}
         {showSidebar && (
           <aside className="w-[260px] bg-card border-r shrink-0 py-6 px-4">
-            <nav className="space-y-1">
-              {NAV_LINKS.map((link) => (
+            {sessionId ? (
+              <nav className="space-y-1">
+                {/* Session header */}
+                <div className="px-3 pb-3 mb-2 border-b">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                    Sessão
+                  </p>
+                  <p className="font-display font-semibold text-sm truncate text-foreground">
+                    {sessionName ?? '...'}
+                  </p>
+                </div>
+
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
-                    pathname === link.href || pathname.startsWith(link.href + '/')
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
+                  href={`/dashboard/session/${sessionId}`}
+                  className={navLinkClass(pathname === `/dashboard/session/${sessionId}`)}
                 >
-                  {link.label}
+                  <Store className="h-4 w-4 shrink-0" />
+                  Lojas
                 </Link>
-              ))}
-            </nav>
+
+                <Link
+                  href={`/dashboard/session/${sessionId}/quiz`}
+                  className={navLinkClass(pathname.startsWith(`/dashboard/session/${sessionId}/quiz`))}
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  Quiz
+                </Link>
+
+                {/* Back to Dashboard */}
+                <div className="pt-2 mt-2 border-t">
+                  <Link href="/dashboard" className={navLinkClass(false)}>
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                    Voltar ao Dashboard
+                  </Link>
+                </div>
+              </nav>
+            ) : (
+              <nav className="space-y-1">
+                <Link
+                  href="/dashboard"
+                  className={navLinkClass(pathname === '/dashboard' || pathname.startsWith('/dashboard/'))}
+                >
+                  <LayoutDashboard className="h-4 w-4 shrink-0" />
+                  Dashboard
+                </Link>
+              </nav>
+            )}
           </aside>
         )}
 

@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Plus } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,13 +37,23 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  SETUP: 'bg-secondary text-secondary-foreground',
-  ROUND_1_CONFIG: 'bg-yellow-100 text-yellow-800',
-  ROUND_1: 'bg-blue-100 text-blue-800',
-  RECONFIGURATION: 'bg-orange-100 text-orange-800',
-  ROUND_2: 'bg-blue-100 text-blue-800',
-  ROUND_3: 'bg-purple-100 text-purple-800',
-  FINISHED: 'bg-green-100 text-green-800',
+  SETUP: 'bg-muted text-muted-foreground',
+  ROUND_1_CONFIG: 'bg-warning/10 text-warning',
+  ROUND_1: 'bg-accent/10 text-accent',
+  RECONFIGURATION: 'bg-warning/10 text-warning',
+  ROUND_2: 'bg-accent/10 text-accent',
+  ROUND_3: 'bg-accent/10 text-accent',
+  FINISHED: 'bg-primary/10 text-primary',
+};
+
+const STATUS_PROGRESS: Record<string, string> = {
+  SETUP: 'Configuração',
+  ROUND_1_CONFIG: 'Configuração R.1',
+  ROUND_1: 'Rodada 1 de 3',
+  RECONFIGURATION: 'Reconfiguração',
+  ROUND_2: 'Rodada 2 de 3',
+  ROUND_3: 'Rodada 3 de 3',
+  FINISHED: 'Finalizada',
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -102,7 +113,14 @@ export default function DashboardPage() {
             </p>
           </div>
           <Button onClick={() => setShowCreate((v) => !v)}>
-            {showCreate ? 'Cancelar' : '+ Nova sessão'}
+            {showCreate ? (
+              'Cancelar'
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                Nova sessão
+              </>
+            )}
           </Button>
         </div>
 
@@ -187,20 +205,39 @@ export default function DashboardPage() {
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base">{s.name}</CardTitle>
+                    <CardTitle className="font-display font-semibold text-lg leading-tight">
+                      {s.name}
+                    </CardTitle>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_COLOR[s.status] ?? 'bg-secondary'}`}
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0 ${STATUS_COLOR[s.status] ?? 'bg-muted text-muted-foreground'}`}
                     >
                       {STATUS_LABEL[s.status] ?? s.status}
                     </span>
                   </div>
-                  <CardDescription>
-                    {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                  <CardDescription className="flex items-center justify-between mt-1">
+                    <span>{new Date(s.createdAt).toLocaleDateString('pt-BR')}</span>
+                    <span className="text-xs font-medium">
+                      {STATUS_PROGRESS[s.status] ?? s.status}
+                    </span>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>Demanda: {s.totalDemand.toLocaleString('pt-BR')}</p>
-                  <p>Caixa: R$ {s.initialCash.toLocaleString('pt-BR')}</p>
+                <CardContent className="text-sm text-muted-foreground space-y-1 pt-0">
+                  <p>
+                    Demanda:{' '}
+                    <span className="font-mono font-medium text-foreground">
+                      {s.totalDemand.toLocaleString('pt-BR')}
+                    </span>
+                  </p>
+                  <p>
+                    Caixa:{' '}
+                    <span className="font-mono font-medium text-foreground">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                        maximumFractionDigits: 0,
+                      }).format(s.initialCash)}
+                    </span>
+                  </p>
                 </CardContent>
               </Card>
             ))}

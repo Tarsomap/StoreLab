@@ -14,6 +14,8 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node -r tsconfig-paths/register src/seed/seed.ts",
+    "seed:demo": "ts-node -r tsconfig-paths/register src/seed/demo-seed.ts",
+    "seed:demo:reset": "npx prisma migrate reset --force && npm run seed && npm run seed:demo",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"

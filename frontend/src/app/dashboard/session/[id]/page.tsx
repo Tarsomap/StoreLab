@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Check, Clock } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -302,9 +303,9 @@ export default function SessionManagementPage() {
           </Card>
 
           {/* Contextual actions */}
-          <Card className="border-primary/20 bg-primary/5">
+          <Card className="border-l-4 border-l-accent">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <CardTitle className="font-display font-semibold text-sm uppercase tracking-wide">
                 Ações
               </CardTitle>
             </CardHeader>
@@ -405,18 +406,18 @@ function PhaseStepper({ activeIndex }: { activeIndex: number }) {
             {/* Node */}
             <div className="flex flex-col items-center shrink-0">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                   isDone
-                    ? 'bg-primary border-primary text-primary-foreground'
+                    ? 'bg-accent text-accent-foreground'
                     : isActive
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-muted-foreground/30 text-muted-foreground/40 bg-background'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground border border-muted-foreground/20'
                 }`}
               >
-                {isDone ? '✓' : idx + 1}
+                {isDone ? <Check className="h-3.5 w-3.5" /> : idx + 1}
               </div>
               <span
-                className={`mt-1 text-[10px] text-center leading-tight whitespace-nowrap max-w-[72px] ${
+                className={`mt-1 text-xs text-center leading-tight whitespace-nowrap max-w-[72px] ${
                   isActive ? 'text-primary font-semibold' : isDone ? 'text-muted-foreground' : 'text-muted-foreground/50'
                 }`}
               >
@@ -427,7 +428,7 @@ function PhaseStepper({ activeIndex }: { activeIndex: number }) {
             {idx < PHASE_STEPS.length - 1 && (
               <div
                 className={`flex-1 h-0.5 mx-1 ${
-                  idx < activeIndex ? 'bg-primary' : 'bg-muted-foreground/20'
+                  idx < activeIndex ? 'bg-accent' : 'bg-muted-foreground/20'
                 }`}
               />
             )}
@@ -480,16 +481,17 @@ function ContextualActions({
       return (
         <div className="space-y-2">
           {allConfirmed ? (
-            <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5 border border-green-200">
+            <p className="text-xs text-accent bg-accent/10 rounded px-2 py-1.5 border border-accent/20">
               Todas as lojas confirmaram o PO.
             </p>
           ) : (
-            <p className="text-xs text-yellow-800 bg-yellow-50 rounded px-2 py-1.5 border border-yellow-200">
+            <p className="text-xs text-warning bg-warning/10 rounded px-2 py-1.5 border border-warning/20 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
               Aguardando confirmação de todos os POs...
             </p>
           )}
           <Button
-            className="w-full"
+            className="w-full shadow-sm hover:bg-accent/90"
             onClick={onAdvance}
             disabled={busy || !allConfirmed}
           >
@@ -578,8 +580,8 @@ function ContextualActions({
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">{label}</p>
-      <p className="font-semibold text-sm">{value}</p>
+      <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">{label}</p>
+      <p className="font-mono font-semibold text-sm">{value}</p>
     </div>
   );
 }
@@ -605,12 +607,27 @@ function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
   const hasPlan = store.cashUsed > 0 || store.planConfirmed;
   const cashDanger = store.availableCash < 0;
 
+  const borderClass = store.planConfirmed
+    ? 'border-l-4 border-l-accent'
+    : store.memberCount > 0
+      ? 'border-l-4 border-l-warning'
+      : 'border-l-4 border-l-muted';
+
   return (
-    <Card>
+    <Card className={borderClass}>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">{store.storeName}</CardTitle>
-          <Badge variant={store.planConfirmed ? 'success' : 'secondary'}>
+          <CardTitle className="font-display font-semibold text-base">
+            {store.storeName}
+          </CardTitle>
+          <Badge
+            className={
+              store.planConfirmed
+                ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/10'
+                : 'bg-warning/10 text-warning border border-warning/20 hover:bg-warning/10'
+            }
+            variant="outline"
+          >
             {store.planConfirmed ? 'PO confirmado' : 'PO pendente'}
           </Badge>
         </div>
@@ -618,7 +635,7 @@ function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
       <CardContent className="space-y-3">
         {/* Access code */}
         <div className="flex items-center gap-2">
-          <span className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
+          <span className="font-mono text-lg font-bold tracking-widest bg-primary text-primary-foreground px-3 py-1 rounded-lg">
             {store.accessCode}
           </span>
           <Button
@@ -636,11 +653,11 @@ function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
           <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 rounded-md p-2.5">
             <div>
               <p className="text-muted-foreground mb-0.5">Caixa usado</p>
-              <p className="font-semibold tabular-nums">{brl(store.cashUsed)}</p>
+              <p className="font-mono font-semibold tabular-nums">{brl(store.cashUsed)}</p>
             </div>
             <div>
               <p className="text-muted-foreground mb-0.5">Disponível</p>
-              <p className={`font-semibold tabular-nums ${cashDanger ? 'text-destructive' : ''}`}>
+              <p className={`font-mono font-semibold tabular-nums ${cashDanger ? 'text-destructive' : ''}`}>
                 {brl(store.availableCash)}
               </p>
             </div>
@@ -648,8 +665,8 @@ function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
               <div className="col-span-2 border-t pt-2 mt-0.5">
                 <p className="text-muted-foreground mb-0.5">EBITDA R{store.lastRound}</p>
                 <p
-                  className={`font-semibold tabular-nums ${
-                    (store.lastRoundEbitdaPct ?? 0) < 0 ? 'text-destructive' : 'text-green-700'
+                  className={`font-mono font-semibold tabular-nums ${
+                    (store.lastRoundEbitdaPct ?? 0) < 0 ? 'text-destructive' : 'text-accent'
                   }`}
                 >
                   {brl(store.lastRoundEbitda)}{' '}
