@@ -9,11 +9,11 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,11 @@ interface StoreStatus {
   memberCount: number;
   members: StoreMember[];
   planConfirmed: boolean;
+  cashUsed: number;
+  availableCash: number;
+  lastRound: number | null;
+  lastRoundEbitda: number | null;
+  lastRoundEbitdaPct: number | null;
 }
 
 interface SessionDetail {
@@ -64,25 +69,24 @@ interface SessionStatusResponse {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  SETUP: 'Configuração',
-  ROUND_1_CONFIG: 'Config. Rodada 1',
-  ROUND_1: 'Rodada 1',
-  RECONFIGURATION: 'Reconfiguração',
-  ROUND_2: 'Rodada 2',
-  ROUND_3: 'Rodada 3',
-  FINISHED: 'Finalizada',
+const PHASE_LABEL: Record<SessionStatus, string> = {
+  SETUP: '1ª Configuração — Preparação',
+  ROUND_1_CONFIG: '1ª Configuração — Aguardando POs',
+  ROUND_1: 'Rodada 1 em andamento',
+  RECONFIGURATION: '2ª Configuração (Reconfiguração)',
+  ROUND_2: 'Rodada 2 em andamento',
+  ROUND_3: 'Rodada 3 em andamento',
+  FINISHED: 'Resultado Final',
 };
 
-const STATUS_COLOR: Record<SessionStatus, string> = {
-  SETUP: 'bg-secondary text-secondary-foreground',
-  ROUND_1_CONFIG: 'bg-yellow-100 text-yellow-800',
-  ROUND_1: 'bg-blue-100 text-blue-800',
-  RECONFIGURATION: 'bg-orange-100 text-orange-800',
-  ROUND_2: 'bg-blue-100 text-blue-800',
-  ROUND_3: 'bg-purple-100 text-purple-800',
-  FINISHED: 'bg-green-100 text-green-800',
-};
+const PHASE_STEPS: { label: string; statuses: SessionStatus[] }[] = [
+  { label: '1ª Configuração', statuses: ['SETUP', 'ROUND_1_CONFIG'] },
+  { label: 'Rodada 1', statuses: ['ROUND_1'] },
+  { label: '2ª Configuração', statuses: ['RECONFIGURATION'] },
+  { label: 'Rodada 2', statuses: ['ROUND_2'] },
+  { label: 'Rodada 3', statuses: ['ROUND_3'] },
+  { label: 'Resultado', statuses: ['FINISHED'] },
+];
 
 const ROLE_LABELS: Record<StoreRole, string> = {
   STORE_MANAGER: 'Gerente da Loja',
@@ -92,14 +96,15 @@ const ROLE_LABELS: Record<StoreRole, string> = {
   SERVICE_MANAGER: 'Serviços',
 };
 
-const EXECUTABLE_STATUSES: SessionStatus[] = ['ROUND_1', 'ROUND_2', 'ROUND_3'];
-const HAS_RESULTS_STATUSES: SessionStatus[] = [
-  'ROUND_1',
-  'RECONFIGURATION',
-  'ROUND_2',
-  'ROUND_3',
-  'FINISHED',
-];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const brl = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+function getActiveStepIndex(status: SessionStatus): number {
+  return PHASE_STEPS.findIndex((s) => s.statuses.includes(status));
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -110,29 +115,23 @@ export default function SessionManagementPage() {
   const { user, logout } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
-  // Data
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [statusData, setStatusData] = useState<SessionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Create store form
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
   const [creatingStore, setCreatingStore] = useState(false);
   const [createStoreError, setCreateStoreError] = useState('');
 
-  // Action states
   const [advancing, setAdvancing] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  // Copied code tracking
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   async function fetchData() {
     setError('');
@@ -155,11 +154,6 @@ export default function SessionManagementPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
-
   async function handleCreateStore(e: FormEvent) {
     e.preventDefault();
     setCreateStoreError('');
@@ -170,9 +164,7 @@ export default function SessionManagementPage() {
       setShowCreateStore(false);
       await fetchData();
     } catch (err) {
-      setCreateStoreError(
-        err instanceof ApiError ? err.message : 'Erro ao criar loja',
-      );
+      setCreateStoreError(err instanceof ApiError ? err.message : 'Erro ao criar loja');
     } finally {
       setCreatingStore(false);
     }
@@ -185,9 +177,7 @@ export default function SessionManagementPage() {
       await api.patch(`/sessions/${sessionId}/advance`, {});
       await fetchData();
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : 'Erro ao avançar rodada',
-      );
+      setActionError(err instanceof ApiError ? err.message : 'Erro ao avançar fase');
     } finally {
       setAdvancing(false);
     }
@@ -200,9 +190,7 @@ export default function SessionManagementPage() {
       await api.post(`/sessions/${sessionId}/execute`, {});
       await fetchData();
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : 'Erro ao executar rodada',
-      );
+      setActionError(err instanceof ApiError ? err.message : 'Erro ao executar rodada');
     } finally {
       setExecuting(false);
     }
@@ -240,16 +228,16 @@ export default function SessionManagementPage() {
   }
 
   const status = session.status as SessionStatus;
-  const canExecute = EXECUTABLE_STATUSES.includes(status);
-  const hasResults = HAS_RESULTS_STATUSES.includes(status);
   const storeCount = statusData.stores.length;
-  const canCreateStore = storeCount < 4;
+  const confirmedCount = statusData.stores.filter((s) => s.planConfirmed).length;
+  const allConfirmed = storeCount > 0 && confirmedCount === storeCount;
+  const canCreateStore = status === 'SETUP' && storeCount < 4;
 
   return (
     <div className="min-h-screen bg-muted/40">
       {/* Header */}
       <header className="bg-card border-b">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -260,120 +248,116 @@ export default function SessionManagementPage() {
               ← Dashboard
             </Button>
             <span className="text-muted-foreground">/</span>
-            <h1 className="text-base font-semibold truncate max-w-[200px]">
-              {session.name}
-            </h1>
+            <h1 className="text-base font-semibold truncate max-w-[200px]">{session.name}</h1>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">
               {mounted ? user?.name : null}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={() => { logout(); router.push('/login'); }}>
               Sair
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Session Info */}
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+
+        {/* ── Phase Banner + Stepper ── */}
         <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-4">
+          <CardContent className="pt-5 pb-5 space-y-4">
+            {/* Phase label */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <CardTitle className="text-xl">{session.name}</CardTitle>
-                <CardDescription className="mt-1">
-                  ID: <span className="font-mono text-xs">{session.id}</span>
-                </CardDescription>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-0.5">
+                  Fase atual
+                </p>
+                <h2 className="text-lg font-bold">{PHASE_LABEL[status]}</h2>
               </div>
-              <span
-                className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${STATUS_COLOR[status]}`}
-              >
-                {STATUS_LABEL[status]}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
-                  Demanda Total
-                </p>
-                <p className="font-semibold">{session.totalDemand.toLocaleString('pt-BR')}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
-                  Caixa Inicial
-                </p>
-                <p className="font-semibold">
-                  R$ {session.initialCash.toLocaleString('pt-BR')}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
-                  Lojas
-                </p>
-                <p className="font-semibold">{storeCount} / 4</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
-                  POs confirmados
-                </p>
-                <p className="font-semibold">
-                  {statusData.stores.filter((s) => s.planConfirmed).length} / {storeCount}
-                </p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{confirmedCount}/{storeCount} POs confirmados</span>
               </div>
             </div>
+
+            {/* Stepper */}
+            <PhaseStepper activeIndex={getActiveStepIndex(status)} />
           </CardContent>
         </Card>
 
-        {/* Action Buttons */}
-        {actionError && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">
-            {actionError}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-3 items-center">
-          {status !== 'FINISHED' && (
-            <Button onClick={handleAdvance} disabled={advancing || executing}>
-              {advancing ? 'Avançando...' : 'Avançar rodada →'}
-            </Button>
-          )}
-          {canExecute && (
-            <Button
-              variant="secondary"
-              onClick={handleExecute}
-              disabled={advancing || executing}
-            >
-              {executing ? 'Executando...' : `Executar ${STATUS_LABEL[status]}`}
-            </Button>
-          )}
-          {hasResults && (
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/session/${sessionId}/results`)}
-            >
-              Ver resultados
-            </Button>
-          )}
+        {/* ── Session Info + Contextual Actions ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Session info */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Sessão</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <InfoTile label="Demanda Total" value={session.totalDemand.toLocaleString('pt-BR')} />
+                <InfoTile label="Caixa Inicial" value={brl(session.initialCash)} />
+                <InfoTile label="Lojas" value={`${storeCount} / 4`} />
+                <InfoTile label="POs Confirmados" value={`${confirmedCount} / ${storeCount}`} />
+              </div>
+              {/* Quick links */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/session/${sessionId}/quiz`)}
+                >
+                  Gerenciar Quiz
+                </Button>
+                {['ROUND_1', 'RECONFIGURATION', 'ROUND_2', 'ROUND_3', 'FINISHED'].includes(status) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push(`/session/${sessionId}/results`)}
+                  >
+                    Ver Resultados
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contextual actions */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Ações
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {actionError && (
+                <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">
+                  {actionError}
+                </p>
+              )}
+              <ContextualActions
+                status={status}
+                allConfirmed={allConfirmed}
+                advancing={advancing}
+                executing={executing}
+                sessionId={sessionId}
+                onAdvance={handleAdvance}
+                onExecute={handleExecute}
+                onNavigate={router.push}
+              />
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Stores Section */}
+        {/* ── Stores ── */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Lojas</h2>
+            <h2 className="text-base font-semibold">Lojas ({storeCount}/4)</h2>
             {canCreateStore && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowCreateStore((v) => !v)}
-              >
+              <Button size="sm" variant="outline" onClick={() => setShowCreateStore((v) => !v)}>
                 {showCreateStore ? 'Cancelar' : '+ Nova loja'}
               </Button>
             )}
           </div>
 
-          {/* Create store form */}
           {showCreateStore && (
             <Card>
               <form onSubmit={handleCreateStore}>
@@ -403,8 +387,7 @@ export default function SessionManagementPage() {
             </Card>
           )}
 
-          {/* Store cards */}
-          {statusData.stores.length === 0 ? (
+          {storeCount === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground text-sm">
                 Nenhuma loja criada ainda. Crie até 4 lojas para os times.
@@ -416,6 +399,7 @@ export default function SessionManagementPage() {
                 <StoreCard
                   key={store.storeId}
                   store={store}
+                  initialCash={session.initialCash}
                   copiedCode={copiedCode}
                   onCopy={copyCode}
                 />
@@ -428,15 +412,208 @@ export default function SessionManagementPage() {
   );
 }
 
+// ── PhaseStepper ──────────────────────────────────────────────────────────────
+
+function PhaseStepper({ activeIndex }: { activeIndex: number }) {
+  return (
+    <div className="flex items-center w-full overflow-x-auto pb-1">
+      {PHASE_STEPS.map((step, idx) => {
+        const isDone = idx < activeIndex;
+        const isActive = idx === activeIndex;
+        return (
+          <div key={step.label} className="flex items-center flex-1 min-w-0">
+            {/* Node */}
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                  isDone
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : isActive
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-muted-foreground/30 text-muted-foreground/40 bg-background'
+                }`}
+              >
+                {isDone ? '✓' : idx + 1}
+              </div>
+              <span
+                className={`mt-1 text-[10px] text-center leading-tight whitespace-nowrap max-w-[72px] ${
+                  isActive ? 'text-primary font-semibold' : isDone ? 'text-muted-foreground' : 'text-muted-foreground/50'
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {/* Connector line */}
+            {idx < PHASE_STEPS.length - 1 && (
+              <div
+                className={`flex-1 h-0.5 mx-1 ${
+                  idx < activeIndex ? 'bg-primary' : 'bg-muted-foreground/20'
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── ContextualActions ─────────────────────────────────────────────────────────
+
+interface ContextualActionsProps {
+  status: SessionStatus;
+  allConfirmed: boolean;
+  advancing: boolean;
+  executing: boolean;
+  sessionId: string;
+  onAdvance: () => void;
+  onExecute: () => void;
+  onNavigate: (path: string) => void;
+}
+
+function ContextualActions({
+  status,
+  allConfirmed,
+  advancing,
+  executing,
+  sessionId,
+  onAdvance,
+  onExecute,
+  onNavigate,
+}: ContextualActionsProps) {
+  const busy = advancing || executing;
+
+  switch (status) {
+    case 'SETUP':
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Crie as 4 lojas e aguarde os times entrarem antes de iniciar.
+          </p>
+          <Button className="w-full" onClick={onAdvance} disabled={busy}>
+            {advancing ? 'Iniciando...' : 'Iniciar 1ª Configuração →'}
+          </Button>
+        </div>
+      );
+
+    case 'ROUND_1_CONFIG':
+      return (
+        <div className="space-y-2">
+          {allConfirmed ? (
+            <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5 border border-green-200">
+              Todas as lojas confirmaram o PO.
+            </p>
+          ) : (
+            <p className="text-xs text-yellow-800 bg-yellow-50 rounded px-2 py-1.5 border border-yellow-200">
+              Aguardando confirmação de todos os POs...
+            </p>
+          )}
+          <Button
+            className="w-full"
+            onClick={onAdvance}
+            disabled={busy || !allConfirmed}
+          >
+            {advancing ? 'Iniciando...' : 'Iniciar Rodada 1 →'}
+          </Button>
+        </div>
+      );
+
+    case 'ROUND_1':
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Execute o motor de cálculo após todas as lojas confirmarem.
+          </p>
+          <Button className="w-full" onClick={onExecute} disabled={busy}>
+            {executing ? 'Executando...' : 'Executar Rodada 1'}
+          </Button>
+          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
+            {advancing ? 'Avançando...' : 'Avançar para Reconfiguração →'}
+          </Button>
+        </div>
+      );
+
+    case 'RECONFIGURATION':
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Gerencie as transferências obrigatórias entre lojas.
+          </p>
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={() => onNavigate(`/dashboard/session/${sessionId}/transfers`)}
+          >
+            Gerenciar Transferências
+          </Button>
+          <Button className="w-full" onClick={onAdvance} disabled={busy}>
+            {advancing ? 'Iniciando...' : 'Iniciar 2ª Configuração →'}
+          </Button>
+        </div>
+      );
+
+    case 'ROUND_2':
+      return (
+        <div className="space-y-2">
+          <Button className="w-full" onClick={onExecute} disabled={busy}>
+            {executing ? 'Executando...' : 'Executar Rodada 2'}
+          </Button>
+          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
+            {advancing ? 'Avançando...' : 'Avançar para Rodada 3 →'}
+          </Button>
+        </div>
+      );
+
+    case 'ROUND_3':
+      return (
+        <div className="space-y-2">
+          <Button className="w-full" onClick={onExecute} disabled={busy}>
+            {executing ? 'Executando...' : 'Executar Rodada 3'}
+          </Button>
+          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
+            {advancing ? 'Finalizando...' : 'Finalizar Sessão →'}
+          </Button>
+        </div>
+      );
+
+    case 'FINISHED':
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5 border border-green-200">
+            Sessão finalizada. Confira o placar final!
+          </p>
+          <Button
+            className="w-full"
+            onClick={() => onNavigate(`/session/${sessionId}/results`)}
+          >
+            Ver Resultado Final →
+          </Button>
+        </div>
+      );
+  }
+}
+
+// ── InfoTile ──────────────────────────────────────────────────────────────────
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">{label}</p>
+      <p className="font-semibold text-sm">{value}</p>
+    </div>
+  );
+}
+
 // ── StoreCard ─────────────────────────────────────────────────────────────────
 
 interface StoreCardProps {
   store: StoreStatus;
+  initialCash: number;
   copiedCode: string | null;
   onCopy: (code: string) => void;
 }
 
-function StoreCard({ store, copiedCode, onCopy }: StoreCardProps) {
+function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
   const ALL_ROLES: StoreRole[] = [
     'STORE_MANAGER',
     'SUPPLY_MANAGER',
@@ -445,20 +622,17 @@ function StoreCard({ store, copiedCode, onCopy }: StoreCardProps) {
     'SERVICE_MANAGER',
   ];
 
+  const hasPlan = store.cashUsed > 0 || store.planConfirmed;
+  const cashDanger = store.availableCash < 0;
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base">{store.storeName}</CardTitle>
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              store.planConfirmed
-                ? 'bg-green-100 text-green-800'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}
-          >
+          <Badge variant={store.planConfirmed ? 'success' : 'secondary'}>
             {store.planConfirmed ? 'PO confirmado' : 'PO pendente'}
-          </span>
+          </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -477,6 +651,37 @@ function StoreCard({ store, copiedCode, onCopy }: StoreCardProps) {
           </Button>
         </div>
 
+        {/* Financial summary */}
+        {hasPlan && (
+          <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 rounded-md p-2.5">
+            <div>
+              <p className="text-muted-foreground mb-0.5">Caixa usado</p>
+              <p className="font-semibold tabular-nums">{brl(store.cashUsed)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground mb-0.5">Disponível</p>
+              <p className={`font-semibold tabular-nums ${cashDanger ? 'text-destructive' : ''}`}>
+                {brl(store.availableCash)}
+              </p>
+            </div>
+            {store.lastRoundEbitda !== null && store.lastRound !== null && (
+              <div className="col-span-2 border-t pt-2 mt-0.5">
+                <p className="text-muted-foreground mb-0.5">EBITDA R{store.lastRound}</p>
+                <p
+                  className={`font-semibold tabular-nums ${
+                    (store.lastRoundEbitdaPct ?? 0) < 0 ? 'text-destructive' : 'text-green-700'
+                  }`}
+                >
+                  {brl(store.lastRoundEbitda)}{' '}
+                  <span className="font-normal text-muted-foreground">
+                    ({store.lastRoundEbitdaPct !== null ? pct(store.lastRoundEbitdaPct) : '—'})
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Members */}
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -486,21 +691,12 @@ function StoreCard({ store, copiedCode, onCopy }: StoreCardProps) {
             {ALL_ROLES.map((role) => {
               const member = store.members.find((m) => m.role === role);
               return (
-                <div
-                  key={role}
-                  className="flex items-center justify-between text-sm py-0.5"
-                >
-                  <span className="text-muted-foreground text-xs">
-                    {ROLE_LABELS[role]}
-                  </span>
+                <div key={role} className="flex items-center justify-between text-sm py-0.5">
+                  <span className="text-muted-foreground text-xs">{ROLE_LABELS[role]}</span>
                   {member ? (
-                    <span className="font-medium text-xs truncate max-w-[130px]">
-                      {member.name}
-                    </span>
+                    <span className="font-medium text-xs truncate max-w-[130px]">{member.name}</span>
                   ) : (
-                    <span className="text-xs text-muted-foreground italic">
-                      vazio
-                    </span>
+                    <span className="text-xs text-muted-foreground/50 italic">vazio</span>
                   )}
                 </div>
               );

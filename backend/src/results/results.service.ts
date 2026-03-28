@@ -7,7 +7,10 @@ export class ResultsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSessionResults(sessionId: string): Promise<StoreResultEntry[]> {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true, initialCash: true },
+    });
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
 
     const results = await this.prisma.roundResult.findMany({
@@ -19,16 +22,24 @@ export class ResultsService {
     const storeMap = new Map<string, StoreResultEntry>();
     for (const r of results) {
       if (!storeMap.has(r.storeId)) {
-        storeMap.set(r.storeId, { storeId: r.storeId, storeName: r.store.name, rounds: [] });
+        storeMap.set(r.storeId, {
+          storeId: r.storeId,
+          storeName: r.store.name,
+          initialCash: session.initialCash,
+          rounds: [],
+        });
       }
-      storeMap.get(r.storeId)!.rounds.push(this.toRoundEntry(r));
+      storeMap.get(r.storeId)!.rounds.push(this.toRoundEntry(r, session.initialCash));
     }
 
     return [...storeMap.values()];
   }
 
   async getSessionRanking(sessionId: string): Promise<RankingEntry[]> {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true, initialCash: true },
+    });
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
 
     const results = await this.prisma.roundResult.findMany({
@@ -41,7 +52,7 @@ export class ResultsService {
       string,
       {
         storeName: string;
-        rounds: { round: number; ebitda: number; ebitdaPercentage: number }[];
+        rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
         totalEbitda: number;
         sumEbitdaPct: number;
       }
@@ -57,7 +68,8 @@ export class ResultsService {
         });
       }
       const entry = storeMap.get(r.storeId)!;
-      entry.rounds.push({ round: r.round, ebitda: r.ebitda, ebitdaPercentage: r.ebitdaPercentage });
+      const cashFinal = session.initialCash - r.cashUsed + r.ebitda;
+      entry.rounds.push({ round: r.round, ebitda: r.ebitda, ebitdaPercentage: r.ebitdaPercentage, cashFinal });
       entry.totalEbitda += r.ebitda;
       entry.sumEbitdaPct += r.ebitdaPercentage;
     }
@@ -81,28 +93,34 @@ export class ResultsService {
     });
   }
 
-  private toRoundEntry(r: {
-    round: number;
-    csat: number;
-    availability: number;
-    basketPrice: number;
-    rankScore: number;
-    demandShare: number;
-    grossRevenue: number;
-    taxAmount: number;
-    netRevenue: number;
-    costOfGoods: number;
-    breakageAmount: number;
-    agingAmount: number;
-    payrollCost: number;
-    maintenanceCost: number;
-    licenseCost: number;
-    interestCost: number;
-    slaRevenueLost: number;
-    ebitda: number;
-    ebitdaPercentage: number;
-    cashUsed: number;
-  }): RoundResultEntry {
+  private toRoundEntry(
+    r: {
+      round: number;
+      csat: number;
+      availability: number;
+      basketPrice: number;
+      rankScore: number;
+      demandShare: number;
+      grossRevenue: number;
+      taxAmount: number;
+      netRevenue: number;
+      costOfGoods: number;
+      breakageAmount: number;
+      agingAmount: number;
+      payrollCost: number;
+      maintenanceCost: number;
+      licenseCost: number;
+      interestCost: number;
+      slaRevenueLost: number;
+      ebitda: number;
+      ebitdaPercentage: number;
+      cashUsed: number;
+    },
+    initialCash: number,
+  ): RoundResultEntry {
+    // cashFinal = initialCash - cashUsed + grossRevenue - totalCosts
+    //           = initialCash - cashUsed + ebitda  (since ebitda = grossRevenue - totalCosts)
+    const cashFinal = initialCash - r.cashUsed + r.ebitda;
     return {
       round: r.round,
       csat: r.csat,
@@ -124,6 +142,7 @@ export class ResultsService {
       ebitda: r.ebitda,
       ebitdaPercentage: r.ebitdaPercentage,
       cashUsed: r.cashUsed,
+      cashFinal,
     };
   }
 }

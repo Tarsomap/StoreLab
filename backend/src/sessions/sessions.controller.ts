@@ -4,8 +4,10 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SessionStatus, UserRole } from '@prisma/client';
@@ -67,6 +69,14 @@ export class SessionsController {
   @Get(':id/status')
   getStatus(@Param('id') id: string) {
     return this.sessionsService.getStatus(id);
+  }
+
+  @Get(':id/stock-availability')
+  getStockAvailability(
+    @Param('id') id: string,
+    @Query('configVersion', ParseIntPipe) configVersion: number,
+  ) {
+    return this.sessionsService.getStockAvailability(id, configVersion);
   }
 
   @Post(':id/execute')

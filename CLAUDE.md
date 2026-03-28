@@ -60,7 +60,7 @@ cd frontend && npm run dev
 IDEAL_CASHIER_OPERATORS = 10
 INITIAL_CASH            = 700000
 INTEREST_RATE_MONTHLY   = 0.12
-BASE_LICENSE_COST       = 500
+BASE_LICENSE_COST       = 1200  // 120(SO) + 80(PDV) + 500(Site) + 500(Segurança)
 CASHIER_SALARY          = 1000
 SERVICE_SALARY          = 1200
 MAINTENANCE_COST        = 400  // só se FREEZER NÃO implementado

@@ -8,6 +8,10 @@ import {
 } from '../interfaces';
 import {
   BASE_LICENSE_COST,
+  LIC_OS,
+  LIC_PDV,
+  LIC_SITE,
+  LIC_SECURITY,
   CASHIER_SALARY,
   SERVICE_SALARY,
   MAINTENANCE_COST,
@@ -160,10 +164,10 @@ describe('FinancialService', () => {
       // grossRevenue=9750, taxAmount=682.5, netRevenue=9067.5
       // costOfGoods=7500
       // cashierOps=5, serviceOps=2 → payroll = 5×1000 + 2×1200 = 7400
-      // no CAPEX → maintenanceCost=400, licenseCost=500
+      // no CAPEX → maintenanceCost=400, licenseCost=1200 (120+80+500+500)
       // cashUsed=500k (< 700k threshold) → interestCost=0
       // slaRevenueLost=0, shrinkage=0
-      // ebitda = 9067.5 - 7500 - 0 - 0 - 7400 - 400 - 500 - 0 - 0 = -6732.5
+      // ebitda = 9067.5 - 7500 - 0 - 0 - 7400 - 400 - 1200 - 0 - 0 = -7432.5
       const input = makeEbitdaInput({
         categoryRevenues: [makeCategoryRevenue()],
       });
@@ -174,9 +178,9 @@ describe('FinancialService', () => {
       expect(result.costOfGoods).toBeCloseTo(7500);
       expect(result.payrollCost).toBeCloseTo(7400);
       expect(result.maintenanceCost).toBe(MAINTENANCE_COST);
-      expect(result.licenseCost).toBe(BASE_LICENSE_COST);
+      expect(result.licenseCost).toBe(BASE_LICENSE_COST); // 1200
       expect(result.interestCost).toBe(0);
-      expect(result.ebitda).toBeCloseTo(-6732.5);
+      expect(result.ebitda).toBeCloseTo(-7432.5);
     });
 
     it('maintenanceCost is 0 when FREEZER is implemented', () => {
@@ -207,8 +211,8 @@ describe('FinancialService', () => {
         ],
       });
       const result = service.computeEbitda(input);
-      // licenseCost = 500 + 100 + 150 = 750 (not-implemented excluded)
-      expect(result.licenseCost).toBeCloseTo(750);
+      // licenseCost = 1200 (base) + 100 + 150 = 1450 (not-implemented excluded)
+      expect(result.licenseCost).toBeCloseTo(1450);
     });
 
     it('computes interest cost when cashUsed exceeds threshold', () => {
@@ -282,6 +286,39 @@ describe('FinancialService', () => {
       });
       const result = service.computeEbitda(input);
       expect(result.ebitdaPercentage).toBeCloseTo(result.ebitda / result.grossRevenue);
+    });
+
+    it('BASE_LICENSE_COST is sum of 4 fixed license components', () => {
+      // spec.md §8: SO(120) + PDV(80) + Site(500) + Segurança(500) = 1200
+      expect(LIC_OS).toBe(120);
+      expect(LIC_PDV).toBe(80);
+      expect(LIC_SITE).toBe(500);
+      expect(LIC_SECURITY).toBe(500);
+      expect(BASE_LICENSE_COST).toBe(LIC_OS + LIC_PDV + LIC_SITE + LIC_SECURITY);
+      expect(BASE_LICENSE_COST).toBe(1200);
+    });
+
+    it('exemplo PO: SECURITY+FREEZER+NETWORK+SITE implementados → licenseCost = 1450', () => {
+      // Cenário: 10 op caixa, 5 op serviço, todos CAPEX exceto AUTOMATION e SELF_CHECKOUT
+      // Deltas implementados: SECURITY(+100) + FREEZER(+0) + NETWORK(+0) + SITE(+150) = +250
+      // licenseCost = 1200 + 250 = 1450
+      // FREEZER implementado → maintenanceCost = 0
+      const input = makeEbitdaInput({
+        categoryRevenues: [],
+        cashierOperators: 10,
+        serviceOperators: 5,
+        capexDecisions: [
+          makeCapex({ type: 'SECURITY',      implemented: true,  monthlyLicenseDelta: 100 }),
+          makeCapex({ capexOptionId: 'c2', type: 'FREEZER',    implemented: true,  monthlyLicenseDelta: 0 }),
+          makeCapex({ capexOptionId: 'c3', type: 'NETWORK',    implemented: true,  monthlyLicenseDelta: 0 }),
+          makeCapex({ capexOptionId: 'c4', type: 'SITE',       implemented: true,  monthlyLicenseDelta: 150 }),
+          makeCapex({ capexOptionId: 'c5', type: 'SELF_CHECKOUT', implemented: false, monthlyLicenseDelta: 320 }),
+          makeCapex({ capexOptionId: 'c6', type: 'AUTOMATION', implemented: false, monthlyLicenseDelta: 0 }),
+        ],
+      });
+      const result = service.computeEbitda(input);
+      expect(result.licenseCost).toBe(1450);
+      expect(result.maintenanceCost).toBe(0); // FREEZER implementado
     });
 
     it('payrollCost uses correct salary constants', () => {

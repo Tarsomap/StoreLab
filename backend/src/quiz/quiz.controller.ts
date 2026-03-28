@@ -80,6 +80,15 @@ export class StoreQuizController {
   ) {
     return this.quizService.getStoreScore(storeId, round);
   }
+
+  @Get('my-score')
+  getMyScore(
+    @Param('storeId') storeId: string,
+    @Query('round', ParseIntPipe) round: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.quizService.getPlayerScore(storeId, user.sub, round);
+  }
 }
 
 // ─── Engine / Interno: consolidar score ──────────────────────────────────────

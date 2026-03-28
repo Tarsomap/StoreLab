@@ -24,10 +24,23 @@ export interface StoreStatusEntry {
   memberCount: number;
   members: StoreMemberStatus[];
   planConfirmed: boolean;
+  cashUsed: number;
+  availableCash: number;
+  lastRound: number | null;
+  lastRoundEbitda: number | null;
+  lastRoundEbitdaPct: number | null;
 }
 
 export interface SessionStatusResponse {
   sessionId: string;
   status: SessionStatus;
   stores: StoreStatusEntry[];
+}
+
+export interface StockAvailabilityEntry {
+  categoryId: string;
+  categoryName: string;
+  totalAvailable: number;
+  totalPurchased: number;
+  remaining: number;
 }

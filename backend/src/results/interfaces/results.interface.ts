@@ -19,11 +19,13 @@ export interface RoundResultEntry {
   ebitda: number;
   ebitdaPercentage: number;
   cashUsed: number;
+  cashFinal: number;
 }
 
 export interface StoreResultEntry {
   storeId: string;
   storeName: string;
+  initialCash: number;
   rounds: RoundResultEntry[];
 }
 
@@ -33,5 +35,5 @@ export interface RankingEntry {
   storeName: string;
   avgEbitdaPercentage: number;
   totalEbitda: number;
-  rounds: { round: number; ebitda: number; ebitdaPercentage: number }[];
+  rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
 }

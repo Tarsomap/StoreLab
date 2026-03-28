@@ -32,11 +32,13 @@ interface RoundResultEntry {
   ebitda: number;
   ebitdaPercentage: number;
   cashUsed: number;
+  cashFinal: number;
 }
 
 interface StoreResultEntry {
   storeId: string;
   storeName: string;
+  initialCash: number;
   rounds: RoundResultEntry[];
 }
 
@@ -46,7 +48,7 @@ interface RankingEntry {
   storeName: string;
   avgEbitdaPercentage: number;
   totalEbitda: number;
-  rounds: { round: number; ebitda: number; ebitdaPercentage: number }[];
+  rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -198,11 +200,13 @@ export default function ResultsPage() {
                       ))}
                       <th className="px-4 py-3 text-right">Média %</th>
                       <th className="px-4 py-3 text-right">Total EBITDA</th>
+                      <th className="px-4 py-3 text-right">Caixa Final</th>
                     </tr>
                   </thead>
                   <tbody>
                     {ranking.map((entry) => {
                       const maxRounds = Math.max(...ranking.map((r) => r.rounds.length), 0);
+                      const lastRound = entry.rounds[entry.rounds.length - 1];
                       return (
                         <tr key={entry.storeId} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="px-4 py-3">
@@ -236,6 +240,15 @@ export default function ResultsPage() {
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             {fmtBrl(entry.totalEbitda)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                            {lastRound ? (
+                              <span className={lastRound.cashFinal < 0 ? 'text-destructive' : 'text-blue-700'}>
+                                {fmtBrl(lastRound.cashFinal)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -275,7 +288,7 @@ export default function ResultsPage() {
                 {expanded.has(store.storeId) && (
                   <CardContent className="pt-0 space-y-4">
                     {store.rounds.map((r) => (
-                      <RoundBreakdown key={r.round} round={r} />
+                      <RoundBreakdown key={r.round} round={r} initialCash={store.initialCash} />
                     ))}
                   </CardContent>
                 )}
@@ -290,14 +303,20 @@ export default function ResultsPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function RoundBreakdown({ round }: { round: RoundResultEntry }) {
+function RoundBreakdown({
+  round,
+  initialCash,
+}: {
+  round: RoundResultEntry;
+  initialCash: number;
+}) {
   const fmt0 = (n: number) =>
     n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-  const rows: { label: string; value: string; negative?: boolean }[] = [
+  const plRows: { label: string; value: string; negative?: boolean; subtotal?: boolean }[] = [
     { label: 'Receita bruta', value: fmt0(round.grossRevenue) },
     { label: 'Impostos', value: fmt0(round.taxAmount), negative: true },
-    { label: 'Receita líquida', value: fmt0(round.netRevenue) },
+    { label: 'Receita líquida', value: fmt0(round.netRevenue), subtotal: true },
     { label: 'Custo de mercadoria', value: fmt0(round.costOfGoods), negative: true },
     { label: 'Quebras', value: fmt0(round.breakageAmount), negative: true },
     { label: 'Aging', value: fmt0(round.agingAmount), negative: true },
@@ -318,6 +337,17 @@ function RoundBreakdown({ round }: { round: RoundResultEntry }) {
     { label: 'Caixa usado', value: fmt0(round.cashUsed) },
   ];
 
+  // Cash-flow composition: initialCash − cashUsed + grossRevenue − totalCosts = cashFinal
+  // totalCosts derived = grossRevenue − ebitda
+  const totalCosts = round.grossRevenue - round.ebitda;
+  const cashFlowRows: { label: string; value: string; sign: '+' | '-' | '='; highlight?: boolean }[] = [
+    { label: 'Caixa inicial', value: fmt0(initialCash), sign: '+' },
+    { label: 'Estoque + CAPEX (gasto)', value: fmt0(round.cashUsed), sign: '-' },
+    { label: 'Receita de vendas', value: fmt0(round.grossRevenue), sign: '+' },
+    { label: 'Custos operacionais', value: fmt0(totalCosts), sign: '-' },
+    { label: 'Caixa Final', value: fmt0(round.cashFinal), sign: '=', highlight: true },
+  ];
+
   return (
     <div className="border rounded-md p-4 space-y-4">
       <h4 className="font-semibold text-sm">Rodada {round.round}</h4>
@@ -332,30 +362,82 @@ function RoundBreakdown({ round }: { round: RoundResultEntry }) {
         ))}
       </div>
 
-      {/* P&L */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.label} className="border-b last:border-0">
-                <td className="py-1.5 text-muted-foreground">{row.label}</td>
-                <td
-                  className={`py-1.5 text-right font-medium tabular-nums ${
-                    row.label === 'EBITDA'
-                      ? round.ebitdaPercentage >= 0
-                        ? 'text-green-700'
-                        : 'text-destructive'
-                      : row.negative
-                        ? 'text-destructive'
-                        : ''
-                  }`}
-                >
-                  {row.value}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* P&L */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Resultado (DRE)
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {plRows.map((row) => (
+                  <tr key={row.label} className={`border-b last:border-0 ${row.subtotal ? 'bg-muted/20' : ''}`}>
+                    <td className="py-1.5 text-muted-foreground">{row.label}</td>
+                    <td
+                      className={`py-1.5 text-right font-medium tabular-nums ${
+                        row.label === 'EBITDA'
+                          ? round.ebitdaPercentage >= 0
+                            ? 'text-green-700'
+                            : 'text-destructive'
+                          : row.negative
+                            ? 'text-destructive'
+                            : ''
+                      }`}
+                    >
+                      {row.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Cash Flow */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Caixa Final
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {cashFlowRows.map((row, idx) => (
+                  <tr
+                    key={row.label}
+                    className={`${idx === cashFlowRows.length - 1 ? 'border-t-2 border-foreground/20' : 'border-b'} ${
+                      row.highlight ? 'bg-blue-50/60' : ''
+                    }`}
+                  >
+                    <td className={`py-1.5 ${row.highlight ? 'font-semibold' : 'text-muted-foreground'}`}>
+                      <span
+                        className={`mr-1.5 text-xs font-bold ${
+                          row.sign === '+' ? 'text-green-600' : row.sign === '-' ? 'text-destructive' : 'text-blue-700'
+                        }`}
+                      >
+                        {row.sign}
+                      </span>
+                      {row.label}
+                    </td>
+                    <td
+                      className={`py-1.5 text-right tabular-nums ${
+                        row.highlight
+                          ? round.cashFinal >= 0
+                            ? 'font-bold text-blue-700'
+                            : 'font-bold text-destructive'
+                          : row.sign === '-'
+                            ? 'text-destructive'
+                            : ''
+                      }`}
+                    >
+                      {row.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

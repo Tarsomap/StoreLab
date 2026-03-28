@@ -20,12 +20,13 @@ import { Badge } from '@/components/ui/badge';
 
 interface QuizOption {
   id: string;
-  text: string;
+  label: string;
 }
 
 interface QuizQuestion {
   id: string;
-  text: string;
+  prompt: string;
+  order: number;
   options: QuizOption[];
 }
 
@@ -36,9 +37,9 @@ interface QuizQuestionsResponse {
 }
 
 interface SubmitResponse {
-  correct: number;
-  total: number;
-  percentage: number;
+  correctAnswers: number;
+  totalQuestions: number;
+  scorePercentage: number; // 0–100
 }
 
 interface StoreSummary {
@@ -64,7 +65,7 @@ interface PlayerAnsweredPayload {
 
 function roundFromStatus(status: string): number {
   if (status === 'ROUND_3') return 3;
-  if (status === 'ROUND_2') return 2;
+  if (status === 'RECONFIGURATION' || status === 'ROUND_2') return 2;
   return 1;
 }
 
@@ -214,10 +215,10 @@ export default function QuizPage() {
           <Card className="text-center">
             <CardHeader>
               <CardTitle className="text-2xl text-green-600">
-                {result.correct}/{result.total} corretas
+                {result.correctAnswers}/{result.totalQuestions} corretas
               </CardTitle>
               <CardDescription>
-                Score: {(result.percentage * 100).toFixed(0)}%
+                Score: {result.scorePercentage.toFixed(0)}%
               </CardDescription>
             </CardHeader>
             <CardFooter className="justify-center">
@@ -257,7 +258,7 @@ export default function QuizPage() {
               <CardHeader>
                 <CardTitle className="text-base">
                   <span className="text-muted-foreground mr-2">{idx + 1}.</span>
-                  {q.text}
+                  {q.prompt}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -276,7 +277,7 @@ export default function QuizPage() {
                           : 'border-input hover:bg-muted'
                       }`}
                     >
-                      {opt.text}
+                      {opt.label}
                     </button>
                   );
                 })}

@@ -42,3 +42,10 @@ export interface StoreScoreResponse {
   membersAnswered: number;
   totalMembers: number;
 }
+
+export interface PlayerScoreResponse {
+  answered: boolean;
+  correctAnswers: number;
+  totalQuestions: number;
+  scorePercentage: number; // 0–100
+}

@@ -238,12 +238,26 @@ Sequência de cálculo do resultado por loja por rodada:
 
 ### Licenciamento de Software
 
-| Licença | Valor | Condição de Ativação |
+Base fixa mensal (4 licenças sempre ativas, independente de CAPEX):
+
+| Licença | Valor/mês | Nota |
 |---|---|---|
-| Sistema Operacional | R$ 120,00/usuário/mês | Sempre ativo |
-| PDVs + Self Checkout | R$ 80,00/equipamento/mês | Sempre ativo + CAPEX Self Checkout |
-| Site | R$ 500,00/mês | Sempre ativo |
-| Sistemas de Segurança | R$ 500,00/mês | Sempre ativo |
+| Sistema Operacional | R$ 120,00 | Sempre ativo |
+| PDV base | R$ 80,00 | 1 equipamento existente, sempre ativo |
+| Site | R$ 500,00 | Sempre ativo |
+| Sistemas de Segurança | R$ 500,00 | Sempre ativo |
+| **Total base** | **R$ 1.200,00** | `BASE_LICENSE_COST` no motor |
+
+Acréscimos por CAPEX implementado (`monthlyLicenseDelta` no seed):
+
+| CAPEX | Delta mensal | Motivo |
+|---|---|---|
+| SECURITY | +R$ 100,00 | +20% sobre licença de Segurança (R$500) |
+| SITE | +R$ 150,00 | +30% sobre licença de Site (R$500) |
+| SELF_CHECKOUT | +R$ 320,00 | +4 equipamentos × R$80/equip |
+| FREEZER, NETWORK, AUTOMATION | R$ 0,00 | Sem impacto em licenças |
+
+**Fórmula:** `licenseCost = 1200 + Σ(monthlyLicenseDelta dos CAPEXes implementados)`
 
 ---
 

@@ -72,6 +72,21 @@ interface StoreSummary {
   accessCode: string;
 }
 
+interface StockAvailabilityEntry {
+  categoryId: string;
+  categoryName: string;
+  totalAvailable: number;
+  totalPurchased: number;
+  remaining: number;
+}
+
+interface PlayerScoreResponse {
+  answered: boolean;
+  correctAnswers: number;
+  totalQuestions: number;
+  scorePercentage: number; // 0–100
+}
+
 interface StoreMemberEntry {
   userId: string;
   name: string;
@@ -164,16 +179,32 @@ export default function PlanPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [stockAvailMap, setStockAvailMap] = useState<Map<string, StockAvailabilityEntry>>(
+    new Map(),
+  );
+  const [quizScore, setQuizScore] = useState<PlayerScoreResponse | null>(null);
 
   const { on } = useSocket(store?.sessionId, storeId);
 
   // ── Load ──────────────────────────────────────────────────────────────────
+
+  const fetchStockAvailability = useCallback(async (sessionId: string, cv: number) => {
+    try {
+      const data = await api.get<StockAvailabilityEntry[]>(
+        `/sessions/${sessionId}/stock-availability?configVersion=${cv}`,
+      );
+      setStockAvailMap(new Map(data.map((e) => [e.categoryId, e])));
+    } catch {
+      // non-blocking — plan page still works without availability data
+    }
+  }, []);
 
   const loadPlan = useCallback(
     async (sessionStatus: string) => {
       const cv = configVersionFromStatus(sessionStatus);
       const data = await api.get<PlanFullResponse>(`/plans/${storeId}/config/${cv}`);
       setPlan(data);
+      return cv;
     },
     [storeId],
   );
@@ -192,13 +223,20 @@ export default function PlanPage() {
         if (me) setMyRole(me.role);
 
         const sessionData = await api.get<{ status: string }>(`/sessions/${storeData.sessionId}/status`);
-        await loadPlan(sessionData.status);
+        const cv = await loadPlan(sessionData.status);
+        await Promise.all([
+          fetchStockAvailability(storeData.sessionId, cv),
+          api
+            .get<PlayerScoreResponse>(`/stores/${storeId}/quiz/my-score?round=${cv}`)
+            .then(setQuizScore)
+            .catch(() => {/* non-blocking */}),
+        ]);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : 'Erro ao carregar plano');
       }
     }
     if (user) init();
-  }, [storeId, user, loadPlan]);
+  }, [storeId, user, loadPlan, fetchStockAvailability]);
 
   // Socket: live plan updates
   useEffect(() => {
@@ -216,6 +254,29 @@ export default function PlanPage() {
     try {
       const updated = await api.put<PlanFullResponse>(path, body);
       setPlan(updated);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCategoryDecision(
+    categoryId: string,
+    stockPurchased: number,
+    priceMargin: number,
+  ) {
+    if (!plan || !store) return;
+    setSaveError('');
+    setSaving(true);
+    try {
+      const updated = await api.put<PlanFullResponse>(`/plans/${plan.id}/category-decision`, {
+        categoryId,
+        stockPurchased,
+        priceMargin,
+      });
+      setPlan(updated);
+      await fetchStockAvailability(store.sessionId, plan.configVersion);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : 'Erro ao salvar');
     } finally {
@@ -294,6 +355,33 @@ export default function PlanPage() {
             danger={dre.ebitdaPct < 0}
           />
         </div>
+
+        {/* Quiz status banner */}
+        {quizScore !== null && !plan.confirmed && (
+          quizScore.answered ? (
+            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+              <span className="text-green-700 font-medium text-sm">
+                ✓ Quiz respondido —{' '}
+                {quizScore.correctAnswers}/{quizScore.totalQuestions} corretas
+                ({quizScore.scorePercentage.toFixed(0)}%)
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-4 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2.5">
+              <span className="text-yellow-800 font-medium text-sm">
+                ⚠ Responda o Quiz antes de confirmar o PO
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-yellow-400 text-yellow-800 hover:bg-yellow-100 shrink-0"
+                onClick={() => router.push(`/store/${storeId}/quiz`)}
+              >
+                Ir para o Quiz →
+              </Button>
+            </div>
+          )
+        )}
 
         {saveError && (
           <p className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">{saveError}</p>
@@ -405,21 +493,25 @@ export default function PlanPage() {
                       <td className="px-3 py-1.5 font-medium text-blue-700 text-xs uppercase tracking-wide">
                         Posição Estoque (un)
                       </td>
-                      {rows.map((r) => (
-                        <td key={r.categoryId} className="px-2 py-1.5 text-right">
-                          <StockInput
-                            value={r.stockPurchased}
-                            disabled={!editable || saving}
-                            onCommit={(v) =>
-                              mutate(`/plans/${plan.id}/category-decision`, {
-                                categoryId: r.categoryId,
-                                stockPurchased: v,
-                                priceMargin: r.priceMargin,
-                              })
-                            }
-                          />
-                        </td>
-                      ))}
+                      {rows.map((r) => {
+                        const avail = stockAvailMap.get(r.categoryId);
+                        // maxForThisStore = remaining (excl. others) = global remaining + my current purchase
+                        const maxForStore = avail
+                          ? avail.remaining + r.stockPurchased
+                          : undefined;
+                        return (
+                          <td key={r.categoryId} className="px-2 py-1.5 text-right">
+                            <StockInput
+                              value={r.stockPurchased}
+                              disabled={!editable || saving}
+                              maxAvailable={maxForStore}
+                              onCommit={(v) =>
+                                handleCategoryDecision(r.categoryId, v, r.priceMargin)
+                              }
+                            />
+                          </td>
+                        );
+                      })}
                       <td className="px-3 py-1.5 text-right font-semibold">
                         {num(rows.reduce((s, r) => s + r.stockPurchased, 0))}
                       </td>
@@ -698,27 +790,40 @@ function StockInput({
   value,
   disabled,
   onCommit,
+  maxAvailable,
 }: {
   value: number;
   disabled: boolean;
   onCommit: (v: number) => void;
+  maxAvailable?: number;
 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
 
+  const draftNum = Number(draft);
+  const overLimit = maxAvailable !== undefined && !isNaN(draftNum) && draftNum > maxAvailable;
+
   return (
-    <Input
-      type="number"
-      min={0}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const v = Number(draft);
-        if (!isNaN(v) && v !== value) onCommit(v);
-      }}
-      disabled={disabled}
-      className="w-24 text-right h-7 text-xs px-2"
-    />
+    <div>
+      <Input
+        type="number"
+        min={0}
+        max={maxAvailable}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const v = Number(draft);
+          if (!isNaN(v) && v !== value) onCommit(v);
+        }}
+        disabled={disabled}
+        className={`w-24 text-right h-7 text-xs px-2 ${overLimit ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+      />
+      {maxAvailable !== undefined && (
+        <p className={`text-xs mt-0.5 text-right ${overLimit ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+          Disp.: {maxAvailable.toLocaleString('pt-BR')}
+        </p>
+      )}
+    </div>
   );
 }
 

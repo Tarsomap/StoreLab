@@ -12,6 +12,7 @@ import { CreateSessionDto } from './dto/create-session.dto';
 import {
   SessionStatusResponse,
   SessionSummary,
+  StockAvailabilityEntry,
 } from './interfaces/session.interface';
 
 const NEXT_STATUS: Partial<Record<SessionStatus, SessionStatus>> = {
@@ -112,8 +113,22 @@ export class SessionsService {
           include: {
             members: { include: { user: { select: { id: true, name: true } } } },
             plans: {
-              where: { confirmed: true },
-              select: { id: true },
+              include: {
+                categoryDecisions: {
+                  include: { category: { select: { unitCost: true } } },
+                },
+                capexDecisions: {
+                  where: { implemented: true },
+                  include: { capexOption: { select: { acquisitionCost: true } } },
+                },
+              },
+              orderBy: { configVersion: 'desc' },
+              take: 1,
+            },
+            roundResults: {
+              orderBy: { round: 'desc' },
+              take: 1,
+              select: { ebitda: true, ebitdaPercentage: true, round: true },
             },
           },
         },
@@ -124,19 +139,79 @@ export class SessionsService {
     return {
       sessionId: session.id,
       status: session.status,
-      stores: session.stores.map((store) => ({
-        storeId: store.id,
-        storeName: store.name,
-        accessCode: store.accessCode,
-        memberCount: store.members.length,
-        members: store.members.map((m) => ({
-          userId: m.userId,
-          name: m.user.name,
-          role: m.role,
-        })),
-        planConfirmed: store.plans.length > 0,
-      })),
+      stores: session.stores.map((store) => {
+        const latestPlan = store.plans[0] ?? null;
+        const cashUsed = latestPlan
+          ? latestPlan.categoryDecisions.reduce(
+              (sum, d) => sum + d.stockPurchased * d.category.unitCost,
+              0,
+            ) +
+            latestPlan.capexDecisions.reduce(
+              (sum, d) => sum + d.capexOption.acquisitionCost,
+              0,
+            )
+          : 0;
+        const lastResult = store.roundResults[0] ?? null;
+        return {
+          storeId: store.id,
+          storeName: store.name,
+          accessCode: store.accessCode,
+          memberCount: store.members.length,
+          members: store.members.map((m) => ({
+            userId: m.userId,
+            name: m.user.name,
+            role: m.role,
+          })),
+          planConfirmed: latestPlan?.confirmed ?? false,
+          cashUsed,
+          availableCash: session.initialCash - cashUsed,
+          lastRound: lastResult?.round ?? null,
+          lastRoundEbitda: lastResult?.ebitda ?? null,
+          lastRoundEbitdaPct: lastResult?.ebitdaPercentage ?? null,
+        };
+      }),
     };
+  }
+
+  async getStockAvailability(
+    sessionId: string,
+    configVersion: number,
+  ): Promise<StockAvailabilityEntry[]> {
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('Sessão não encontrada');
+
+    const categories = await this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+
+    const sessionConfigs = await this.prisma.sessionCategoryConfig.findMany({
+      where: { sessionId },
+    });
+    const configMap = new Map(sessionConfigs.map((c) => [c.categoryId, c.stockAvailable]));
+
+    const purchased = await this.prisma.poCategoryDecision.groupBy({
+      by: ['categoryId'],
+      where: {
+        plan: {
+          configVersion,
+          store: { sessionId },
+        },
+      },
+      _sum: { stockPurchased: true },
+    });
+    const purchasedMap = new Map(
+      purchased.map((p) => [p.categoryId, p._sum.stockPurchased ?? 0]),
+    );
+
+    return categories.map((cat) => {
+      const totalAvailable = configMap.get(cat.id) ?? cat.stockAvailable;
+      const totalPurchased = purchasedMap.get(cat.id) ?? 0;
+      return {
+        categoryId: cat.id,
+        categoryName: cat.name,
+        totalAvailable,
+        totalPurchased,
+        remaining: totalAvailable - totalPurchased,
+      };
+    });
   }
 
   private toSummary(session: {

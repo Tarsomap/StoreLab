@@ -100,11 +100,30 @@ export class PlansService {
     await this.assertStoreMember(plan.storeId, userId);
     this.assertNotConfirmed(plan);
 
-    // Validate stock cap against session config or category default
-    const availableStock = await this.resolveStockAvailable(plan.storeId, dto.categoryId);
-    if (dto.stockPurchased > availableStock) {
+    // Validate session-wide stock: totalAvailable minus what OTHER stores already bought
+    const [availableStock, store] = await Promise.all([
+      this.resolveStockAvailable(plan.storeId, dto.categoryId),
+      this.prisma.store.findUnique({ where: { id: plan.storeId }, select: { sessionId: true } }),
+    ]);
+    if (!store) throw new NotFoundException('Loja não encontrada');
+
+    const { _sum } = await this.prisma.poCategoryDecision.aggregate({
+      where: {
+        categoryId: dto.categoryId,
+        plan: {
+          configVersion: plan.configVersion,
+          storeId: { not: plan.storeId },
+          store: { sessionId: store.sessionId },
+        },
+      },
+      _sum: { stockPurchased: true },
+    });
+    const purchasedByOthers = _sum.stockPurchased ?? 0;
+    const remaining = availableStock - purchasedByOthers;
+
+    if (dto.stockPurchased > remaining) {
       throw new BadRequestException(
-        `Estoque máximo disponível para esta categoria: ${availableStock} unidades`,
+        `Estoque insuficiente. Disponível: ${remaining} unidades. Já comprado por outras lojas: ${purchasedByOthers}`,
       );
     }
 

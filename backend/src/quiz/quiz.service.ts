@@ -11,6 +11,7 @@ import { CreateQuestionsDto } from './dto/create-questions.dto';
 import { SubmitAnswersDto } from './dto/submit-answers.dto';
 import {
   PlayerQuizResponse,
+  PlayerScoreResponse,
   QuizQuestionPublic,
   QuizQuestionWithAnswer,
   StoreScoreResponse,
@@ -79,6 +80,7 @@ export class QuizService {
   }
 
   // ─── Jogador: buscar quiz SEM gabarito ───────────────────────────────────────
+  // Retorna questions:[] quando o facilitador ainda não configurou (sem erro 404)
 
   async getQuestionsForPlayer(
     sessionId: string,
@@ -88,8 +90,14 @@ export class QuizService {
   ): Promise<PlayerQuizResponse> {
     await this.assertStoreMember(storeId, userId);
 
-    const questions = await this.loadQuestions(sessionId, round);
-    const alreadyAnswered = await this.hasUserAnswered(userId, storeId, round);
+    const questions = await this.prisma.quizQuestion.findMany({
+      where: { sessionId, round },
+      include: { options: true },
+      orderBy: { order: 'asc' },
+    });
+
+    const alreadyAnswered =
+      questions.length > 0 ? await this.hasUserAnswered(userId, storeId, round) : false;
 
     const publicQuestions: QuizQuestionPublic[] = questions.map((q) => ({
       id: q.id,
@@ -99,6 +107,31 @@ export class QuizService {
     }));
 
     return { round, alreadyAnswered, questions: publicQuestions };
+  }
+
+  // ─── Jogador: score individual da rodada ──────────────────────────────────────
+
+  async getPlayerScore(
+    storeId: string,
+    userId: string,
+    round: number,
+  ): Promise<PlayerScoreResponse> {
+    const answers = await this.prisma.userQuizAnswer.findMany({
+      where: { userId, storeId, round },
+    });
+
+    if (answers.length === 0) {
+      return { answered: false, correctAnswers: 0, totalQuestions: 0, scorePercentage: 0 };
+    }
+
+    const correctAnswers = answers.filter((a) => a.isCorrect).length;
+    const totalQuestions = answers.length;
+    return {
+      answered: true,
+      correctAnswers,
+      totalQuestions,
+      scorePercentage: (correctAnswers / totalQuestions) * 100,
+    };
   }
 
   // ─── Jogador: submeter respostas ─────────────────────────────────────────────
