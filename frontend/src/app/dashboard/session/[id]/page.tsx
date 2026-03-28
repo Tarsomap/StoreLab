@@ -2,7 +2,6 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
 import {
   Card,
@@ -112,9 +111,6 @@ export default function SessionManagementPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
-  const { user, logout } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
-
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [statusData, setStatusData] = useState<SessionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,7 +127,6 @@ export default function SessionManagementPage() {
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  useEffect(() => { setMounted(true); }, []);
 
   async function fetchData() {
     setError('');
@@ -206,7 +201,7 @@ export default function SessionManagementPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted/40 flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <p className="text-muted-foreground">Carregando sessão...</p>
       </div>
     );
@@ -214,7 +209,7 @@ export default function SessionManagementPage() {
 
   if (error || !session || !statusData) {
     return (
-      <div className="min-h-screen bg-muted/40 flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <Card className="max-w-sm w-full">
           <CardContent className="pt-6 text-center space-y-4">
             <p className="text-destructive">{error || 'Sessão não encontrada'}</p>
@@ -234,34 +229,20 @@ export default function SessionManagementPage() {
   const canCreateStore = status === 'SETUP' && storeCount < 4;
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/dashboard')}
-              className="text-muted-foreground"
-            >
-              ← Dashboard
-            </Button>
-            <span className="text-muted-foreground">/</span>
-            <h1 className="text-base font-semibold truncate max-w-[200px]">{session.name}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">
-              {mounted ? user?.name : null}
-            </span>
-            <Button variant="outline" size="sm" onClick={() => { logout(); router.push('/login'); }}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+    <div className="max-w-5xl mx-auto space-y-5">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push('/dashboard')}
+          className="text-muted-foreground px-0 hover:bg-transparent"
+        >
+          ← Dashboard
+        </Button>
+        <span>/</span>
+        <span className="font-medium text-foreground truncate max-w-[200px]">{session.name}</span>
+      </div>
 
         {/* ── Phase Banner + Stepper ── */}
         <Card>
@@ -407,7 +388,6 @@ export default function SessionManagementPage() {
             </div>
           )}
         </div>
-      </main>
     </div>
   );
 }

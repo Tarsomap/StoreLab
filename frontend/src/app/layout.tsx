@@ -1,8 +1,21 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Sora, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const sora = Sora({
+  subsets: ['latin'],
+  variable: '--font-display',
+});
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-body',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+});
 
 export const metadata: Metadata = {
   title: 'Retail Game Platform',
@@ -16,7 +29,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>{children}</body>
+      <body
+        className={`${sora.variable} ${dmSans.variable} ${jetbrainsMono.variable} font-body antialiased`}
+      >
+        {children}
+      </body>
     </html>
   );
 }

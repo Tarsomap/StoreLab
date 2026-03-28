@@ -11,7 +11,10 @@
       "Bash(npx --no jest \"financial.service.spec\" --no-coverage --forceExit)",
       "Bash(cmd /c \"npx jest financial.service.spec --no-coverage --forceExit\")",
       "Bash(npm test:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run:*)",
+      "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/app' -name *.tsx -o -name *.ts -o -name *.css)",
+      "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/components' -name *.tsx)"
     ]
   }
 }

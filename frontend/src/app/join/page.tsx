@@ -2,7 +2,6 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
 import {
   Card,
@@ -50,8 +49,6 @@ interface UserStoreEntry {
 
 export default function JoinPage() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
 
   // Existing memberships
   const [myStores, setMyStores] = useState<UserStoreEntry[]>([]);
@@ -65,7 +62,6 @@ export default function JoinPage() {
   const [joined, setJoined] = useState<JoinResponse | null>(null);
 
   useEffect(() => {
-    setMounted(true);
     api
       .get<UserStoreEntry[]>('/stores/mine')
       .then(setMyStores)
@@ -80,11 +76,6 @@ export default function JoinPage() {
       return () => clearTimeout(t);
     }
   }, [joined, router]);
-
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -108,7 +99,7 @@ export default function JoinPage() {
 
   if (joined) {
     return (
-      <div className="min-h-screen bg-muted/40 flex items-center justify-center p-4">
+      <div className="flex items-center justify-center py-16">
         <Card className="w-full max-w-sm text-center">
           <CardHeader>
             <CardTitle className="text-green-600">Você entrou!</CardTitle>
@@ -148,23 +139,7 @@ export default function JoinPage() {
   // ── Main page ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Retail Game Platform</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">
-              {mounted ? user?.name : null}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-10 space-y-6 flex flex-col items-center">
+    <div className="max-w-2xl mx-auto py-4 space-y-6 flex flex-col items-center">
         {/* Existing memberships */}
         {!loadingMine && myStores.length > 0 && (
           <div className="w-full max-w-sm space-y-3">
@@ -251,7 +226,6 @@ export default function JoinPage() {
             </CardFooter>
           </form>
         </Card>
-      </main>
     </div>
   );
 }

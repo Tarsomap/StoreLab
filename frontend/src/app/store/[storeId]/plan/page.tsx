@@ -170,7 +170,7 @@ export default function PlanPage() {
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [store, setStore] = useState<StoreSummary | null>(null);
   const [plan, setPlan] = useState<PlanFullResponse | null>(null);
@@ -301,14 +301,14 @@ export default function PlanPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <p className="text-destructive">{loadError}</p>
       </div>
     );
   }
   if (!plan || !store) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center py-32 text-muted-foreground">
         Carregando plano...
       </div>
     );
@@ -321,24 +321,12 @@ export default function PlanPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-semibold">{store.name}</h1>
-            {plan.confirmed && <Badge variant="outline" className="text-green-700 border-green-400">Confirmado</Badge>}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
-            <Button variant="outline" size="sm" onClick={() => { logout(); router.push('/login'); }}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-5 space-y-5">
+    <div className="max-w-7xl mx-auto space-y-5">
+      {/* Store title */}
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-display font-bold">{store.name}</h1>
+        {plan.confirmed && <Badge variant="outline" className="text-green-700 border-green-400">Confirmado</Badge>}
+      </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -685,7 +673,6 @@ export default function PlanPage() {
             )}
           </div>
         </div>
-      </main>
     </div>
   );
 }

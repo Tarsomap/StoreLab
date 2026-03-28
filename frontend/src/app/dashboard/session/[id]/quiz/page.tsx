@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
 import {
   Card,
@@ -101,8 +100,6 @@ export default function QuizManagementPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
-  const { logout } = useAuthStore();
-
   const [round, setRound] = useState<1 | 2 | 3>(1);
   const [questions, setQuestions] = useState<QuestionDraft[]>(makeBlankQuestions);
   const [savedCount, setSavedCount] = useState<Record<1 | 2 | 3, number>>({ 1: 0, 2: 0, 3: 0 });
@@ -202,36 +199,20 @@ export default function QuizManagementPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/dashboard/session/${sessionId}`)}
-              className="text-muted-foreground"
-            >
-              ← Sessão
-            </Button>
-            <span className="text-muted-foreground">/</span>
-            <h1 className="text-base font-semibold">Gerenciar Quiz</h1>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              logout();
-              router.push('/login');
-            }}
-          >
-            Sair
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push(`/dashboard/session/${sessionId}`)}
+          className="text-muted-foreground px-0 hover:bg-transparent"
+        >
+          ← Sessão
+        </Button>
+        <span>/</span>
+        <span className="font-medium text-foreground">Gerenciar Quiz</span>
+      </div>
         {/* Round selector */}
         <Card>
           <CardContent className="pt-4 pb-4">
@@ -396,7 +377,6 @@ export default function QuizManagementPage() {
             </div>
           </div>
         )}
-      </main>
     </div>
   );
 }

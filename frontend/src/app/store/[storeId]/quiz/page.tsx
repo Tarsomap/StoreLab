@@ -75,7 +75,7 @@ export default function QuizPage() {
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [store, setStore] = useState<StoreSummary | null>(null);
   const [round, setRound] = useState(1);
@@ -159,11 +159,6 @@ export default function QuizPage() {
     }
   }
 
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
-
   // ── States ────────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -185,24 +180,12 @@ export default function QuizPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold">Quiz — Rodada {round}</h1>
-            {store && <Badge variant="secondary">{store.name}</Badge>}
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Quiz title */}
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-display font-bold">Quiz — Rodada {round}</h1>
+        {store && <Badge variant="secondary">{store.name}</Badge>}
+      </div>
         {/* Team progress */}
         {progress && (
           <p className="text-sm text-center text-muted-foreground">
@@ -302,7 +285,6 @@ export default function QuizPage() {
             </div>
           </div>
         )}
-      </main>
     </div>
   );
 }

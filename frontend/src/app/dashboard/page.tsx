@@ -2,7 +2,6 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import {
   Card,
@@ -50,9 +49,6 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
-
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -65,18 +61,12 @@ export default function DashboardPage() {
   const [createError, setCreateError] = useState('');
 
   useEffect(() => {
-    setMounted(true);
     api
       .get<Session[]>('/sessions')
       .then(setSessions)
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -102,24 +92,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Retail Game Platform</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">
-              {mounted ? user?.name : null}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
         {/* Top row */}
         <div className="flex items-center justify-between">
           <div>
@@ -233,7 +206,6 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-      </main>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
@@ -69,8 +69,7 @@ const RANK_COLORS: Record<number, string> = {
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
-  const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [ranking, setRanking] = useState<RankingEntry[]>([]);
   const [storeResults, setStoreResults] = useState<StoreResultEntry[]>([]);
@@ -135,16 +134,11 @@ export default function ResultsPage() {
     });
   }
 
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
-
   // ── States ────────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center py-32 text-muted-foreground">
         Carregando resultados...
       </div>
     );
@@ -152,7 +146,7 @@ export default function ResultsPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-32">
         <p className="text-destructive">{loadError}</p>
       </div>
     );
@@ -161,21 +155,8 @@ export default function ResultsPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Resultados da Sessão</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8">
+      <h1 className="text-2xl font-display font-bold">Resultados da Sessão</h1>
         {/* Ranking table */}
         <section>
           <h2 className="text-xl font-bold mb-4">Ranking Final</h2>
@@ -296,7 +277,6 @@ export default function ResultsPage() {
             ))}
           </div>
         </section>
-      </main>
     </div>
   );
 }

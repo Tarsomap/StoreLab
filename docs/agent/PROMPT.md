@@ -1,3 +1,14 @@
+> ⚠️ **DOCUMENTO HISTÓRICO — NÃO USAR COMO PROMPT ATIVO**
+>
+> Este prompt foi usado para construir o MVP entre fevereiro e março de 2026.
+> O MVP está 100% implementado e testado.
+> Para o contexto atual do projeto, consultar o CLAUDE.md na raiz do repositório.
+> Para regras de implementação, consultar .claude/rules/ (frontend.md, backend.md, engine.md).
+>
+> Última atualização deste header: 28/03/2026
+
+---
+
 # PROMPT — Retail Game Platform
 
 > Cole este prompt no **Cursor (Plan Mode)** ou no **Claude Code** para iniciar a implementação guiada.

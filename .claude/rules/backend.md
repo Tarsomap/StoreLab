@@ -3,36 +3,40 @@ paths:
   - "backend/src/**/*.ts"
 ---
 
-# Backend Rules — NestJS
+# Backend Rules — Retail Game Platform
 
-## Padrões obrigatórios
-- Controllers: apenas validação de input e chamada ao service. ZERO lógica de negócio.
-- Services: toda lógica aqui. Injetar dependências via constructor.
-- DTOs: usar class-validator decorators (@IsString, @IsInt, @Min, etc.)
-- Prisma: usar PrismaService injetável (não instanciar PrismaClient direto)
-- Respostas: sempre tipar com interfaces. Nunca retornar entidades Prisma raw.
-- Erros: usar exceções NestJS (NotFoundException, ForbiddenException, etc.)
+## Estado Atual: ✅ MVP Completo
+TODOS os módulos estão implementados, testados e funcionando.
+NÃO reimplementar módulos existentes.
+NÃO alterar regras de negócio sem consultar docs/agent/spec.md.
 
-## PrismaService
-Criar em `src/common/prisma.service.ts`:
-```typescript
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+## Módulos e Status
 
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  async onModuleInit() {
-    await this.$connect();
-  }
-}
-```
+| Módulo | Status | Testes |
+|--------|--------|--------|
+| auth/ | ✅ Completo | Login, register, refresh, guards |
+| users/ | ✅ Completo | findById, findByEmail |
+| sessions/ | ✅ Completo | CRUD, state machine, invite codes |
+| stores/ | ✅ Completo | CRUD, join, 5 papéis, reentrada |
+| plans/ | ✅ Completo | PO, category decisions, CAPEX, workforce, confirm |
+| quiz/ | ✅ Completo | 10 perguntas/rodada, consolidação, CSAT |
+| engine/ | ✅ Completo | 72 testes, 100% cobertura — NÃO TOCAR |
+| results/ | ✅ Completo | Round results, ranking, caixa final |
+| gateway/ | ✅ Completo | 7 eventos WebSocket |
+| transfer/ | ✅ Completo | 8 validações, 1-2 jogadores obrigatórios |
 
-## Guards
-- JwtAuthGuard: protege rotas autenticadas
-- RolesGuard: verifica UserRole (FACILITATOR vs PLAYER)
-- StoreRoleGuard: verifica StoreRole dentro da loja
+## Quando alterar o backend
+O backend SÓ deve ser alterado para:
+- Fase C: novos endpoints (PDF export, histórico de sessões)
+- Correções de bugs encontrados durante testes de integração
+- NÃO para reformatar, refatorar "por estética" ou reorganizar
 
-## Convenções
-- Nomes de arquivo: kebab-case (auth.service.ts, create-session.dto.ts)
-- Imports: usar path aliases quando configurado
-- NUNCA usar `any` — usar `unknown` se necessário e fazer type narrowing
+## Regras Técnicas
+- Controllers finos — toda lógica nos services
+- DTO validation com class-validator em TODOS os endpoints
+- Nunca hardcodar constantes fora de constants/ ou seed/
+- Prisma transactions para operações que envolvem múltiplas tabelas
+- Seed determinístico para SLA: hash(`${sessionId}-${storeId}-${round}-${capexKey}`)
+- Estoque é sempre em UNIDADES (quantidade), nunca em R$
+- Quebras/Aging: SÓ no final da rodada 3, sobre estoque acumulado
+- Transferências: OBRIGATÓRIAS (1-2 por loja), Gerente intransferível
