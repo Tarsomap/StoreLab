@@ -61,7 +61,7 @@ export default function RegisterPage() {
   const strength = getPasswordStrength(password);
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-sm auth-stagger">
       {/* Header */}
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 mb-6">
@@ -75,7 +75,7 @@ export default function RegisterPage() {
             </svg>
           </div>
           <span className="font-display font-semibold text-sm text-foreground tracking-tight">
-            Retail Game
+            Store<span style={{ color: 'hsl(142 71% 45%)' }}>Lab</span>
           </span>
         </div>
 
@@ -101,23 +101,93 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* Role segmented control */}
+        {/* Role card picker */}
         <div className="space-y-1.5">
           <Label className="text-sm font-medium text-foreground">Tipo de conta</Label>
-          <div className="flex rounded-xl bg-muted p-1 gap-1">
+          <div className="grid grid-cols-2 gap-2.5">
             {(['PLAYER', 'FACILITATOR'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setRole(r)}
                 className={cn(
-                  'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-150 outline-none',
+                  'relative flex flex-col items-start gap-2.5 rounded-xl border-2 p-4 text-left outline-none',
+                  'focus-visible:ring-2 focus-visible:ring-accent/50',
                   role === r
-                    ? 'bg-card text-foreground shadow-sm border border-border/40'
-                    : 'text-muted-foreground hover:text-foreground',
+                    ? 'border-primary bg-primary/[0.04] shadow-sm'
+                    : 'border-border hover:border-primary/35 hover:bg-muted/50',
                 )}
               >
-                {r === 'PLAYER' ? '🎮 Jogador' : '🎓 Facilitador'}
+                {/* Icon */}
+                <div
+                  className={cn(
+                    'w-9 h-9 rounded-xl flex items-center justify-center',
+                    role === r
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {r === 'PLAYER' ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  ) : (
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polygon points="22 10 12 5 2 10 12 15 22 10" />
+                      <path d="M6 12v5c3.5 3.5 8.5 3.5 12 0v-5" />
+                    </svg>
+                  )}
+                </div>
+
+                {/* Label + description */}
+                <div>
+                  <p
+                    className={cn(
+                      'text-sm font-semibold font-display',
+                      role === r ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {r === 'PLAYER' ? 'Jogador' : 'Facilitador'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-body leading-snug">
+                    {r === 'PLAYER'
+                      ? 'Participa nas decisões da loja'
+                      : 'Gerencia e monitora sessões'}
+                  </p>
+                </div>
+
+                {/* Selected indicator */}
+                {role === r && (
+                  <div className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                    <svg
+                      viewBox="0 0 10 10"
+                      className="w-2.5 h-2.5 text-primary-foreground"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      <path d="M2 5l2 2 4-4" />
+                    </svg>
+                  </div>
+                )}
               </button>
             ))}
           </div>

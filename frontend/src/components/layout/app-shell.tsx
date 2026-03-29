@@ -59,7 +59,7 @@ export default function AppShell({ children, userRole }: AppShellProps) {
       {/* TopBar */}
       <header className="h-16 bg-primary text-primary-foreground flex items-center justify-between px-6 shrink-0">
         <span className="font-display font-semibold text-base tracking-tight">
-          Retail Game Platform
+          Store<span style={{ color: 'hsl(142 71% 45%)' }}>Lab</span>
         </span>
         <div className="flex items-center gap-3">
           <span className="text-sm text-primary-foreground/70 hidden sm:block">

@@ -18,8 +18,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Retail Game Platform',
-  description: 'Plataforma de simulação de gestão de varejo',
+  title: 'StoreLab',
+  description: 'Simulação gamificada de gestão de varejo',
 };
 
 export default function RootLayout({

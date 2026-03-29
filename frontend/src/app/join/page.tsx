@@ -127,38 +127,56 @@ export default function JoinPage() {
 
   if (joined) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center space-y-6">
-        <div className="w-20 h-20 rounded-full bg-accent/10 border-2 border-accent flex items-center justify-center">
-          <svg
-            viewBox="0 0 24 24"
-            className="w-10 h-10 text-accent"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="flex flex-col items-center justify-center py-12 text-center space-y-6 join-success-enter max-w-sm mx-auto">
+        {/* Success icon */}
+        <div className="relative">
+          <div
+            className="w-24 h-24 rounded-full flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, hsl(142 71% 45% / 0.15), hsl(142 71% 45% / 0.06))',
+              border: '2px solid hsl(142 71% 45% / 0.4)',
+              boxShadow: '0 0 40px hsl(142 71% 45% / 0.2)',
+            }}
           >
-            <path d="M5 13l4 4L19 7" />
-          </svg>
+            <svg
+              viewBox="0 0 24 24"
+              className="w-11 h-11 check-icon-pop"
+              fill="none"
+              stroke="hsl(142 71% 45%)"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
         </div>
 
-        <div>
-          <h2 className="font-display font-bold text-2xl text-foreground">Você entrou!</h2>
-          <p className="text-muted-foreground mt-2 font-body">
-            Bem-vindo(a) à{' '}
-            <span className="font-semibold text-foreground">{joined.name}</span>
+        {/* Store info */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-body text-muted-foreground uppercase tracking-wider">
+            Entrada confirmada
           </p>
-          <p className="text-sm text-muted-foreground mt-1 font-body">
+          <h2 className="font-display font-bold text-2xl text-foreground leading-tight">
+            {joined.name}
+          </h2>
+          <p className="text-sm text-muted-foreground font-body">
             Papel:{' '}
-            <span className="font-medium text-foreground">{ROLE_LABELS[role]}</span>
+            <span className="font-semibold text-foreground">{ROLE_LABELS[role]}</span>
           </p>
         </div>
 
-        <p className="text-xs text-muted-foreground animate-pulse font-body">
+        {/* Redirect indicator */}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
+          <svg className="animate-spin w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
           Redirecionando para o Plano Operacional...
-        </p>
+        </div>
 
-        <div className="flex flex-col gap-2 w-full max-w-xs">
+        {/* Action buttons */}
+        <div className="flex flex-col gap-2 w-full">
           <Button
             className="w-full rounded-xl"
             onClick={() => router.push(`/store/${joined.id}/plan`)}
@@ -183,9 +201,30 @@ export default function JoinPage() {
   // ── Main page ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-lg mx-auto py-4 space-y-8">
+    <div className="max-w-lg mx-auto py-4 space-y-7">
       {/* Page heading */}
-      <div className="text-center space-y-1">
+      <div className="text-center space-y-2">
+        <div
+          className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-1"
+          style={{
+            background: 'linear-gradient(135deg, hsl(222 47% 21%), hsl(222 47% 30%))',
+            boxShadow: '0 4px 16px hsl(222 47% 21% / 0.25)',
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+        </div>
         <h1 className="font-display font-bold text-2xl text-foreground">Entre na Partida</h1>
         <p className="text-muted-foreground text-sm font-body">
           Insira o código de 6 caracteres fornecido pelo facilitador
@@ -201,11 +240,26 @@ export default function JoinPage() {
           {myStores.map((s) => (
             <div
               key={s.storeId}
-              className="bg-card rounded-xl border border-primary/20 px-4 py-3 flex items-center justify-between gap-3 hover:shadow-md transition-shadow"
+              className="bg-card rounded-xl border border-primary/15 px-4 py-3 flex items-center justify-between gap-3 hover:shadow-md hover:border-primary/30"
             >
-              <div>
-                <p className="font-semibold text-sm text-foreground font-body">{s.storeName}</p>
-                <p className="text-xs text-muted-foreground font-body">{ROLE_LABELS[s.role]}</p>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <rect x="2" y="7" width="20" height="14" rx="2" />
+                    <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-foreground font-body truncate">{s.storeName}</p>
+                  <p className="text-xs text-muted-foreground font-body">{ROLE_LABELS[s.role]}</p>
+                </div>
               </div>
               <Button
                 size="sm"
@@ -243,7 +297,16 @@ export default function JoinPage() {
             <Label className="text-sm font-medium text-foreground block text-center">
               Código de acesso
             </Label>
-            <div className="flex gap-2 justify-center">
+
+            {/* Code inputs container — glows green when complete */}
+            <div
+              className="flex gap-2.5 justify-center rounded-2xl py-3 px-2"
+              style={{
+                background: codeComplete ? 'hsl(142 71% 45% / 0.06)' : 'transparent',
+                boxShadow: codeComplete ? '0 0 0 2px hsl(142 71% 45% / 0.25)' : 'none',
+                transition: 'background 400ms, box-shadow 400ms',
+              }}
+            >
               {chars.map((char, idx) => (
                 <input
                   key={idx}
@@ -258,23 +321,31 @@ export default function JoinPage() {
                   onKeyDown={(e) => handleCharKeyDown(idx, e)}
                   onPaste={idx === 0 ? handlePaste : undefined}
                   className={cn(
-                    'w-11 h-14 text-center text-xl font-mono font-bold uppercase rounded-xl border-2 bg-background outline-none select-none',
-                    'transition-all duration-150',
+                    'w-12 h-[3.75rem] text-center text-2xl font-mono font-bold uppercase rounded-xl border-2 bg-background outline-none select-none',
                     char
                       ? 'border-accent text-foreground'
                       : 'border-border text-foreground',
                     'focus:border-primary focus:ring-0',
                   )}
-                  style={char ? { boxShadow: '0 0 0 3px hsl(142 71% 45% / 0.15)' } : undefined}
+                  style={
+                    char
+                      ? { boxShadow: '0 0 0 4px hsl(142 71% 45% / 0.12)' }
+                      : undefined
+                  }
                 />
               ))}
             </div>
-            {codeComplete && (
-              <p className="text-xs text-accent text-center font-body flex items-center justify-center gap-1">
+
+            {codeComplete ? (
+              <p className="text-xs text-accent text-center font-body flex items-center justify-center gap-1.5 font-medium">
                 <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
                 </svg>
-                Código completo
+                Código completo — selecione seu papel abaixo
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center font-body">
+                Cole ou digite o código da sua loja
               </p>
             )}
           </div>
@@ -289,7 +360,7 @@ export default function JoinPage() {
                 id="store-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as StoreRole)}
-                className="w-full h-11 appearance-none rounded-xl border border-input bg-background px-4 pr-10 text-sm font-body cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                className="w-full h-11 appearance-none rounded-xl border-2 border-border bg-background px-4 pr-10 text-sm font-body cursor-pointer focus:outline-none focus:border-primary focus:ring-0 hover:border-primary/35"
               >
                 {(Object.entries(ROLE_LABELS) as [StoreRole, string][]).map(([value, label]) => (
                   <option key={value} value={value}>

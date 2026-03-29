@@ -40,7 +40,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-sm auth-stagger">
       {/* Header */}
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 mb-6">
@@ -54,7 +54,7 @@ function LoginForm() {
             </svg>
           </div>
           <span className="font-display font-semibold text-sm text-foreground tracking-tight">
-            Retail Game
+            Store<span style={{ color: 'hsl(142 71% 45%)' }}>Lab</span>
           </span>
         </div>
 
