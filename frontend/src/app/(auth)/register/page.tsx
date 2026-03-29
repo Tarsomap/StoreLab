@@ -4,17 +4,33 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore, type UserRole } from '@/stores/authStore';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+function getPasswordStrength(pwd: string): { level: 0 | 1 | 2 | 3 | 4; label: string } {
+  if (!pwd) return { level: 0, label: '' };
+  if (pwd.length < 6) return { level: 1, label: 'Fraca' };
+  if (pwd.length < 8) return { level: 2, label: 'Média' };
+  const extras = [/[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((rx) => rx.test(pwd)).length;
+  if (extras >= 2) return { level: 4, label: 'Forte' };
+  return { level: 3, label: 'Boa' };
+}
+
+const STRENGTH_COLORS: Record<number, string> = {
+  1: 'bg-destructive',
+  2: 'bg-warning',
+  3: 'bg-yellow-400',
+  4: 'bg-accent',
+};
+
+const STRENGTH_TEXT: Record<number, string> = {
+  1: 'text-destructive',
+  2: 'text-warning',
+  3: 'text-yellow-500',
+  4: 'text-accent',
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -42,88 +58,176 @@ export default function RegisterPage() {
     }
   }
 
+  const strength = getPasswordStrength(password);
+
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Criar conta</CardTitle>
-        <CardDescription>Retail Game Platform</CardDescription>
-      </CardHeader>
-
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="name">Nome</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Seu nome"
-              autoComplete="name"
-              required
-              minLength={2}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">E-mail</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="seu@email.com"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Mínimo 8 caracteres"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Tipo de conta</Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    <div className="w-full max-w-sm">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="inline-flex items-center gap-2 mb-6">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <svg
+              viewBox="0 0 16 16"
+              className="w-4 h-4 text-primary-foreground"
+              fill="currentColor"
             >
-              <option value="PLAYER">Jogador</option>
-              <option value="FACILITATOR">Facilitador</option>
-            </select>
+              <path d="M2 3h12v2H2V3zm1 4h10v6H3V7zm2 1v4h6V8H5z" />
+            </svg>
           </div>
-        </CardContent>
+          <span className="font-display font-semibold text-sm text-foreground tracking-tight">
+            Retail Game
+          </span>
+        </div>
 
-        <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Criando conta...' : 'Criar conta'}
-          </Button>
-          <p className="text-sm text-muted-foreground text-center">
-            Já tem conta?{' '}
-            <Link href="/login" className="text-primary hover:underline">
-              Entrar
-            </Link>
-          </p>
-        </CardFooter>
+        <h2 className="font-display font-bold text-2xl text-foreground leading-tight">
+          Criar conta
+        </h2>
+        <p className="text-muted-foreground text-sm mt-1.5 font-body">
+          Escolha seu perfil e comece agora
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 flex items-start gap-2">
+            <svg
+              viewBox="0 0 16 16"
+              className="w-4 h-4 shrink-0 mt-0.5"
+              fill="currentColor"
+            >
+              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 9.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5v-4h1.5v4z" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Role segmented control */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-foreground">Tipo de conta</Label>
+          <div className="flex rounded-xl bg-muted p-1 gap-1">
+            {(['PLAYER', 'FACILITATOR'] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRole(r)}
+                className={cn(
+                  'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-150 outline-none',
+                  role === r
+                    ? 'bg-card text-foreground shadow-sm border border-border/40'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {r === 'PLAYER' ? '🎮 Jogador' : '🎓 Facilitador'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="text-sm font-medium text-foreground">
+            Nome
+          </Label>
+          <Input
+            id="name"
+            type="text"
+            placeholder="Seu nome completo"
+            autoComplete="name"
+            required
+            minLength={2}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm font-medium text-foreground">
+            E-mail
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="seu@email.com"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-sm font-medium text-foreground">
+            Senha
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
+          />
+          {password && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((n) => (
+                  <div
+                    key={n}
+                    className={cn(
+                      'h-1 flex-1 rounded-full transition-all duration-300',
+                      strength.level >= n
+                        ? STRENGTH_COLORS[strength.level]
+                        : 'bg-muted-foreground/20',
+                    )}
+                  />
+                ))}
+              </div>
+              <p
+                className={cn(
+                  'text-xs font-body',
+                  STRENGTH_TEXT[strength.level] ?? 'text-muted-foreground',
+                )}
+              >
+                Senha {strength.label}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <Button
+          type="submit"
+          className="w-full h-11 font-semibold rounded-xl text-sm"
+          disabled={loading}
+        >
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              Criando conta...
+            </span>
+          ) : (
+            'Criar conta'
+          )}
+        </Button>
       </form>
-    </Card>
+
+      <div className="mt-6 text-center">
+        <p className="text-sm text-muted-foreground font-body">
+          Já tem conta?{' '}
+          <Link
+            href="/login"
+            className="text-primary font-medium hover:text-accent transition-colors"
+          >
+            Entrar
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

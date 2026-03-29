@@ -5,9 +5,11 @@ import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Trophy, Award, Medal, TrendingUp, TrendingDown,
+  ChevronDown, ChevronUp,
+} from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,11 +60,543 @@ const fmtBrl = (n: number) =>
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const fmtNum = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
-const RANK_COLORS: Record<number, string> = {
-  1: 'bg-yellow-100 text-yellow-800',
-  2: 'bg-slate-100 text-slate-700',
-  3: 'bg-orange-100 text-orange-700',
+const ebitdaClass = (pct: number) => (pct >= 0 ? 'text-accent' : 'text-destructive');
+
+// ── Rank inline styles (safe, no JIT issues) ─────────────────────────────────
+
+function rankHeaderStyle(rank: number): React.CSSProperties {
+  switch (rank) {
+    case 1: return { background: 'linear-gradient(135deg, hsl(45,93%,52%) 0%, hsl(38,92%,44%) 100%)' };
+    case 2: return { background: 'linear-gradient(135deg, hsl(210,11%,80%) 0%, hsl(210,11%,62%) 100%)' };
+    case 3: return { background: 'linear-gradient(135deg, hsl(29,55%,58%) 0%, hsl(29,49%,44%) 100%)' };
+    default: return { background: 'linear-gradient(135deg, hsl(220,9%,72%) 0%, hsl(220,9%,58%) 100%)' };
+  }
+}
+
+function rankGlowStyle(rank: number): React.CSSProperties {
+  switch (rank) {
+    case 1: return { boxShadow: '0 0 52px hsla(45,93%,47%,0.32), 0 8px 28px rgba(0,0,0,0.12)' };
+    case 2: return { boxShadow: '0 4px 20px rgba(0,0,0,0.09)' };
+    case 3: return { boxShadow: '0 4px 16px rgba(0,0,0,0.08)' };
+    default: return { boxShadow: '0 2px 10px rgba(0,0,0,0.06)' };
+  }
+}
+
+function rankBadgeStyle(rank: number): React.CSSProperties {
+  switch (rank) {
+    case 1: return {
+      background: 'linear-gradient(135deg, hsl(45,93%,52%), hsl(38,92%,44%))',
+      color: 'hsl(45,80%,18%)',
+    };
+    case 2: return {
+      background: 'linear-gradient(135deg, hsl(210,11%,72%), hsl(210,11%,58%))',
+      color: 'hsl(210,11%,18%)',
+    };
+    case 3: return {
+      background: 'linear-gradient(135deg, hsl(29,55%,56%), hsl(29,49%,43%))',
+      color: 'hsl(29,49%,16%)',
+    };
+    default: return { background: 'hsl(220,9%,62%)', color: 'white' };
+  }
+}
+
+function rankHeaderTextStyle(rank: number): React.CSSProperties {
+  switch (rank) {
+    case 1: return { color: 'hsl(45,80%,18%)' };
+    case 2: return { color: 'hsl(210,11%,20%)' };
+    case 3: return { color: 'hsl(29,49%,16%)' };
+    default: return { color: 'white' };
+  }
+}
+
+const RANK_MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉', 4: '' };
+const RANK_LABEL: Record<number, string> = {
+  1: '1º Lugar', 2: '2º Lugar', 3: '3º Lugar', 4: '4º Lugar',
 };
+
+// ── PodiumCard ────────────────────────────────────────────────────────────────
+
+function PodiumCard({ entry }: { entry: RankingEntry }) {
+  const lastRound = entry.rounds[entry.rounds.length - 1];
+  const isChampion = entry.rank === 1;
+  const maxPct = Math.max(...entry.rounds.map((r) => Math.abs(r.ebitdaPercentage * 100)), 5);
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden flex flex-col border border-border/20"
+      style={rankGlowStyle(entry.rank)}
+    >
+      {/* Header band */}
+      <div
+        className="px-5 py-3.5 flex items-center justify-between"
+        style={rankHeaderStyle(entry.rank)}
+      >
+        <div className="flex items-center gap-2">
+          {entry.rank === 1 && (
+            <Trophy className="w-4 h-4 shrink-0" style={rankHeaderTextStyle(1)} />
+          )}
+          {entry.rank === 2 && (
+            <Award className="w-4 h-4 shrink-0" style={rankHeaderTextStyle(2)} />
+          )}
+          {entry.rank === 3 && (
+            <Medal className="w-4 h-4 shrink-0" style={rankHeaderTextStyle(3)} />
+          )}
+          <span
+            className="font-display font-bold text-xs tracking-widest uppercase"
+            style={rankHeaderTextStyle(entry.rank)}
+          >
+            {RANK_LABEL[entry.rank] ?? '4º Lugar'}
+          </span>
+        </div>
+        <span className="text-xl leading-none">{RANK_MEDAL[entry.rank] ?? ''}</span>
+      </div>
+
+      {/* Body */}
+      <div className="bg-card flex-1 p-5 space-y-4">
+        {isChampion && (
+          <div className="flex items-center gap-1.5 -mt-1">
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+              style={{
+                background: 'hsla(45,93%,47%,0.12)',
+                color: 'hsl(38,80%,30%)',
+              }}
+            >
+              ★ Campeão
+            </span>
+          </div>
+        )}
+
+        <h3 className="font-display font-bold text-lg leading-snug text-foreground">
+          {entry.storeName}
+        </h3>
+
+        {/* EBITDA médio — hero number */}
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">EBITDA Médio</p>
+          <p
+            className={`font-mono font-bold leading-none ${ebitdaClass(entry.avgEbitdaPercentage)} ${
+              isChampion ? 'text-5xl' : 'text-3xl'
+            }`}
+          >
+            {fmtPct(entry.avgEbitdaPercentage)}
+          </p>
+        </div>
+
+        {/* Per-round progress bars */}
+        <div className="space-y-2">
+          {entry.rounds.map((r) => {
+            const pctVal = r.ebitdaPercentage * 100;
+            const barWidth = Math.min((Math.abs(pctVal) / maxPct) * 100, 100);
+            return (
+              <div key={r.round} className="flex items-center gap-2">
+                <span className="font-mono text-xs text-muted-foreground w-4 shrink-0">
+                  R{r.round}
+                </span>
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      pctVal >= 0 ? 'bg-accent' : 'bg-destructive'
+                    }`}
+                    style={{ width: `${barWidth}%`, transition: 'width 1s ease-out' }}
+                  />
+                </div>
+                <span
+                  className={`font-mono text-xs font-semibold w-12 text-right shrink-0 ${ebitdaClass(
+                    r.ebitdaPercentage,
+                  )}`}
+                >
+                  {fmtPct(r.ebitdaPercentage)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Cash final */}
+        {lastRound && (
+          <div className="pt-3 border-t border-border/40">
+            <p className="text-xs text-muted-foreground mb-1">Caixa Final</p>
+            <p
+              className={`font-mono font-bold text-base ${
+                lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
+              }`}
+            >
+              {fmtBrl(lastRound.cashFinal)}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── RankingTable ──────────────────────────────────────────────────────────────
+
+function RankingTable({ ranking }: { ranking: RankingEntry[] }) {
+  const maxRounds = Math.max(...ranking.map((r) => r.rounds.length), 0);
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-muted/50 border-b">
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-12">
+              #
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Loja
+            </th>
+            {Array.from({ length: maxRounds }, (_, i) => (
+              <th
+                key={i}
+                className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                R{i + 1} EBITDA%
+              </th>
+            ))}
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Média
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Total EBITDA
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Caixa Final
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {ranking.map((entry) => {
+            const lastRound = entry.rounds[entry.rounds.length - 1];
+            return (
+              <tr
+                key={entry.storeId}
+                className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+              >
+                <td className="px-4 py-4">
+                  <span
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold"
+                    style={rankBadgeStyle(entry.rank)}
+                  >
+                    {entry.rank}
+                  </span>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display font-semibold text-foreground">
+                      {entry.storeName}
+                    </span>
+                    {entry.rank === 1 && (
+                      <Trophy className="w-3.5 h-3.5 text-rank-1 shrink-0" />
+                    )}
+                  </div>
+                </td>
+                {Array.from({ length: maxRounds }, (_, i) => {
+                  const r = entry.rounds.find((rr) => rr.round === i + 1);
+                  return (
+                    <td key={i} className="px-4 py-4 text-right">
+                      {r ? (
+                        <span
+                          className={`font-mono text-sm font-medium ${ebitdaClass(
+                            r.ebitdaPercentage,
+                          )}`}
+                        >
+                          {fmtPct(r.ebitdaPercentage)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="px-4 py-4 text-right">
+                  <span
+                    className={`font-mono text-sm font-bold ${ebitdaClass(
+                      entry.avgEbitdaPercentage,
+                    )}`}
+                  >
+                    {fmtPct(entry.avgEbitdaPercentage)}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <span className="font-mono text-sm text-foreground">
+                    {fmtBrl(entry.totalEbitda)}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-right">
+                  {lastRound ? (
+                    <span
+                      className={`font-mono text-sm font-semibold ${
+                        lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
+                      }`}
+                    >
+                      {fmtBrl(lastRound.cashFinal)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── StoreBreakdownCard ────────────────────────────────────────────────────────
+
+function StoreBreakdownCard({
+  store,
+  rank,
+  isExpanded,
+  onToggle,
+}: {
+  store: StoreResultEntry;
+  rank: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Card className="rounded-xl overflow-hidden">
+      <button
+        type="button"
+        className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onToggle}
+      >
+        <div className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">
+          <div className="flex items-center gap-3">
+            <span
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0"
+              style={rankBadgeStyle(rank)}
+            >
+              {rank}
+            </span>
+            <span className="font-display font-semibold text-base text-foreground">
+              {store.storeName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {store.rounds.map((r) => (
+              <span
+                key={r.round}
+                className={`font-mono text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  r.ebitdaPercentage >= 0
+                    ? 'bg-accent/10 text-accent'
+                    : 'bg-destructive/10 text-destructive'
+                }`}
+              >
+                R{r.round}: {fmtPct(r.ebitdaPercentage)}
+              </span>
+            ))}
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground ml-1 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground ml-1 shrink-0" />
+            )}
+          </div>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <CardContent className="border-t pt-4 space-y-4 bg-background/50">
+          {store.rounds.map((r) => (
+            <RoundBreakdown key={r.round} round={r} initialCash={store.initialCash} />
+          ))}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+// ── RoundBreakdown ────────────────────────────────────────────────────────────
+
+function RoundBreakdown({
+  round,
+  initialCash,
+}: {
+  round: RoundResultEntry;
+  initialCash: number;
+}) {
+  const fmt0 = (n: number) =>
+    n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+  const plRows: {
+    label: string;
+    value: string;
+    negative?: boolean;
+    subtotal?: boolean;
+    isEbitda?: boolean;
+  }[] = [
+    { label: 'Receita bruta', value: fmt0(round.grossRevenue) },
+    { label: 'Impostos', value: fmt0(round.taxAmount), negative: true },
+    { label: 'Receita líquida', value: fmt0(round.netRevenue), subtotal: true },
+    { label: 'Custo de mercadoria', value: fmt0(round.costOfGoods), negative: true },
+    { label: 'Quebras', value: fmt0(round.breakageAmount), negative: true },
+    { label: 'Aging', value: fmt0(round.agingAmount), negative: true },
+    { label: 'Folha de pagamento', value: fmt0(round.payrollCost), negative: true },
+    { label: 'Manutenção', value: fmt0(round.maintenanceCost), negative: true },
+    { label: 'Licenças', value: fmt0(round.licenseCost), negative: true },
+    { label: 'Juros', value: fmt0(round.interestCost), negative: true },
+    { label: 'Perda SLA', value: fmt0(round.slaRevenueLost), negative: true },
+    {
+      label: 'EBITDA',
+      value: `${fmt0(round.ebitda)} (${fmtPct(round.ebitdaPercentage)})`,
+      isEbitda: true,
+    },
+  ];
+
+  const metrics: { label: string; value: string }[] = [
+    { label: 'CSAT', value: fmtNum(round.csat) },
+    { label: 'Disponibilidade', value: fmtNum(round.availability) },
+    { label: 'Preço médio', value: fmtNum(round.basketPrice) },
+    { label: 'Score ranking', value: String(round.rankScore) },
+    { label: 'Market share', value: fmtPct(round.demandShare) },
+    { label: 'Caixa usado', value: fmt0(round.cashUsed) },
+  ];
+
+  const totalCosts = round.grossRevenue - round.ebitda;
+  const cashFlowRows: {
+    label: string;
+    value: string;
+    sign: '+' | '-' | '=';
+    highlight?: boolean;
+  }[] = [
+    { label: 'Caixa inicial', value: fmt0(initialCash), sign: '+' },
+    { label: 'Estoque + CAPEX (gasto)', value: fmt0(round.cashUsed), sign: '-' },
+    { label: 'Receita de vendas', value: fmt0(round.grossRevenue), sign: '+' },
+    { label: 'Custos operacionais', value: fmt0(totalCosts), sign: '-' },
+    { label: 'Caixa Final', value: fmt0(round.cashFinal), sign: '=', highlight: true },
+  ];
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-4 space-y-4">
+      {/* Round header */}
+      <div className="flex items-center gap-2">
+        <h4 className="font-display font-bold text-sm text-foreground">
+          Rodada {round.round}
+        </h4>
+        <span
+          className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded-full ${
+            round.ebitdaPercentage >= 0
+              ? 'bg-accent/10 text-accent'
+              : 'bg-destructive/10 text-destructive'
+          }`}
+        >
+          {fmtPct(round.ebitdaPercentage)}
+        </span>
+        {round.ebitdaPercentage >= 0 ? (
+          <TrendingUp className="w-3.5 h-3.5 text-accent" />
+        ) : (
+          <TrendingDown className="w-3.5 h-3.5 text-destructive" />
+        )}
+      </div>
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        {metrics.map((m) => (
+          <div key={m.label} className="bg-muted/40 rounded-lg p-2.5">
+            <p className="text-xs text-muted-foreground mb-0.5">{m.label}</p>
+            <p className="font-mono text-sm font-semibold text-foreground">{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* P&L */}
+        <div className="rounded-lg bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Resultado (DRE)
+          </p>
+          <div>
+            {plRows.map((row) => (
+              <div
+                key={row.label}
+                className={`flex justify-between items-center py-1.5 border-b border-border/30 last:border-0 ${
+                  row.subtotal ? '-mx-3 px-3 bg-muted/30' : ''
+                } ${row.isEbitda ? 'border-t border-border/60 mt-1 pt-2' : ''}`}
+              >
+                <span
+                  className={`text-xs ${
+                    row.subtotal || row.isEbitda ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  {row.label}
+                </span>
+                <span
+                  className={`font-mono text-xs font-medium ${
+                    row.isEbitda
+                      ? round.ebitdaPercentage >= 0
+                        ? 'text-accent font-bold'
+                        : 'text-destructive font-bold'
+                      : row.negative
+                        ? 'text-destructive/80'
+                        : 'text-foreground'
+                  }`}
+                >
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cash Flow */}
+        <div className="rounded-lg bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Caixa Final
+          </p>
+          <div>
+            {cashFlowRows.map((row, idx) => (
+              <div
+                key={row.label}
+                className={`flex justify-between items-center py-1.5 ${
+                  idx === cashFlowRows.length - 1
+                    ? 'border-t-2 border-foreground/15 mt-1 pt-2'
+                    : 'border-b border-border/30'
+                } ${row.highlight ? '-mx-3 px-3 bg-primary/5 rounded' : ''}`}
+              >
+                <span
+                  className={`text-xs flex items-center gap-1.5 ${
+                    row.highlight ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span
+                    className={`font-mono font-bold ${
+                      row.sign === '+'
+                        ? 'text-accent'
+                        : row.sign === '-'
+                          ? 'text-destructive'
+                          : 'text-primary'
+                    }`}
+                  >
+                    {row.sign}
+                  </span>
+                  {row.label}
+                </span>
+                <span
+                  className={`font-mono text-xs ${
+                    row.highlight
+                      ? round.cashFinal >= 0
+                        ? 'font-bold text-primary'
+                        : 'font-bold text-destructive'
+                      : row.sign === '-'
+                        ? 'text-destructive/80 font-medium'
+                        : 'text-foreground/80'
+                  }`}
+                >
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -79,7 +613,7 @@ export default function ResultsPage() {
 
   const { on } = useSocket(sessionId);
 
-  // ── Load ─────────────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function load() {
@@ -103,7 +637,6 @@ export default function ResultsPage() {
 
   useEffect(() => {
     return on<{ results: RoundResultEntry[] }>('round:results', () => {
-      // Reload results when new round finishes
       Promise.all([
         api.get<RankingEntry[]>(`/results/${sessionId}/ranking`),
         api.get<StoreResultEntry[]>(`/results/${sessionId}`),
@@ -152,273 +685,121 @@ export default function ResultsPage() {
     );
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Derived data ──────────────────────────────────────────────────────────────
+
+  const storeRankMap: Record<string, number> = {};
+  ranking.forEach((e) => {
+    storeRankMap[e.storeId] = e.rank;
+  });
+
+  const sortedStoreResults = [...storeResults].sort(
+    (a, b) => (storeRankMap[a.storeId] ?? 99) - (storeRankMap[b.storeId] ?? 99),
+  );
+
+  const winner = ranking.find((r) => r.rank === 1);
+
+  // Podium arrangement: 2nd | 1st (elevated) | 3rd
+  const podiumTop = [
+    ranking.find((r) => r.rank === 2),
+    ranking.find((r) => r.rank === 1),
+    ranking.find((r) => r.rank === 3),
+  ].filter((e): e is RankingEntry => e !== undefined);
+  const fourthPlace = ranking.find((r) => r.rank === 4);
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <h1 className="text-2xl font-display font-bold">Resultados da Sessão</h1>
-        {/* Ranking table */}
-        <section>
-          <h2 className="text-xl font-bold mb-4">Ranking Final</h2>
-          {ranking.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum resultado disponível ainda.
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50 text-left">
-                      <th className="px-4 py-3 w-12">#</th>
-                      <th className="px-4 py-3">Loja</th>
-                      {Array.from({ length: Math.max(...ranking.map((r) => r.rounds.length), 0) }, (_, i) => (
-                        <th key={i} className="px-4 py-3 text-right">
-                          R{i + 1} EBITDA%
-                        </th>
-                      ))}
-                      <th className="px-4 py-3 text-right">Média %</th>
-                      <th className="px-4 py-3 text-right">Total EBITDA</th>
-                      <th className="px-4 py-3 text-right">Caixa Final</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ranking.map((entry) => {
-                      const maxRounds = Math.max(...ranking.map((r) => r.rounds.length), 0);
-                      const lastRound = entry.rounds[entry.rounds.length - 1];
-                      return (
-                        <tr key={entry.storeId} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="px-4 py-3">
-                            <span
-                              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-                                RANK_COLORS[entry.rank] ?? 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              {entry.rank}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 font-medium">{entry.storeName}</td>
-                          {Array.from({ length: maxRounds }, (_, i) => {
-                            const r = entry.rounds.find((rr) => rr.round === i + 1);
-                            return (
-                              <td key={i} className="px-4 py-3 text-right tabular-nums">
-                                {r ? (
-                                  <span className={r.ebitdaPercentage < 0 ? 'text-destructive' : ''}>
-                                    {fmtPct(r.ebitdaPercentage)}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                            <span className={entry.avgEbitdaPercentage < 0 ? 'text-destructive' : 'text-green-700'}>
-                              {fmtPct(entry.avgEbitdaPercentage)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {fmtBrl(entry.totalEbitda)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                            {lastRound ? (
-                              <span className={lastRound.cashFinal < 0 ? 'text-destructive' : 'text-blue-700'}>
-                                {fmtBrl(lastRound.cashFinal)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
-        </section>
+    <div className="max-w-5xl mx-auto space-y-10 pb-16">
 
-        {/* Breakdown per store */}
-        <section>
-          <h2 className="text-xl font-bold mb-4">Breakdown por Loja</h2>
-          <div className="space-y-4">
-            {storeResults.map((store) => (
-              <Card key={store.storeId}>
-                <CardHeader
-                  className="cursor-pointer select-none"
-                  onClick={() => toggleExpanded(store.storeId)}
-                >
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{store.storeName}</CardTitle>
-                    <div className="flex items-center gap-2">
-                      {store.rounds.map((r) => (
-                        <Badge key={r.round} variant={r.ebitdaPercentage >= 0 ? 'success' : 'destructive'}>
-                          R{r.round}: {fmtPct(r.ebitdaPercentage)}
-                        </Badge>
-                      ))}
-                      <span className="text-muted-foreground text-sm ml-2">
-                        {expanded.has(store.storeId) ? '▲' : '▼'}
-                      </span>
-                    </div>
-                  </div>
-                </CardHeader>
+      {/* ── HERO HEADER ───────────────────────────────────────────────────── */}
+      <div className="space-y-2 pt-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-bold uppercase tracking-widest">
+          <Trophy className="w-3.5 h-3.5" />
+          Resultado Final
+        </div>
+        <h1 className="font-display text-3xl font-bold text-foreground">
+          Resultado da Sessão
+        </h1>
+        {winner ? (
+          <p className="text-muted-foreground text-base">
+            <span className="font-display font-semibold text-foreground">
+              {winner.storeName}
+            </span>{' '}
+            conquistou o 1º lugar com{' '}
+            <span className={`font-mono font-bold ${ebitdaClass(winner.avgEbitdaPercentage)}`}>
+              {fmtPct(winner.avgEbitdaPercentage)}
+            </span>{' '}
+            de EBITDA médio.
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-base">
+            Aguardando resultados das rodadas.
+          </p>
+        )}
+      </div>
 
-                {expanded.has(store.storeId) && (
-                  <CardContent className="pt-0 space-y-4">
-                    {store.rounds.map((r) => (
-                      <RoundBreakdown key={r.round} round={r} initialCash={store.initialCash} />
-                    ))}
-                  </CardContent>
-                )}
-              </Card>
+      {/* ── PODIUM ────────────────────────────────────────────────────────── */}
+      {ranking.length > 0 && (
+        <section>
+          {/* 1st, 2nd, 3rd in podium layout */}
+          <div className="grid grid-cols-3 gap-4 items-end">
+            {podiumTop.map((entry, idx) => (
+              <div
+                key={entry.storeId}
+                className={idx === 1 ? '-translate-y-5' : ''}
+              >
+                <PodiumCard entry={entry} />
+                {/* Podium base strip */}
+                <div
+                  className="h-3 rounded-b-xl mt-1.5"
+                  style={rankHeaderStyle(entry.rank)}
+                />
+              </div>
             ))}
           </div>
+
+          {/* 4th place below the podium */}
+          {fourthPlace && (
+            <div className="mt-5 max-w-xs mx-auto">
+              <PodiumCard entry={fourthPlace} />
+            </div>
+          )}
         </section>
-    </div>
-  );
-}
+      )}
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+      {/* ── RANKING TABLE ─────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="font-display text-xl font-bold text-foreground">
+          Tabela de Classificação
+        </h2>
+        {ranking.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Nenhum resultado disponível ainda.
+            </CardContent>
+          </Card>
+        ) : (
+          <RankingTable ranking={ranking} />
+        )}
+      </section>
 
-function RoundBreakdown({
-  round,
-  initialCash,
-}: {
-  round: RoundResultEntry;
-  initialCash: number;
-}) {
-  const fmt0 = (n: number) =>
-    n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
-  const plRows: { label: string; value: string; negative?: boolean; subtotal?: boolean }[] = [
-    { label: 'Receita bruta', value: fmt0(round.grossRevenue) },
-    { label: 'Impostos', value: fmt0(round.taxAmount), negative: true },
-    { label: 'Receita líquida', value: fmt0(round.netRevenue), subtotal: true },
-    { label: 'Custo de mercadoria', value: fmt0(round.costOfGoods), negative: true },
-    { label: 'Quebras', value: fmt0(round.breakageAmount), negative: true },
-    { label: 'Aging', value: fmt0(round.agingAmount), negative: true },
-    { label: 'Folha de pagamento', value: fmt0(round.payrollCost), negative: true },
-    { label: 'Manutenção', value: fmt0(round.maintenanceCost), negative: true },
-    { label: 'Licenças', value: fmt0(round.licenseCost), negative: true },
-    { label: 'Juros', value: fmt0(round.interestCost), negative: true },
-    { label: 'Perda SLA', value: fmt0(round.slaRevenueLost), negative: true },
-    { label: 'EBITDA', value: `${fmt0(round.ebitda)} (${fmtPct(round.ebitdaPercentage)})` },
-  ];
-
-  const metrics: { label: string; value: string }[] = [
-    { label: 'CSAT', value: fmtNum(round.csat) },
-    { label: 'Disponibilidade', value: fmtNum(round.availability) },
-    { label: 'Preço médio', value: fmtNum(round.basketPrice) },
-    { label: 'Score ranking', value: String(round.rankScore) },
-    { label: 'Market share', value: fmtPct(round.demandShare) },
-    { label: 'Caixa usado', value: fmt0(round.cashUsed) },
-  ];
-
-  // Cash-flow composition: initialCash − cashUsed + grossRevenue − totalCosts = cashFinal
-  // totalCosts derived = grossRevenue − ebitda
-  const totalCosts = round.grossRevenue - round.ebitda;
-  const cashFlowRows: { label: string; value: string; sign: '+' | '-' | '='; highlight?: boolean }[] = [
-    { label: 'Caixa inicial', value: fmt0(initialCash), sign: '+' },
-    { label: 'Estoque + CAPEX (gasto)', value: fmt0(round.cashUsed), sign: '-' },
-    { label: 'Receita de vendas', value: fmt0(round.grossRevenue), sign: '+' },
-    { label: 'Custos operacionais', value: fmt0(totalCosts), sign: '-' },
-    { label: 'Caixa Final', value: fmt0(round.cashFinal), sign: '=', highlight: true },
-  ];
-
-  return (
-    <div className="border rounded-md p-4 space-y-4">
-      <h4 className="font-semibold text-sm">Rodada {round.round}</h4>
-
-      {/* Metrics */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-xs">
-        {metrics.map((m) => (
-          <div key={m.label}>
-            <p className="text-muted-foreground">{m.label}</p>
-            <p className="font-medium">{m.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* P&L */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Resultado (DRE)
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <tbody>
-                {plRows.map((row) => (
-                  <tr key={row.label} className={`border-b last:border-0 ${row.subtotal ? 'bg-muted/20' : ''}`}>
-                    <td className="py-1.5 text-muted-foreground">{row.label}</td>
-                    <td
-                      className={`py-1.5 text-right font-medium tabular-nums ${
-                        row.label === 'EBITDA'
-                          ? round.ebitdaPercentage >= 0
-                            ? 'text-green-700'
-                            : 'text-destructive'
-                          : row.negative
-                            ? 'text-destructive'
-                            : ''
-                      }`}
-                    >
-                      {row.value}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* ── BREAKDOWN ─────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="font-display text-xl font-bold text-foreground">
+          Breakdown por Loja
+        </h2>
+        <div className="space-y-3">
+          {sortedStoreResults.map((store) => (
+            <StoreBreakdownCard
+              key={store.storeId}
+              store={store}
+              rank={storeRankMap[store.storeId] ?? 4}
+              isExpanded={expanded.has(store.storeId)}
+              onToggle={() => toggleExpanded(store.storeId)}
+            />
+          ))}
         </div>
-
-        {/* Cash Flow */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Caixa Final
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <tbody>
-                {cashFlowRows.map((row, idx) => (
-                  <tr
-                    key={row.label}
-                    className={`${idx === cashFlowRows.length - 1 ? 'border-t-2 border-foreground/20' : 'border-b'} ${
-                      row.highlight ? 'bg-blue-50/60' : ''
-                    }`}
-                  >
-                    <td className={`py-1.5 ${row.highlight ? 'font-semibold' : 'text-muted-foreground'}`}>
-                      <span
-                        className={`mr-1.5 text-xs font-bold ${
-                          row.sign === '+' ? 'text-green-600' : row.sign === '-' ? 'text-destructive' : 'text-blue-700'
-                        }`}
-                      >
-                        {row.sign}
-                      </span>
-                      {row.label}
-                    </td>
-                    <td
-                      className={`py-1.5 text-right tabular-nums ${
-                        row.highlight
-                          ? round.cashFinal >= 0
-                            ? 'font-bold text-blue-700'
-                            : 'font-bold text-destructive'
-                          : row.sign === '-'
-                            ? 'text-destructive'
-                            : ''
-                      }`}
-                    >
-                      {row.value}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
