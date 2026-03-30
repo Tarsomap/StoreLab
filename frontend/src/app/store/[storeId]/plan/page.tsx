@@ -1,10 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api, ApiError } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
+import { POSkeleton } from '@/components/skeletons/po-skeleton';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { formatBrl } from '@/lib/format-brl';
+import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -116,8 +122,7 @@ function configVersionFromStatus(status: string): number {
   return 1;
 }
 
-const brl = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const brl = formatBrl;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const num = (n: number) => n.toLocaleString('pt-BR');
 
@@ -208,6 +213,8 @@ function hasSlaRisk(name: string): boolean {
   return SLA_RISK_KEYWORDS.some((k) => lower.includes(k));
 }
 
+type ConfirmState = 'idle' | 'loading' | 'success' | 'error';
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function PlanPage() {
@@ -222,11 +229,14 @@ export default function PlanPage() {
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>('idle');
   const [stockAvailMap, setStockAvailMap] = useState<Map<string, StockAvailabilityEntry>>(
     new Map(),
   );
   const [quizScore, setQuizScore] = useState<PlayerScoreResponse | null>(null);
+
+  const finFirst = useRef(true);
+  const finPrevRef = useRef<{ e: number; c: number } | null>(null);
 
   const { on } = useSocket(store?.sessionId, storeId);
 
@@ -288,6 +298,52 @@ export default function PlanPage() {
     });
   }, [on]);
 
+  const ebitdaValForAnim = useMemo(() => {
+    if (!plan || !store) return 0;
+    return buildDre(buildCatRows(plan.categoryDecisions), plan.financials).ebitda;
+  }, [plan, store]);
+
+  const cashValForAnim = useMemo(
+    () => plan?.financials.availableCash ?? 0,
+    [plan?.financials.availableCash],
+  );
+
+  const ebitdaFlash = useAnimatedValue(
+    ebitdaValForAnim,
+    !!(plan && store),
+    plan?.id ?? null,
+  );
+  const cashFlash = useAnimatedValue(
+    cashValForAnim,
+    !!(plan && store),
+    plan?.id ?? null,
+  );
+
+  useEffect(() => {
+    finFirst.current = true;
+    finPrevRef.current = null;
+  }, [storeId, plan?.id]);
+
+  useEffect(() => {
+    setConfirmState('idle');
+  }, [storeId, plan?.id]);
+
+  useEffect(() => {
+    if (!plan || !store) return;
+    const e = buildDre(buildCatRows(plan.categoryDecisions), plan.financials).ebitda;
+    const c = plan.financials.availableCash;
+    if (finFirst.current) {
+      finFirst.current = false;
+      finPrevRef.current = { e, c };
+      return;
+    }
+    const p = finPrevRef.current;
+    if (p && (e !== p.e || c !== p.c)) {
+      toast.info('Valores atualizados', { duration: 2000 });
+    }
+    finPrevRef.current = { e, c };
+  }, [plan, store]);
+
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   async function mutate<B>(path: string, body: B) {
@@ -329,14 +385,17 @@ export default function PlanPage() {
 
   async function handleConfirm() {
     if (!plan) return;
-    setConfirming(true);
+    setConfirmState('loading');
     try {
       const updated = await api.post<PlanFullResponse>(`/plans/${plan.id}/confirm`, {});
       setPlan(updated);
+      setConfirmState('success');
+      toast.success('PO confirmado com sucesso!');
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : 'Erro ao confirmar');
-    } finally {
-      setConfirming(false);
+      setConfirmState('error');
+      const message = err instanceof Error ? err.message : 'Erro ao confirmar PO';
+      toast.error(message);
+      setTimeout(() => setConfirmState('idle'), 3000);
     }
   }
 
@@ -350,12 +409,7 @@ export default function PlanPage() {
     );
   }
   if (!plan || !store) {
-    return (
-      <div className="flex items-center justify-center py-32 text-muted-foreground gap-3">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Carregando plano...</span>
-      </div>
-    );
+    return <POSkeleton />;
   }
 
   const editable = !plan.confirmed;
@@ -427,11 +481,14 @@ export default function PlanPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* EBITDA R$ */}
         <div
-          className={`rounded-xl border p-4 shadow-sm transition-all
-            ${ebitdaPositive
+          className={cn(
+            'rounded-xl border p-4 shadow-sm transition-colors duration-300',
+            ebitdaPositive
               ? 'bg-accent/8 border-accent/25'
-              : 'bg-destructive/8 border-destructive/25'
-            }`}
+              : 'bg-destructive/8 border-destructive/25',
+            ebitdaFlash === 'up' && 'bg-accent/20',
+            ebitdaFlash === 'down' && 'bg-destructive/20',
+          )}
         >
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">EBITDA</p>
@@ -440,9 +497,17 @@ export default function PlanPage() {
               : <TrendingDown className="h-4 w-4 text-destructive" />
             }
           </div>
-          <p className={`font-mono text-2xl font-bold leading-none ${ebitdaPositive ? 'text-accent' : 'text-destructive'}`}>
-            {brl(dre.ebitda)}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p
+              className={`font-mono text-2xl font-bold leading-none ${
+                ebitdaPositive ? 'text-accent' : 'text-destructive'
+              }`}
+            >
+              {brl(dre.ebitda)}
+            </p>
+            {ebitdaFlash === 'up' && <span className="text-accent font-bold leading-none">↑</span>}
+            {ebitdaFlash === 'down' && <span className="text-destructive font-bold leading-none">↓</span>}
+          </div>
         </div>
 
         {/* EBITDA % */}
@@ -457,17 +522,32 @@ export default function PlanPage() {
         </div>
 
         {/* Cash gauge */}
-        <div className={`rounded-xl border p-4 shadow-sm col-span-2 lg:col-span-1
-          ${cashCritical ? 'bg-destructive/8 border-destructive/25' : cashWarning ? 'bg-warning/8 border-warning/25' : 'bg-card border-border'}`}
+        <div
+          className={cn(
+            'rounded-xl border p-4 shadow-sm col-span-2 lg:col-span-1 transition-colors duration-300',
+            cashCritical
+              ? 'bg-destructive/8 border-destructive/25'
+              : cashWarning
+                ? 'bg-warning/8 border-warning/25'
+                : 'bg-card border-border',
+            cashFlash === 'up' && 'bg-accent/20',
+            cashFlash === 'down' && 'bg-destructive/20',
+          )}
         >
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Caixa Disponível</p>
             <Wallet className={`h-4 w-4 ${cashCritical ? 'text-destructive' : cashWarning ? 'text-warning' : 'text-muted-foreground'}`} />
           </div>
-          <p className={`font-mono text-xl font-bold leading-none mb-2
-            ${cashCritical ? 'text-destructive' : cashWarning ? 'text-warning' : 'text-foreground'}`}>
-            {brl(plan.financials.availableCash)}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <p
+              className={`font-mono text-xl font-bold leading-none
+            ${cashCritical ? 'text-destructive' : cashWarning ? 'text-warning' : 'text-foreground'}`}
+            >
+              {brl(plan.financials.availableCash)}
+            </p>
+            {cashFlash === 'up' && <span className="text-accent font-bold leading-none">↑</span>}
+            {cashFlash === 'down' && <span className="text-destructive font-bold leading-none">↓</span>}
+          </div>
           {/* Progress bar */}
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
@@ -558,15 +638,15 @@ export default function PlanPage() {
         {/* ── LEFT: DRE ──────────────────────────────────────────────────── */}
         <div className="xl:sticky xl:top-[72px]">
           <Card className="overflow-hidden border-border/80 shadow-sm">
-            {/* DRE header */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30">
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
                 <ClipboardCheck className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display">
                 DRE — Plano Operacional
               </h2>
             </div>
+            <Separator />
             <CardContent className="px-4 pb-2 pt-3 space-y-0">
               <DreLine label="Total de Vendas" value={brl(dre.totalVendas)} bold />
               <DreLine
@@ -602,7 +682,7 @@ export default function PlanPage() {
                 <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
                   Custos Fixos
                 </span>
-                <div className="flex-1 h-px bg-border/50" />
+                <Separator className="flex-1 bg-border/50" />
               </div>
 
               <DreLine
@@ -667,14 +747,15 @@ export default function PlanPage() {
 
           {/* Category table */}
           <Card className="overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30">
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
                 <ShoppingBag className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display">
                 Decisões por Categoria
               </h2>
             </div>
+            <Separator />
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
@@ -775,7 +856,7 @@ export default function PlanPage() {
                     <td colSpan={rows.length + 2} className="px-4 py-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50">Perdas</span>
-                        <div className="flex-1 h-px bg-border/40" />
+                        <Separator className="flex-1 bg-border/40" />
                       </div>
                     </td>
                   </tr>
@@ -791,14 +872,15 @@ export default function PlanPage() {
 
           {/* Operadores */}
           <Card className="shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30">
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
                 <Users className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display">
                 Equipe Operacional
               </h2>
             </div>
+            <Separator />
             <CardContent className="pt-4 pb-4">
               <OperadoresForm
                 cashierOperators={plan.cashierOperators}
@@ -817,14 +899,15 @@ export default function PlanPage() {
 
           {/* CAPEX */}
           <Card className="shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30">
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
                 <Zap className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display">
                 Investimentos (CAPEX)
               </h2>
             </div>
+            <Separator />
             <CardContent className="pt-4 pb-4">
               <div className="space-y-2">
                 {plan.capexDecisions.map((cx) => {
@@ -833,7 +916,7 @@ export default function PlanPage() {
                   return (
                     <div
                       key={cx.id}
-                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all
+                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md
                         ${cx.implemented
                           ? 'border-accent/25 bg-accent/5'
                           : showRisk
@@ -892,26 +975,55 @@ export default function PlanPage() {
           </Card>
 
           {/* ── CONFIRM BUTTON ──────────────────────────────────────────── */}
-          {myRole === 'STORE_MANAGER' && !plan.confirmed && (
+          {myRole === 'STORE_MANAGER' && (plan.confirmed || confirmState === 'success') && (
+            <Button
+              type="button"
+              disabled
+              className="w-full h-14 text-base font-bold rounded-xl gap-2 shadow-lg bg-accent text-accent-foreground
+                opacity-100 cursor-not-allowed"
+            >
+              <span className="text-lg leading-none" aria-hidden>
+                ✓
+              </span>
+              PO Confirmado
+            </Button>
+          )}
+
+          {myRole === 'STORE_MANAGER' && !plan.confirmed && confirmState !== 'success' && (
             <div className="relative">
-              {/* Glow effect when ready */}
-              <div className="absolute -inset-1 rounded-2xl bg-accent/20 blur-md animate-pulse" />
+              {confirmState === 'idle' && (
+                <div className="absolute -inset-1 rounded-2xl bg-accent/20 blur-md animate-pulse" />
+              )}
               <Button
+                type="button"
                 onClick={handleConfirm}
-                disabled={confirming || saving}
-                className="relative w-full h-14 text-base font-bold rounded-xl gap-3 shadow-lg
-                  bg-accent hover:bg-accent/90 text-accent-foreground
-                  disabled:opacity-60 disabled:cursor-not-allowed
-                  transition-all duration-200 hover:shadow-accent/25 hover:shadow-xl hover:-translate-y-0.5"
+                disabled={
+                  saving ||
+                  confirmState === 'loading' ||
+                  confirmState === 'error'
+                }
+                className={cn(
+                  'relative w-full h-14 text-base font-bold rounded-xl gap-3 shadow-lg text-accent-foreground',
+                  'disabled:opacity-60 disabled:cursor-not-allowed',
+                  'transition-all duration-200',
+                  confirmState === 'idle' &&
+                    'bg-accent hover:bg-accent/90 hover:shadow-accent/25 hover:shadow-xl hover:-translate-y-0.5',
+                  confirmState === 'loading' && 'bg-accent',
+                  confirmState === 'error' &&
+                    'bg-accent border-2 border-destructive ring-2 ring-destructive/30',
+                )}
               >
-                {confirming ? (
+                {confirmState === 'loading' ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Confirmando Plano...
+                    <span
+                      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white mr-2 shrink-0"
+                      aria-hidden
+                    />
+                    Confirmando...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-5 w-5" />
+                    <CheckCircle2 className="h-5 w-5 shrink-0" />
                     Confirmar Plano Operacional
                   </>
                 )}
@@ -919,7 +1031,7 @@ export default function PlanPage() {
             </div>
           )}
 
-          {plan.confirmed && (
+          {plan.confirmed && myRole !== 'STORE_MANAGER' && (
             <div className="flex items-center justify-center gap-2 rounded-xl border border-accent/25 bg-accent/8 py-4">
               <CheckCircle2 className="h-5 w-5 text-accent" />
               <p className="text-sm font-semibold text-accent">
@@ -998,21 +1110,28 @@ function CatTableRow<T extends CatRowData>({
   bold?: boolean;
 }) {
   const totalVal = total ? rows.reduce((s, r) => s + total(r), 0) : null;
+  const cellReadOnly =
+    'cursor-default bg-muted/50 select-none px-3 py-2 text-right font-mono text-xs';
   return (
     <tr className="border-b last:border-0">
-      <td className={`px-4 py-2 text-xs ${muted ? 'text-muted-foreground' : bold ? 'font-semibold' : 'font-medium'}`}>
+      <td
+        className={`px-4 py-2 text-xs cursor-default ${muted ? 'text-muted-foreground' : bold ? 'font-semibold' : 'font-medium'}`}
+      >
         {label}
       </td>
       {rows.map((r) => (
-        <td key={r.categoryId} className={`px-3 py-2 text-right font-mono text-xs
-          ${muted ? 'text-muted-foreground' : bold ? 'font-semibold' : ''}`}>
+        <td
+          key={r.categoryId}
+          className={cn(
+            cellReadOnly,
+            muted ? 'text-muted-foreground' : bold ? 'font-semibold text-foreground' : 'text-foreground',
+          )}
+        >
           {getValue(r)}
         </td>
       ))}
-      <td className="px-4 py-2 text-right font-mono text-xs font-semibold">
-        {totalVal !== null
-          ? totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-          : '—'}
+      <td className={cn(cellReadOnly, 'px-4 font-semibold text-foreground')}>
+        {totalVal !== null ? formatBrl(totalVal) : '—'}
       </td>
     </tr>
   );
@@ -1051,9 +1170,12 @@ function StockInput({
           if (!isNaN(v) && v !== value) onCommit(v);
         }}
         disabled={disabled}
-        className={`w-24 text-right h-7 text-xs px-2 font-mono
-          ${catInputClass ?? ''}
-          ${overLimit ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+        className={cn(
+          'w-24 text-right h-7 text-xs px-2 font-mono',
+          catInputClass,
+          overLimit && 'border-destructive focus-visible:ring-destructive',
+          disabled && 'disabled:bg-muted/50 disabled:cursor-default',
+        )}
       />
       {maxAvailable !== undefined && (
         <p className={`text-[10px] mt-0.5 text-right font-mono
@@ -1093,7 +1215,11 @@ function MarginInput({
           if (!isNaN(v) && v !== value) onCommit(v);
         }}
         disabled={disabled}
-        className={`w-20 text-right h-7 text-xs px-2 font-mono ${catInputClass ?? ''}`}
+        className={cn(
+          'w-20 text-right h-7 text-xs px-2 font-mono',
+          catInputClass,
+          disabled && 'disabled:bg-muted/50 disabled:cursor-default',
+        )}
       />
       <span className="text-muted-foreground text-xs font-mono">%</span>
     </div>
@@ -1151,10 +1277,10 @@ function OperadoresForm({
               onChange={(e) => setCashier(e.target.value)}
               onBlur={(e) => commit(e.target.value, service)}
               disabled={!editable || saving}
-              className="w-20 h-8 text-sm text-right font-mono"
+              className="w-20 h-8 text-sm text-right font-mono disabled:bg-muted/50 disabled:cursor-default"
             />
             <span className="text-sm font-mono font-semibold text-foreground">
-              = {cashierCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+              = {brl(cashierCost)}
             </span>
           </div>
           {/* CSAT indicator */}
@@ -1190,10 +1316,10 @@ function OperadoresForm({
               onChange={(e) => setService(e.target.value)}
               onBlur={(e) => commit(cashier, e.target.value)}
               disabled={!editable || saving}
-              className="w-20 h-8 text-sm text-right font-mono"
+              className="w-20 h-8 text-sm text-right font-mono disabled:bg-muted/50 disabled:cursor-default"
             />
             <span className="text-sm font-mono font-semibold text-foreground">
-              = {serviceCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+              = {brl(serviceCost)}
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground">0–5 define SLA de resolução</p>
@@ -1204,7 +1330,7 @@ function OperadoresForm({
       <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
         <span className="text-xs text-muted-foreground">Total Folha de Pagamento</span>
         <span className="font-mono text-sm font-bold text-foreground">
-          {totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+          {brl(totalFolha)}
         </span>
       </div>
       <p className="text-xs text-muted-foreground">

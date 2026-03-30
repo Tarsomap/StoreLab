@@ -15,7 +15,8 @@
       "Bash(npm run:*)",
       "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/app' -name *.tsx -o -name *.ts -o -name *.css)",
       "Bash(find 'C:/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/components' -name *.tsx)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"confirm\\\\|submit\\\\|button\" /c/Users/SAMSUNG/Desktop/Residência 2/retail-game-platform/frontend/src/app/store/[storeId]/plan/page.tsx)"
     ]
   }
 }

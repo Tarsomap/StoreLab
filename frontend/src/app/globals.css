@@ -42,6 +42,23 @@
   @apply transition-colors duration-200;
 }
 
+/* ── App Router page enter ────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: fadeInUp 200ms ease-out forwards;
+}
+
 /* ── Auth & Join page animations ──────────────────────────────────── */
 
 @keyframes slide-up-fade {

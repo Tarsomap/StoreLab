@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { Store } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -230,6 +231,20 @@ export default function JoinPage() {
           Insira o código de 6 caracteres fornecido pelo facilitador
         </p>
       </div>
+
+      {!loadingMine && myStores.length === 0 && (
+        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-5 py-8 text-center space-y-3">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-card text-muted-foreground border shadow-sm">
+            <Store className="h-6 w-6" aria-hidden />
+          </div>
+          <p className="font-display text-sm font-semibold text-foreground">
+            Nenhuma loja vinculada ainda
+          </p>
+          <p className="text-xs text-muted-foreground font-body max-w-xs mx-auto leading-relaxed">
+            Quando entrar com um código válido, sua loja aparecerá aqui para acesso rápido ao Plano Operacional.
+          </p>
+        </div>
+      )}
 
       {/* Existing memberships */}
       {!loadingMine && myStores.length > 0 && (

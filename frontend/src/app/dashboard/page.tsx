@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { formatBrl } from '@/lib/format-brl';
 import {
   Card,
   CardContent,
@@ -13,7 +14,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, LayoutDashboard } from 'lucide-react';
+import { toast } from 'sonner';
+import { DashboardSkeleton } from '@/components/skeletons/dashboard-skeleton';
+import {
+  SessionStatusBadge,
+  SESSION_STATUS_LABEL,
+} from '@/components/session-status-badge';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,26 +33,6 @@ interface Session {
   initialCash: number;
   createdAt: string;
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  SETUP: 'Configuração',
-  ROUND_1_CONFIG: 'Config. Rodada 1',
-  ROUND_1: 'Rodada 1',
-  RECONFIGURATION: 'Reconfiguração',
-  ROUND_2: 'Rodada 2',
-  ROUND_3: 'Rodada 3',
-  FINISHED: 'Finalizada',
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  SETUP: 'bg-muted text-muted-foreground',
-  ROUND_1_CONFIG: 'bg-warning/10 text-warning',
-  ROUND_1: 'bg-accent/10 text-accent',
-  RECONFIGURATION: 'bg-warning/10 text-warning',
-  ROUND_2: 'bg-accent/10 text-accent',
-  ROUND_3: 'bg-accent/10 text-accent',
-  FINISHED: 'bg-primary/10 text-primary',
-};
 
 const STATUS_PROGRESS: Record<string, string> = {
   SETUP: 'Configuração',
@@ -64,7 +52,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
-  // Create form state
   const [newName, setNewName] = useState('');
   const [newDemand, setNewDemand] = useState('1000');
   const [newCash, setNewCash] = useState('700000');
@@ -90,6 +77,7 @@ export default function DashboardPage() {
         totalDemand: Number(newDemand),
         initialCash: Number(newCash),
       });
+      toast.success('Sessão criada');
       setSessions((prev) => [session, ...prev]);
       setShowCreate(false);
       setNewName('');
@@ -102,147 +90,159 @@ export default function DashboardPage() {
     }
   }
 
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-        {/* Top row */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Minhas Sessões</h2>
-            <p className="text-muted-foreground text-sm mt-1">
-              Gerencie as sessões de jogo
-            </p>
-          </div>
-          <Button onClick={() => setShowCreate((v) => !v)}>
-            {showCreate ? (
-              'Cancelar'
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                Nova sessão
-              </>
-            )}
-          </Button>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl font-bold text-foreground">Minhas Sessões</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gerencie as sessões de jogo
+          </p>
         </div>
+        <Button onClick={() => setShowCreate((v) => !v)}>
+          {showCreate ? (
+            'Cancelar'
+          ) : (
+            <>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova sessão
+            </>
+          )}
+        </Button>
+      </div>
 
-        {/* Create form */}
-        {showCreate && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Nova sessão</CardTitle>
-            </CardHeader>
-            <form onSubmit={handleCreate}>
-              <CardContent className="space-y-4">
-                {createError && (
-                  <p className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">
-                    {createError}
-                  </p>
-                )}
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div className="sm:col-span-1 space-y-2">
-                    <Label htmlFor="new-name">Nome da sessão</Label>
-                    <Input
-                      id="new-name"
-                      placeholder="Ex: Turma A"
-                      required
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-demand">Demanda total</Label>
-                    <Input
-                      id="new-demand"
-                      type="number"
-                      min={1}
-                      required
-                      value={newDemand}
-                      onChange={(e) => setNewDemand(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-cash">Caixa inicial (R$)</Label>
-                    <Input
-                      id="new-cash"
-                      type="number"
-                      min={1}
-                      required
-                      value={newCash}
-                      onChange={(e) => setNewCash(e.target.value)}
-                    />
-                  </div>
+      {showCreate && (
+        <Card className="shadow-sm border">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-base font-semibold font-display">Nova sessão</CardTitle>
+          </CardHeader>
+          <Separator className="my-4" />
+          <form onSubmit={handleCreate}>
+            <CardContent className="space-y-4 pt-0">
+              {createError && (
+                <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-3 py-2">
+                  {createError}
+                </p>
+              )}
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-1 space-y-2">
+                  <Label htmlFor="new-name" className="text-sm text-muted-foreground">
+                    Nome da sessão
+                  </Label>
+                  <Input
+                    id="new-name"
+                    placeholder="Ex: Turma A"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
                 </div>
-              </CardContent>
-              <div className="px-6 pb-6">
-                <Button type="submit" disabled={creating}>
-                  {creating ? 'Criando...' : 'Criar sessão'}
-                </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="new-demand" className="text-sm text-muted-foreground">
+                    Demanda total
+                  </Label>
+                  <Input
+                    id="new-demand"
+                    type="number"
+                    min={1}
+                    required
+                    value={newDemand}
+                    onChange={(e) => setNewDemand(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-cash" className="text-sm text-muted-foreground">
+                    Caixa inicial (R$)
+                  </Label>
+                  <Input
+                    id="new-cash"
+                    type="number"
+                    min={1}
+                    required
+                    value={newCash}
+                    onChange={(e) => setNewCash(e.target.value)}
+                  />
+                </div>
               </div>
-            </form>
-          </Card>
-        )}
-
-        {/* Sessions list */}
-        {loading ? (
-          <div className="text-center py-16 text-muted-foreground">
-            Carregando sessões...
-          </div>
-        ) : sessions.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <p className="text-muted-foreground">Nenhuma sessão criada ainda.</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Clique em &quot;+ Nova sessão&quot; para começar.
-              </p>
             </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sessions.map((s) => (
-              <Card
-                key={s.id}
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => router.push(`/dashboard/session/${s.id}`)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="font-display font-semibold text-lg leading-tight">
-                      {s.name}
-                    </CardTitle>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0 ${STATUS_COLOR[s.status] ?? 'bg-muted text-muted-foreground'}`}
-                    >
-                      {STATUS_LABEL[s.status] ?? s.status}
-                    </span>
-                  </div>
-                  <CardDescription className="flex items-center justify-between mt-1">
-                    <span>{new Date(s.createdAt).toLocaleDateString('pt-BR')}</span>
-                    <span className="text-xs font-medium">
-                      {STATUS_PROGRESS[s.status] ?? s.status}
-                    </span>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1 pt-0">
-                  <p>
-                    Demanda:{' '}
-                    <span className="font-mono font-medium text-foreground">
-                      {s.totalDemand.toLocaleString('pt-BR')}
-                    </span>
-                  </p>
-                  <p>
-                    Caixa:{' '}
-                    <span className="font-mono font-medium text-foreground">
-                      {new Intl.NumberFormat('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL',
-                        maximumFractionDigits: 0,
-                      }).format(s.initialCash)}
-                    </span>
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+            <div className="px-6 pb-6">
+              <Button type="submit" disabled={creating}>
+                {creating ? 'Criando...' : 'Criar sessão'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {sessions.length === 0 ? (
+        <Card className="shadow-sm border">
+          <CardContent className="py-16 px-6 text-center space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <LayoutDashboard className="h-7 w-7" aria-hidden />
+            </div>
+            <div className="space-y-1">
+              <p className="font-display text-base font-semibold text-foreground">
+                Nenhuma sessão criada ainda
+              </p>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                Crie a primeira sessão para convidar lojas e acompanhar as rodadas do jogo.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-xl"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nova sessão
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {sessions.map((s) => (
+            <Card
+              key={s.id}
+              className="cursor-pointer shadow-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+              onClick={() => router.push(`/dashboard/session/${s.id}`)}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="font-display font-semibold text-base leading-tight">
+                    {s.name}
+                  </CardTitle>
+                  <SessionStatusBadge status={s.status} />
+                </div>
+                <CardDescription className="flex items-center justify-between mt-1 text-sm">
+                  <span>{new Date(s.createdAt).toLocaleDateString('pt-BR')}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {STATUS_PROGRESS[s.status] ?? SESSION_STATUS_LABEL[s.status] ?? s.status}
+                  </span>
+                </CardDescription>
+              </CardHeader>
+              <Separator />
+              <CardContent className="text-sm text-muted-foreground space-y-1 pt-4">
+                <p>
+                  Demanda:{' '}
+                  <span className="font-mono font-medium text-foreground">
+                    {s.totalDemand.toLocaleString('pt-BR')}
+                  </span>
+                </p>
+                <p>
+                  Caixa:{' '}
+                  <span className="font-mono font-medium text-foreground">
+                    {formatBrl(s.initialCash)}
+                  </span>
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useAuthStore, type UserRole } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,14 +22,14 @@ function getPasswordStrength(pwd: string): { level: 0 | 1 | 2 | 3 | 4; label: st
 const STRENGTH_COLORS: Record<number, string> = {
   1: 'bg-destructive',
   2: 'bg-warning',
-  3: 'bg-yellow-400',
+  3: 'bg-warning/80',
   4: 'bg-accent',
 };
 
 const STRENGTH_TEXT: Record<number, string> = {
   1: 'text-destructive',
   2: 'text-warning',
-  3: 'text-yellow-500',
+  3: 'text-warning',
   4: 'text-accent',
 };
 
@@ -50,9 +51,12 @@ export default function RegisterPage() {
 
     try {
       await register(name, email, password, role);
+      toast.success('Conta criada com sucesso!');
       router.push(role === 'FACILITATOR' ? '/dashboard' : '/join');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar conta');
+      const message = err instanceof Error ? err.message : 'Erro ao criar conta';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -103,7 +107,7 @@ export default function RegisterPage() {
 
         {/* Role card picker */}
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium text-foreground">Tipo de conta</Label>
+          <Label className="text-sm text-muted-foreground">Tipo de conta</Label>
           <div className="grid grid-cols-2 gap-2.5">
             {(['PLAYER', 'FACILITATOR'] as const).map((r) => (
               <button
@@ -194,7 +198,7 @@ export default function RegisterPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="name" className="text-sm font-medium text-foreground">
+          <Label htmlFor="name" className="text-sm text-muted-foreground">
             Nome
           </Label>
           <Input
@@ -211,7 +215,7 @@ export default function RegisterPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium text-foreground">
+          <Label htmlFor="email" className="text-sm text-muted-foreground">
             E-mail
           </Label>
           <Input
@@ -227,7 +231,7 @@ export default function RegisterPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-sm font-medium text-foreground">
+          <Label htmlFor="password" className="text-sm text-muted-foreground">
             Senha
           </Label>
           <Input

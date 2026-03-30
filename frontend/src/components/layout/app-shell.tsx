@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { LayoutDashboard, Store, BookOpen, ArrowLeft } from 'lucide-react';
+import { WsStatusDot } from '@/components/layout/ws-status-dot';
 
 type UserRole = 'FACILITATOR' | 'PLAYER';
 
@@ -47,7 +48,7 @@ export default function AppShell({ children, userRole }: AppShellProps) {
   const showSidebar = userRole === 'FACILITATOR';
 
   function navLinkClass(active: boolean) {
-    return `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+    return `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${
       active
         ? 'bg-muted text-foreground font-medium'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -62,13 +63,14 @@ export default function AppShell({ children, userRole }: AppShellProps) {
           Store<span style={{ color: 'hsl(142 71% 45%)' }}>Lab</span>
         </span>
         <div className="flex items-center gap-3">
+          <WsStatusDot />
           <span className="text-sm text-primary-foreground/70 hidden sm:block">
             {user?.name}
           </span>
           <Button
             variant="outline"
             size="sm"
-            className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+            className="border-primary-foreground/30 text-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
             onClick={handleLogout}
           >
             Sair

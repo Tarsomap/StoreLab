@@ -1,7 +1,7 @@
 # CLAUDE.md — Retail Game Platform
 
 > Contexto para Claude Code. Leia este arquivo inteiro antes de qualquer tarefa.
-> Última atualização: 28/03/2026
+> Última atualização: 30/03/2026
 
 ## O que é este projeto
 
@@ -117,9 +117,13 @@ NÃO usar logo/nome da empresa parceira em nenhuma tela.
 
 ### Regras Visuais Globais
 - EBITDA positivo = verde (accent), negativo = vermelho (destructive), SEMPRE
-- Valores monetários = font-mono, formato R$ XX.XXX,XX (Intl.NumberFormat pt-BR)
+- Valores monetários = `font-mono`; moeda sempre via `formatBrl()` em `@/lib/format-brl` (prefixo **`R$ `** com espaço)
 - Títulos de página = font-display (Sora), text-2xl font-bold
-- Status badges: SETUP=bg-muted, ROUND_X=bg-accent, FINISHED=bg-primary
+- Status de sessão: usar `SessionStatusBadge` (`frontend/src/components/session-status-badge.tsx`) — SETUP=muted, ROUND em andamento=accent/warning conforme fase, FINISHED=primary
+- Separadores em cards/seções: componente `Separator` (`frontend/src/components/ui/separator.tsx`); evitar `border-b` só no header do card (tabelas podem manter `border-b` entre linhas)
+- Empty states: ícone Lucide discreto + título + texto curto + CTA quando fizer sentido (dashboard sem sessões, sessão sem lojas, join sem lojas vinculadas)
+- Botões/links desabilitados: `cursor-not-allowed` + `opacity-50` (base do `Button`); inputs do PO somente leitura (`disabled`): `disabled:bg-muted/50 disabled:cursor-default` além do estilo do `Input`
+- Labels de formulário (auth e similares): `text-sm text-muted-foreground`
 - Cards: rounded-xl shadow-sm border, hover:shadow-md
 - Border radius padrão: rounded-xl (12px)
 - Transição global: transition-colors duration-200

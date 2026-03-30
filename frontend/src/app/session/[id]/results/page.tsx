@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
+import { formatBrl } from '@/lib/format-brl';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Trophy, Award, Medal, TrendingUp, TrendingDown,
   ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { ResultsSkeleton } from '@/components/skeletons/results-skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,8 +57,6 @@ interface RankingEntry {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmtBrl = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const fmtNum = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
@@ -116,16 +116,23 @@ const RANK_LABEL: Record<number, string> = {
 
 // ── PodiumCard ────────────────────────────────────────────────────────────────
 
-function PodiumCard({ entry }: { entry: RankingEntry }) {
+function PodiumCard({
+  entry,
+  podiumBaseStrip = false,
+}: {
+  entry: RankingEntry;
+  podiumBaseStrip?: boolean;
+}) {
   const lastRound = entry.rounds[entry.rounds.length - 1];
   const isChampion = entry.rank === 1;
   const maxPct = Math.max(...entry.rounds.map((r) => Math.abs(r.ebitdaPercentage * 100)), 5);
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden flex flex-col border border-border/20"
-      style={rankGlowStyle(entry.rank)}
-    >
+    <div className="origin-center overflow-visible transition-transform duration-150 hover:scale-[1.02]">
+      <div
+        className="flex flex-col overflow-hidden rounded-2xl border border-border/20"
+        style={rankGlowStyle(entry.rank)}
+      >
       {/* Header band */}
       <div
         className="px-5 py-3.5 flex items-center justify-between"
@@ -222,11 +229,16 @@ function PodiumCard({ entry }: { entry: RankingEntry }) {
                 lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
               }`}
             >
-              {fmtBrl(lastRound.cashFinal)}
+              {formatBrl(lastRound.cashFinal)}
             </p>
           </div>
         )}
       </div>
+
+      {podiumBaseStrip && (
+        <div className="h-3 shrink-0" style={rankHeaderStyle(entry.rank)} aria-hidden />
+      )}
+    </div>
     </div>
   );
 }
@@ -321,7 +333,7 @@ function RankingTable({ ranking }: { ranking: RankingEntry[] }) {
                 </td>
                 <td className="px-4 py-4 text-right">
                   <span className="font-mono text-sm text-foreground">
-                    {fmtBrl(entry.totalEbitda)}
+                    {formatBrl(entry.totalEbitda)}
                   </span>
                 </td>
                 <td className="px-4 py-4 text-right">
@@ -331,7 +343,7 @@ function RankingTable({ ranking }: { ranking: RankingEntry[] }) {
                         lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
                       }`}
                     >
-                      {fmtBrl(lastRound.cashFinal)}
+                      {formatBrl(lastRound.cashFinal)}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
@@ -420,9 +432,6 @@ function RoundBreakdown({
   round: RoundResultEntry;
   initialCash: number;
 }) {
-  const fmt0 = (n: number) =>
-    n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
   const plRows: {
     label: string;
     value: string;
@@ -430,20 +439,20 @@ function RoundBreakdown({
     subtotal?: boolean;
     isEbitda?: boolean;
   }[] = [
-    { label: 'Receita bruta', value: fmt0(round.grossRevenue) },
-    { label: 'Impostos', value: fmt0(round.taxAmount), negative: true },
-    { label: 'Receita líquida', value: fmt0(round.netRevenue), subtotal: true },
-    { label: 'Custo de mercadoria', value: fmt0(round.costOfGoods), negative: true },
-    { label: 'Quebras', value: fmt0(round.breakageAmount), negative: true },
-    { label: 'Aging', value: fmt0(round.agingAmount), negative: true },
-    { label: 'Folha de pagamento', value: fmt0(round.payrollCost), negative: true },
-    { label: 'Manutenção', value: fmt0(round.maintenanceCost), negative: true },
-    { label: 'Licenças', value: fmt0(round.licenseCost), negative: true },
-    { label: 'Juros', value: fmt0(round.interestCost), negative: true },
-    { label: 'Perda SLA', value: fmt0(round.slaRevenueLost), negative: true },
+    { label: 'Receita bruta', value: formatBrl(round.grossRevenue) },
+    { label: 'Impostos', value: formatBrl(round.taxAmount), negative: true },
+    { label: 'Receita líquida', value: formatBrl(round.netRevenue), subtotal: true },
+    { label: 'Custo de mercadoria', value: formatBrl(round.costOfGoods), negative: true },
+    { label: 'Quebras', value: formatBrl(round.breakageAmount), negative: true },
+    { label: 'Aging', value: formatBrl(round.agingAmount), negative: true },
+    { label: 'Folha de pagamento', value: formatBrl(round.payrollCost), negative: true },
+    { label: 'Manutenção', value: formatBrl(round.maintenanceCost), negative: true },
+    { label: 'Licenças', value: formatBrl(round.licenseCost), negative: true },
+    { label: 'Juros', value: formatBrl(round.interestCost), negative: true },
+    { label: 'Perda SLA', value: formatBrl(round.slaRevenueLost), negative: true },
     {
       label: 'EBITDA',
-      value: `${fmt0(round.ebitda)} (${fmtPct(round.ebitdaPercentage)})`,
+      value: `${formatBrl(round.ebitda)} (${fmtPct(round.ebitdaPercentage)})`,
       isEbitda: true,
     },
   ];
@@ -454,7 +463,7 @@ function RoundBreakdown({
     { label: 'Preço médio', value: fmtNum(round.basketPrice) },
     { label: 'Score ranking', value: String(round.rankScore) },
     { label: 'Market share', value: fmtPct(round.demandShare) },
-    { label: 'Caixa usado', value: fmt0(round.cashUsed) },
+    { label: 'Caixa usado', value: formatBrl(round.cashUsed) },
   ];
 
   const totalCosts = round.grossRevenue - round.ebitda;
@@ -464,11 +473,11 @@ function RoundBreakdown({
     sign: '+' | '-' | '=';
     highlight?: boolean;
   }[] = [
-    { label: 'Caixa inicial', value: fmt0(initialCash), sign: '+' },
-    { label: 'Estoque + CAPEX (gasto)', value: fmt0(round.cashUsed), sign: '-' },
-    { label: 'Receita de vendas', value: fmt0(round.grossRevenue), sign: '+' },
-    { label: 'Custos operacionais', value: fmt0(totalCosts), sign: '-' },
-    { label: 'Caixa Final', value: fmt0(round.cashFinal), sign: '=', highlight: true },
+    { label: 'Caixa inicial', value: formatBrl(initialCash), sign: '+' },
+    { label: 'Estoque + CAPEX (gasto)', value: formatBrl(round.cashUsed), sign: '-' },
+    { label: 'Receita de vendas', value: formatBrl(round.grossRevenue), sign: '+' },
+    { label: 'Custos operacionais', value: formatBrl(totalCosts), sign: '-' },
+    { label: 'Caixa Final', value: formatBrl(round.cashFinal), sign: '=', highlight: true },
   ];
 
   return (
@@ -670,11 +679,7 @@ export default function ResultsPage() {
   // ── States ────────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32 text-muted-foreground">
-        Carregando resultados...
-      </div>
-    );
+    return <ResultsSkeleton />;
   }
 
   if (loadError) {
@@ -748,12 +753,7 @@ export default function ResultsPage() {
                 key={entry.storeId}
                 className={idx === 1 ? '-translate-y-5' : ''}
               >
-                <PodiumCard entry={entry} />
-                {/* Podium base strip */}
-                <div
-                  className="h-3 rounded-b-xl mt-1.5"
-                  style={rankHeaderStyle(entry.rank)}
-                />
+                <PodiumCard entry={entry} podiumBaseStrip />
               </div>
             ))}
           </div>

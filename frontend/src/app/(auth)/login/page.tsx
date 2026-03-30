@@ -3,6 +3,7 @@
 import { useState, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ function LoginForm() {
 
     try {
       await login(email, password);
+      toast.success('Bem-vindo de volta!');
       const from = searchParams.get('from');
       const user = useAuthStore.getState().user;
       if (from) {
@@ -33,7 +35,9 @@ function LoginForm() {
         router.push(user?.role === 'FACILITATOR' ? '/dashboard' : '/join');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao fazer login');
+      const message = err instanceof Error ? err.message : 'Erro ao fazer login';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -81,7 +85,7 @@ function LoginForm() {
         )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium text-foreground">
+          <Label htmlFor="email" className="text-sm text-muted-foreground">
             E-mail
           </Label>
           <Input
@@ -97,7 +101,7 @@ function LoginForm() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-sm font-medium text-foreground">
+          <Label htmlFor="password" className="text-sm text-muted-foreground">
             Senha
           </Label>
           <Input

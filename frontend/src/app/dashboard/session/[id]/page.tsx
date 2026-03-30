@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import { formatBrl } from '@/lib/format-brl';
 import {
   Card,
   CardContent,
@@ -13,7 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock } from 'lucide-react';
+import { Check, Clock, Store } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { SessionSkeleton } from '@/components/skeletons/session-skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,8 +101,7 @@ const ROLE_LABELS: Record<StoreRole, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const brl = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const brl = formatBrl;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 function getActiveStepIndex(status: SessionStatus): number {
@@ -201,11 +203,7 @@ export default function SessionManagementPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-muted-foreground">Carregando sessão...</p>
-      </div>
-    );
+    return <SessionSkeleton />;
   }
 
   if (error || !session || !statusData) {
@@ -254,7 +252,7 @@ export default function SessionManagementPage() {
                 <p className="text-xs uppercase tracking-wide text-muted-foreground mb-0.5">
                   Fase atual
                 </p>
-                <h2 className="text-lg font-bold">{PHASE_LABEL[status]}</h2>
+                <h2 className="font-display text-lg font-bold text-foreground">{PHASE_LABEL[status]}</h2>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{confirmedCount}/{storeCount} POs confirmados</span>
@@ -262,7 +260,10 @@ export default function SessionManagementPage() {
             </div>
 
             {/* Stepper */}
-            <PhaseStepper activeIndex={getActiveStepIndex(status)} />
+            <Separator />
+            <div className="pt-4">
+              <PhaseStepper activeIndex={getActiveStepIndex(status)} />
+            </div>
           </CardContent>
         </Card>
 
@@ -270,10 +271,11 @@ export default function SessionManagementPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Session info */}
           <Card className="lg:col-span-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Sessão</CardTitle>
+            <CardHeader className="pb-0">
+              <CardTitle className="text-base font-semibold font-display">Sessão</CardTitle>
             </CardHeader>
-            <CardContent>
+            <Separator className="my-3" />
+            <CardContent className="pt-0">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <InfoTile label="Demanda Total" value={session.totalDemand.toLocaleString('pt-BR')} />
                 <InfoTile label="Caixa Inicial" value={brl(session.initialCash)} />
@@ -304,12 +306,13 @@ export default function SessionManagementPage() {
 
           {/* Contextual actions */}
           <Card className="border-l-4 border-l-accent">
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-0">
               <CardTitle className="font-display font-semibold text-sm uppercase tracking-wide">
                 Ações
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <Separator className="my-3" />
+            <CardContent className="space-y-3 pt-0">
               {actionError && (
                 <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">
                   {actionError}
@@ -332,7 +335,9 @@ export default function SessionManagementPage() {
         {/* ── Stores ── */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">Lojas ({storeCount}/4)</h2>
+            <h2 className="font-display text-base font-semibold text-foreground">
+              Lojas ({storeCount}/4)
+            </h2>
             {canCreateStore && (
               <Button size="sm" variant="outline" onClick={() => setShowCreateStore((v) => !v)}>
                 {showCreateStore ? 'Cancelar' : '+ Nova loja'}
@@ -370,9 +375,24 @@ export default function SessionManagementPage() {
           )}
 
           {storeCount === 0 ? (
-            <Card>
-              <CardContent className="py-10 text-center text-muted-foreground text-sm">
-                Nenhuma loja criada ainda. Crie até 4 lojas para os times.
+            <Card className="shadow-sm border">
+              <CardContent className="py-12 px-6 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                  <Store className="h-7 w-7" aria-hidden />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-display text-base font-semibold text-foreground">
+                    Nenhuma loja criada ainda
+                  </p>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Crie até 4 lojas para gerar códigos de acesso e os times entrarem na partida.
+                  </p>
+                </div>
+                {canCreateStore && (
+                  <Button type="button" size="sm" onClick={() => setShowCreateStore(true)}>
+                    + Nova loja
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -561,7 +581,7 @@ function ContextualActions({
     case 'FINISHED':
       return (
         <div className="space-y-2">
-          <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5 border border-green-200">
+          <p className="text-xs text-accent bg-accent/10 rounded px-2 py-1.5 border border-accent/25">
             Sessão finalizada. Confira o placar final!
           </p>
           <Button
@@ -614,7 +634,9 @@ function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
       : 'border-l-4 border-l-muted';
 
   return (
-    <Card className={borderClass}>
+    <Card
+      className={`${borderClass} shadow-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md`}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="font-display font-semibold text-base">
