@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '@/stores/authStore';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const SOCKET_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
 
 type SocketPool = { socket: Socket; token: string; refs: number };
 
@@ -39,7 +39,9 @@ export function useSocketConnectionState(): SocketConnectionState {
   const token = useAuthStore((s) => s.token);
   const [state, setState] = useState<SocketConnectionState>('disconnected');
 
-  useEffect(() => {
+  // useLayoutEffect: aplica estado real antes do paint — evita flash vermelho quando o pool
+  // já tem socket conectado ou quando `connect` dispara antes dos listeners no mesmo tick.
+  useLayoutEffect(() => {
     if (!token) {
       setState('disconnected');
       return;
@@ -47,21 +49,24 @@ export function useSocketConnectionState(): SocketConnectionState {
 
     const socket = acquireSocket(token);
 
+    // Estado inicial síncrono: o evento `connect` pode já ter ocorrido antes dos .on().
+    setState(socket.connected ? 'connected' : 'disconnected');
+
     const onConnect = () => setState('connected');
     const onDisconnect = () => setState('disconnected');
     const onReconnectAttempt = () => setState('reconnecting');
+    const onReconnect = () => setState('connected');
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('reconnect_attempt', onReconnectAttempt);
-
-    if (socket.connected) setState('connected');
-    else setState('disconnected');
+    socket.on('reconnect', onReconnect);
 
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('reconnect_attempt', onReconnectAttempt);
+      socket.off('reconnect', onReconnect);
       releaseSocket();
     };
   }, [token]);
