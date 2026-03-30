@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo do usuário — Cadastro:
+ * 1) Escolhe Jogador ou Facilitador, preenche nome, e-mail e senha (indicador visual de força só orienta).
+ * 2) POST `/auth/register` — em sucesso vai para `/join` ou `/dashboard` conforme o papel.
+ * 3) Erros da API aparecem no cartão e no toast.
+ */
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -10,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
+/** Avalia comprimento e variedade da senha só para feedback visual (não substitui validação do backend). */
 function getPasswordStrength(pwd: string): { level: 0 | 1 | 2 | 3 | 4; label: string } {
   if (!pwd) return { level: 0, label: '' };
   if (pwd.length < 6) return { level: 1, label: 'Fraca' };
@@ -33,6 +40,9 @@ const STRENGTH_TEXT: Record<number, string> = {
   4: 'text-accent',
 };
 
+/**
+ * Tela de criação de conta com seletor de papel; mostra o formulário completo e barras de força da senha.
+ */
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuthStore();

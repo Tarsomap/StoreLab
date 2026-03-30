@@ -1,3 +1,4 @@
+/** Layout de carregamento do Plano Operacional (duas colunas + cartões). */
 export function POSkeleton() {
   return (
     <div className="max-w-[1400px] mx-auto space-y-5 pb-10 animate-pulse">

@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * Fluxo do facilitador — Dashboard (`/dashboard`):
+ * 1) Ao abrir, GET `/sessions` lista todas as partidas dele; enquanto carrega mostra esqueleto.
+ * 2) Pode criar sessão (POST `/sessions`) — nome, demanda, caixa; nova sessão aparece no topo da lista.
+ * 3) Vê KPIs, destaque da primeira sessão ativa, grade de sessões ativas (clique vai para `/dashboard/session/[id]`).
+ * 4) Sessões finalizadas alimentam gráfico de EBITDA % (GET `/results/:id/ranking`) e tabela “Histórico” com link para resultados públicos.
+ */
 import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -79,6 +86,7 @@ const STATUS_PROGRESS: Record<string, string> = {
   FINISHED: 'Finalizada',
 };
 
+/** Extrai nome da loja campeã de vários formatos possíveis da API (compatibilidade). */
 function formatSessionWinner(session: Session): string {
   if (typeof session.winnerStoreName === 'string' && session.winnerStoreName.trim()) {
     return session.winnerStoreName.trim();
@@ -97,6 +105,7 @@ function formatSessionWinner(session: Session): string {
   return '—';
 }
 
+/** Número de lojas na sessão a partir de `storeCount` ou tamanho do array `stores`. */
 function formatStoreCount(session: Session): string {
   if (typeof session.storeCount === 'number' && Number.isFinite(session.storeCount)) {
     return String(session.storeCount);
@@ -107,6 +116,7 @@ function formatStoreCount(session: Session): string {
   return '—';
 }
 
+/** Soma lojas só se todas as sessões finalizadas tiverem `storeCount` — senão mostra traço no KPI. */
 function sumTrainedStoresForFinished(finished: Session[]): number | '—' {
   if (finished.length === 0) return 0;
   let sum = 0;
@@ -120,6 +130,7 @@ function sumTrainedStoresForFinished(finished: Session[]): number | '—' {
   return sum;
 }
 
+/** Texto “confirmados/total” para o cartão em destaque quando a API enviar os dois números. */
 function formatConfirmedStores(session: Session): string {
   const c = session.confirmedPos;
   const sc = session.storeCount;
@@ -152,6 +163,7 @@ const STORE_LINE_COLORS = [
 
 type EbitdaChartRow = { round: number } & Record<string, number | null>;
 
+/** Monta linhas do gráfico: eixo X = rodada 1–3, uma série por `storeId` com EBITDA % daquela rodada. */
 function buildEbitdaChartRows(ranking: RankingEntry[]): EbitdaChartRow[] {
   return ROUNDS_AXIS.map((round) => {
     const row: EbitdaChartRow = { round };
@@ -163,10 +175,12 @@ function buildEbitdaChartRows(ranking: RankingEntry[]): EbitdaChartRow[] {
   });
 }
 
+/** Evita gráfico vazio se o ranking não tiver séries por rodada. */
 function rankingHasRoundData(ranking: RankingEntry[]): boolean {
   return ranking.some((e) => e.rounds.length > 0);
 }
 
+/** Caixa flutuante do gráfico Recharts listando cada loja e o % de EBITDA na rodada sob o cursor. */
 function EbitdaLineTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   const roundLabel =
@@ -195,6 +209,10 @@ function EbitdaLineTooltip({ active, payload, label }: TooltipContentProps) {
   );
 }
 
+/**
+ * Bloco “Desempenho histórico”: seletor de sessão finalizada + GET ranking + gráfico de linhas.
+ * **API:** ao mudar sessão, busca `/results/:id/ranking`; **tela:** mostra loading, erro ou gráfico.
+ */
 function HistoricPerformanceSection({ finishedSessions }: { finishedSessions: Session[] }) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     () => finishedSessions[0]?.id ?? null,
@@ -363,6 +381,7 @@ function HistoricPerformanceSection({ finishedSessions }: { finishedSessions: Se
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+/** Página principal do facilitador após login — lista, cria e resume sessões. */
 export default function DashboardPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);

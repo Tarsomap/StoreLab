@@ -1,3 +1,4 @@
+/** Layout de carregamento da página de ranking/resultados. */
 export function ResultsSkeleton() {
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-16 animate-pulse">

@@ -7,11 +7,20 @@ import { StoresService } from './stores.service';
 import { TransferDto } from './dto/transfer.dto';
 import { TransferResponse } from './interfaces/store.interface';
 
+/**
+ * Endpoint REST aninhado na sessão: `POST /sessions/:sessionId/transfers`.
+ * Fica separado do `StoresController` para a URL refletir a regra de negócio — “movimentação de pessoas dentro desta partida”,
+ * sempre decidida pelo facilitador (como no varejo real a matriz realoca gente entre filiais, não o cliente na fila).
+ */
 @Controller('sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SessionTransferController {
+  /** Delega a lógica pesada ao StoresService.transfer (validações de fase e limite). */
   constructor(private readonly storesService: StoresService) {}
 
+  /**
+   * Registra a troca de loja de um jogador, somente na fase RECONFIGURATION e com todas as validações do serviço.
+   */
   @Post(':sessionId/transfers')
   @Roles(UserRole.FACILITATOR)
   transfer(

@@ -1,3 +1,4 @@
+/** Rótulo acessível para inputs (associação por `htmlFor` no uso). */
 import { forwardRef, LabelHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 

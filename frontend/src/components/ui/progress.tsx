@@ -1,7 +1,8 @@
+/** Barra de progresso só com Tailwind — preenchimento animado conforme `value` 0–100. */
 import { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-/** Barra de progresso estilo shadcn/ui, sem dependência Radix (apenas Tailwind). */
+/** Preenche a faixa da esquerda para a direita até `value`% (útil para “X de Y responderam”). */
 export function Progress({
   className,
   value,

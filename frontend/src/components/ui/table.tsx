@@ -1,3 +1,4 @@
+/** Tabela responsiva com scroll horizontal automático no wrapper. */
 import { forwardRef, HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 

@@ -11,12 +11,28 @@ import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 
+/**
+ * Conteúdo mínimo extraído do JWT na conexão WebSocket (id, e-mail e papel).
+ * Espelha o payload do login para sabermos se o socket é facilitador ou jogador sem consultar o banco a cada mensagem.
+ */
 interface JwtPayload {
   sub: string;
   email: string;
   role: string;
 }
 
+/**
+ * Porta de entrada Socket.io do StoreLab: mantém uma “linha aberta” entre o servidor e o navegador do jogador.
+ *
+ * Por que WebSocket e não só HTTP: em HTTP cada atualização exigiria o front ficar perguntando de novo e de novo (enquete)
+ * ou o usuário atualizar a página. Com a linha aberta, o servidor **empurra** avisos na hora — rodada começou, plano mudou,
+ * resultado saiu — e todos que estão na mesma “sala” veem ao mesmo tempo, como um rádio da partida.
+ *
+ * Salas (rooms): `session:{id}` reúne quem acompanha a partida; `facilitator:{id}` é um subconjunto só dos facilitadores
+ * daquela sessão; `store:{id}` reúne quem está focado naquela loja (time editando PO ou quiz).
+ *
+ * CORS `origin: '*'` deixa qualquer origem conectar no desenvolvimento; em produção costuma-se restringir ao domínio do front.
+ */
 @Injectable()
 @WebSocketGateway({ cors: { origin: '*' } })
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -25,10 +41,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(GameGateway.name);
 
+  /**
+   * JwtService reutiliza o mesmo segredo do REST para provar que o socket pertence a um usuário já autenticado.
+   */
   constructor(private readonly jwtService: JwtService) {}
 
-  // ─── Connection lifecycle ────────────────────────────────────────────────────
+  // ─── Ciclo de vida da conexão (linha telefônica ligada / desligada) ─────────
 
+  /**
+   * Chamado quando o navegador abre o WebSocket: exigimos o mesmo token do login (no auth ou na query).
+   *
+   * Por que fechar sem token ou com token inválido: senão qualquer um ouviria eventos da partida sem estar logado —
+   * seria vazar informação de jogo e quebrar a mesma confiança do REST. Guardamos userId e userRole no `socket.data`
+   * para decidir salas extras (ex.: facilitador) sem reler o JWT a cada evento.
+   */
   handleConnection(socket: Socket): void {
     const token =
       (socket.handshake.auth?.token as string) ??
@@ -51,12 +77,23 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /**
+   * Chamado quando o jogador fecha a aba ou cai a internet — só registramos para diagnóstico; o Socket.io limpa a sala sozinho.
+   */
   handleDisconnect(socket: Socket): void {
     this.logger.log(`Disconnected: ${socket.id}`);
   }
 
-  // ─── Client → Server events ──────────────────────────────────────────────────
+  // ─── Eventos do cliente → servidor (o front “liga” para entrar numa sala) ───
 
+  /**
+   * O cliente avisa que quer ouvir tudo da **sessão** informada (entra na sala `session:{sessionId}`).
+   *
+   * **Quem deve chamar:** qualquer tela ligada à partida (facilitador ou jogador que já entrou no jogo).
+   * **Quem recebe broadcasts dessa sala depois:** todos os sockets que mandaram join para essa mesma sessão.
+   * Se o usuário for **facilitador**, entra também em `facilitator:{sessionId}` para receber avisos só do painel mestre
+   * (ex.: loja confirmou PO), sem poluir o celular de todo jogador com detalhe operacional do facilitador.
+   */
   @SubscribeMessage('join:session')
   handleJoinSession(
     @ConnectedSocket() socket: Socket,
@@ -72,6 +109,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`${socket.id} joined ${room}`);
   }
 
+  /**
+   * O cliente pede para ouvir eventos **da loja** (sala `store:{storeId}`) — típico do time montando plano ou quiz juntos.
+   *
+   * **Quem recebe:** só sockets que deram join nessa loja (colegas do mesmo time + telas abertas naquela unidade),
+   * não necessariamente todos da sessão inteira, para não vazar edição de uma loja para outra.
+   */
   @SubscribeMessage('join:store')
   handleJoinStore(
     @ConnectedSocket() socket: Socket,
@@ -82,39 +125,66 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`${socket.id} joined ${room}`);
   }
 
-  // ─── Server → Client emit methods ────────────────────────────────────────────
+  // ─── Emissões servidor → cliente (servidor fala na sala) ────────────────────
 
-  /** Emitted to store room when any PO decision changes */
+  /**
+   * **Quando dispara:** alguém altera decisões do plano operacional colaborativo (PO) da loja.
+   * **Quem recebe:** todos conectados na sala `store:{storeId}` (time da loja vendo a mesma tabela ao vivo).
+   * **Por que aqui:** edição colaborativa precisa refletir na hora; HTTP só com polling deixaria a sensação de atraso ou conflito.
+   */
   emitPlanUpdated(storeId: string, plan: unknown): void {
     this.emitToRoom(`store:${storeId}`, 'plan:updated', { plan });
   }
 
-  /** Emitted to facilitator room when a store confirms its PO */
+  /**
+   * **Quando dispara:** uma loja **confirma** o plano operacional — marco para o facilitador saber que aquele time fechou a etapa.
+   * **Quem recebe:** apenas sockets na sala `facilitator:{sessionId}` (facilitadores daquela partida), não todos os jogadores,
+   * para o painel mestre atualizar listas de status sem encher o chat da loja com ruído administrativo.
+   */
   emitStoreConfirmed(sessionId: string, storeId: string): void {
     this.emitToRoom(`facilitator:${sessionId}`, 'store:confirmed', { storeId });
   }
 
-  /** Emitted to session room when a round starts */
+  /**
+   * **Quando dispara:** a sessão avança de estado para uma **rodada ativa** (1, 2 ou 3) — após o facilitador destravar a fase.
+   * **Quem recebe:** todos em `session:{sessionId}` (toda a sala da partida alinhada na mesma contagem regressiva mental).
+   */
   emitRoundStarted(sessionId: string, round: number): void {
     this.emitToRoom(`session:${sessionId}`, 'round:started', { round });
   }
 
-  /** Emitted to session room after the engine finishes calculating a round */
+  /**
+   * **Quando dispara:** o motor terminou de calcular a rodada e os resultados foram gravados.
+   * **Quem recebe:** todos em `session:{sessionId}` — ranking e números aparecem nas telas sem F5.
+   * **Por que WebSocket:** resultado é evento único e urgente; enfileirar requisições GET manualmente seria mais lento e propenso a “ainda não atualizou”.
+   */
   emitRoundResults(sessionId: string, results: unknown[]): void {
     this.emitToRoom(`session:${sessionId}`, 'round:results', { results });
   }
 
-  /** Emitted to session room when the session reaches FINISHED */
+  /**
+   * **Quando dispara:** a sessão chega ao estado **FINISHED** (fim de jogo).
+   * **Quem recebe:** todos em `session:{sessionId}` com o payload de resultado final (ex.: pódio).
+   * Assim jogadores e facilitador veem o encerramento ao mesmo tempo, fechando a experiência como apresentação ao vivo.
+   */
   emitSessionFinished(sessionId: string, finalResults: unknown[]): void {
     this.emitToRoom(`session:${sessionId}`, 'session:finished', { finalResults });
   }
 
-  /** Emitted to store room when an SLA event occurs for that store */
+  /**
+   * **Quando dispara:** o motor registrou um **incidente de SLA** (CAPEX não implementado sorteado) para aquela loja.
+   * **Quem recebe:** sala `store:{storeId}` — o time sente o “apagão” ou perda na hora, reforçando a consequência da decisão.
+   * Não vai para a sessão inteira para não dar spoiler estratégico às outras equipes antes da hora.
+   */
   emitSlaEvent(storeId: string, slaEvent: unknown): void {
     this.emitToRoom(`store:${storeId}`, 'sla:event', { slaEvent });
   }
 
-  /** Emitted to store room when a player submits their quiz answers */
+  /**
+   * **Quando dispara:** um jogador **envia respostas** do quiz (ou progresso parcial contabilizado no serviço que chama isto).
+   * **Quem recebe:** colegas na mesma loja (`store:{storeId}`) — útil para mostrar “fulano já respondeu” no grupo.
+   * **Quem não recebe:** outras lojas e quem não entrou na sala da loja (precisa ter feito `join:store`).
+   */
   emitQuizPlayerAnswered(
     storeId: string,
     payload: { userId: string; storeId: string; round: number; answered: number; total: number },
@@ -122,8 +192,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToRoom(`store:${storeId}`, 'quiz:player-answered', payload);
   }
 
-  // ─── Private ─────────────────────────────────────────────────────────────────
+  // ─── Interno ────────────────────────────────────────────────────────────────
 
+  /**
+   * Envia um evento nomeado para todos os sockets que estão na sala indicada (quem não entrou na sala simplesmente não escuta).
+   */
   private emitToRoom(room: string, event: string, data: unknown): void {
     if (this.server) {
       this.server.to(room).emit(event, data);

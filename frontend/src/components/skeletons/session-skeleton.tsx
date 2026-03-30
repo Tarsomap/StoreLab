@@ -1,3 +1,4 @@
+/** Layout de carregamento da página de gestão de sessão (facilitador). */
 export function SessionSkeleton() {
   return (
     <div className="max-w-5xl mx-auto space-y-5 animate-pulse">

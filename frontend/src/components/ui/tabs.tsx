@@ -1,5 +1,6 @@
 'use client';
 
+/** Abas simples com contexto React: uma área visível por vez conforme `defaultValue`. */
 import { createContext, useContext, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +20,7 @@ interface TabsProps {
   className?: string;
 }
 
+/** Provedor de aba ativa; filhos usam `TabsTrigger` / `TabsContent` com o mesmo `value`. */
 export function Tabs({ defaultValue, children, className }: TabsProps) {
   const [active, setActive] = useState(defaultValue);
   return (
@@ -28,6 +30,7 @@ export function Tabs({ defaultValue, children, className }: TabsProps) {
   );
 }
 
+/** Faixa que agrupa os botões das abas. */
 export function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -41,6 +44,7 @@ export function TabsList({ children, className }: { children: React.ReactNode; c
   );
 }
 
+/** Botão que troca a aba ativa para o `value` informado. */
 export function TabsTrigger({
   value,
   children,
@@ -68,6 +72,7 @@ export function TabsTrigger({
   );
 }
 
+/** Conteúdo exibido somente quando a aba ativa coincide com `value`. */
 export function TabsContent({
   value,
   children,

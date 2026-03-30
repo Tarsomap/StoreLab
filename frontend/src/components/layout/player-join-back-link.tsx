@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-/** Navegação de volta ao fluxo de entrada (código + papel) — visão jogador nas rotas /store/... */
+/**
+ * Botão “Voltar para Entrar na Sessão” no topo das rotas `/store/...` — leva de volta ao `/join` para trocar de loja ou código.
+ */
 export function PlayerJoinBackLink() {
   const router = useRouter();
 

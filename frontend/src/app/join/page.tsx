@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo do jogador — Entrar na partida (`/join`):
+ * 1) Vê lojas em que já está (GET `/stores/mine`) com atalho para o PO.
+ * 2) Digita código de 6 caracteres + papel → POST `/stores/join`; sucesso mostra confirmação e redireciona ao PO em ~2s.
+ * 3) Pode colar código inteiro no primeiro campo; navegação entre caixas com teclado.
+ */
 import { useState, useEffect, useRef, FormEvent, ClipboardEvent, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
@@ -40,6 +46,7 @@ interface UserStoreEntry {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/** Tela de entrada do jogador na loja com código e seleção de papel. */
 export default function JoinPage() {
   const router = useRouter();
 

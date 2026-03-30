@@ -13,8 +13,15 @@ import {
   ShrinkageCategoryInput,
 } from './interfaces';
 
+/**
+ * Orquestra o cálculo de uma rodada: carrega sessão e planos, chama cada subserviço na ordem correta
+ * e grava resultados no banco, além de avisar o front em tempo real (SLA e fim da rodada).
+ */
 @Injectable()
 export class EngineService {
+  /**
+   * Injeta persistência, gateway e os serviços de domínio do motor (CSAT, demanda, financeiro, etc.).
+   */
   constructor(
     private readonly prisma: PrismaService,
     private readonly gameGateway: GameGateway,
@@ -25,6 +32,19 @@ export class EngineService {
     private readonly slaService: SlaService,
   ) {}
 
+  /**
+   * Executa o pipeline completo da rodada para todas as lojas da sessão.
+   *
+   * Fluxo resumido: (1) carregar plano certo (versão 1 na rodada 1, versão 2 nas demais);
+   * (2) montar entradas por loja (categorias, CAPEX, caixa usado, nota do quiz);
+   * (3) calcular indicadores e demanda; (4) receita por categoria e SLA sobre receita bruta;
+   * (5) na rodada 3, shrinkage com estoque não vendido acumulado; (6) limite de juros conforme regra
+   * pós-rodada 1; (7) EBITDA; (8) upsert em roundResult e slaEvent; (9) emitir resultados via WebSocket.
+   *
+   * @param sessionId - Sessão a processar.
+   * @param round - 1, 2 ou 3.
+   * @throws NotFoundException se a sessão não existir.
+   */
   async runRound(sessionId: string, round: number): Promise<void> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
@@ -48,6 +68,7 @@ export class EngineService {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
+    // Rodada 1 usa configuração/plano versão 1; rodadas 2 e 3 usam versão 2 (reconfiguração do jogo).
     const configVersion = round === 1 ? 1 : 2;
 
     const storeInputs: {
@@ -65,12 +86,14 @@ export class EngineService {
       if (!plan) continue;
 
       const quizAnswer = store.quizAnswers.find((q) => q.round === round);
+      // Banco guarda percentual 0–100; o motor usa decimal 0–1 para combinar com CSAT e limites.
       const quizScorePercentage = quizAnswer ? quizAnswer.scorePercentage / 100 : 0;
 
       const categories: CategoryEngineInput[] = plan.categoryDecisions.map((dec) => {
         const sessionConfig = session.categoryConfigs.find(
           (c) => c.categoryId === dec.categoryId,
         );
+        // Facilitador pode ajustar estoque global da sessão; se não houver, cai no padrão da categoria.
         const sessionStockAvailable =
           sessionConfig?.stockAvailable ?? dec.category.stockAvailable;
 
@@ -98,6 +121,7 @@ export class EngineService {
         implemented: dec.implemented,
       }));
 
+      // Caixa usado na rodada = compra de estoque + CAPEX efetivamente implementado (saída de caixa).
       const stockCost = categories.reduce(
         (sum, c) => sum + c.stockPurchased * c.unitCost,
         0,
@@ -143,6 +167,7 @@ export class EngineService {
         0,
       );
 
+      // SLA usa a receita bruta antes de “descontar” a perda — é a base para estimar perda diária.
       const slaResult = this.slaService.computeEvents({
         sessionId,
         storeId: storeInput.storeId,
@@ -267,7 +292,7 @@ export class EngineService {
       }
     }
 
-    // Emit round results to the session room
+    // Notifica a sala da sessão com o ranking/valores recém-calculados para atualizar dashboards ao vivo.
     const savedResults = await this.prisma.roundResult.findMany({
       where: { sessionId, round },
       include: { store: { select: { name: true } } },
@@ -275,6 +300,20 @@ export class EngineService {
     this.gameGateway.emitRoundResults(sessionId, savedResults);
   }
 
+  /**
+   * Monta, para a rodada 3, o estoque não vendido acumulado por categoria.
+   *
+   * Somamos: (a) não vendido desta rodada (vem das receitas por categoria); (b) para cada plano anterior
+   * (versões 1 e 2), estimamos não vendido usando a demanda da rodada correspondente ao configVersion do plano.
+   * A fórmula sold = comprado × demandShare daquele resultado aproxima quantas unidades saíram; o que sobrou
+   * incrementa o acumulado. Assim o shrinkage final pune estoque parado ao longo do jogo, não só o da última compra.
+   *
+   * @param sessionId - Sessão (escopo dos resultados anteriores).
+   * @param storeId - Loja analisada.
+   * @param currentCategories - Metadados atuais por categoria (taxas e custo).
+   * @param currentCategoryRevenues - Inclui unsoldStock desta rodada por categoria.
+   * @returns Lista pronta para o ShrinkageService.
+   */
   private async buildShrinkageInputs(
     sessionId: string,
     storeId: string,
@@ -305,6 +344,7 @@ export class EngineService {
       if (!result) continue;
 
       for (const dec of plan.categoryDecisions) {
+        // Sem CMV na rodada de referência, tratamos como nada vendido (evita divisão estranha).
         const sold = result.costOfGoods > 0
           ? dec.stockPurchased * (result.demandShare)
           : 0;
@@ -324,6 +364,20 @@ export class EngineService {
     }));
   }
 
+  /**
+   * Define até quanto de caixa usado não gera juros nesta rodada.
+   *
+   * Na rodada 1 o limite é simplesmente o caixa inicial da sessão — ainda não há histórico.
+   * Nas rodadas seguintes, partimos do caixa inicial, subtraímos o que a loja já gastou na rodada 1
+   * e somamos o custo dos CAPEX da versão 1 do plano que ficaram só no papel (não implementados),
+   * porque esse dinheiro “não saiu” e volta a compor o colchão para cálculo de juros, alinhado à regra do jogo.
+   *
+   * @param initialCash - Caixa inicial da sessão.
+   * @param sessionId - Sessão.
+   * @param storeId - Loja.
+   * @param round - Rodada atual.
+   * @returns Valor-limite (threshold) em reais para a fórmula de juros do FinancialService.
+   */
   private async computeInterestThreshold(
     initialCash: number,
     sessionId: string,
@@ -347,6 +401,7 @@ export class EngineService {
       include: { capexDecisions: { include: { capexOption: true } } },
     });
 
+    // CAPEX previsto mas não comprado na v1 não consumiu caixa — recompõe o limite para juros nas rodadas 2 e 3.
     const unimplementedCapexCost = plan1
       ? plan1.capexDecisions
           .filter((d) => !d.implemented)

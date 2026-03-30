@@ -1,3 +1,4 @@
+/** Linha divisória horizontal ou vertical entre seções de cartão. */
 import { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 

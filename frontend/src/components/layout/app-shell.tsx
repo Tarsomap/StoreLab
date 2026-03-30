@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Casca visual do app: barra superior fixa (marca, ponto de WebSocket, nome, sair) e, para facilitador, sidebar contextual.
+ * Busca nome da sessão quando a URL é `/dashboard/session/[id]/...` para mostrar no menu lateral.
+ */
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -16,11 +20,16 @@ interface AppShellProps {
   userRole?: UserRole;
 }
 
+/** Lê o id da sessão na rota do dashboard para carregar o título da partida na sidebar. */
 function extractSessionId(pathname: string): string | null {
   const match = pathname.match(/^\/dashboard\/session\/([^/]+)/);
   return match ? match[1] : null;
 }
 
+/**
+ * @param children - Conteúdo da página atual (área principal com fundo `background`).
+ * @param userRole - Se `FACILITATOR`, exibe sidebar; jogador fica só com TopBar e conteúdo full width.
+ */
 export default function AppShell({ children, userRole }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();

@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo do jogador — Quiz (`/store/[storeId]/quiz`):
+ * 1) Descobre rodada pela fase da sessão; GET `/stores/:id/quiz?round=` traz perguntas ou “já respondeu”.
+ * 2) WebSocket `quiz:player-answered` na sala da loja atualiza “quantos membros responderam” em tempo real.
+ * 3) POST `/stores/:id/quiz/submit` envia todas as respostas; a tela mostra aproveitamento e bloqueia novo envio.
+ */
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -63,6 +69,7 @@ interface PlayerAnsweredPayload {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Número do quiz (1–3) coerente com o status da sessão, igual à regra do facilitador. */
 function roundFromStatus(status: string): number {
   if (status === 'ROUND_3') return 3;
   if (status === 'RECONFIGURATION' || status === 'ROUND_2') return 2;
@@ -71,6 +78,7 @@ function roundFromStatus(status: string): number {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/** Questionário da rodada para o time da loja; progresso coletivo via Socket.io. */
 export default function QuizPage() {
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;

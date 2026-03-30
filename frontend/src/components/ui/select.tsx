@@ -1,5 +1,6 @@
 'use client';
 
+/** Lista suspensa acessível (Radix): gatilho, conteúdo e itens estilizados para formulários e filtros. */
 import * as React from 'react';
 import { forwardRef } from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';

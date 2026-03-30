@@ -1,5 +1,6 @@
 'use client';
 
+/** Painel lateral deslizante (Radix Dialog): usado no progresso do quiz do facilitador. */
 import * as React from 'react';
 import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';

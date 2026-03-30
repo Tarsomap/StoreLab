@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
+/** Textos amigáveis para cada valor de `SessionStatus` vindo da API. */
 export const SESSION_STATUS_LABEL: Record<string, string> = {
   SETUP: 'Configuração',
   ROUND_1_CONFIG: 'Config. Rodada 1',
@@ -21,6 +22,11 @@ const SESSION_STATUS_CLASS: Record<string, string> = {
   FINISHED: 'bg-primary/10 text-primary border-transparent',
 };
 
+/**
+ * Pill colorida com o estágio da partida (configuração, rodada em andamento, finalizada, etc.).
+ *
+ * @param status - String do enum de status da sessão.
+ */
 export function SessionStatusBadge({ status }: { status: string }) {
   const label = SESSION_STATUS_LABEL[status] ?? status;
   const cls =

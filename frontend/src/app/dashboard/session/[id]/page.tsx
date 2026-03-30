@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * Fluxo do facilitador — Gestão de uma sessão (`/dashboard/session/[id]`):
+ * 1) Carrega detalhe da sessão e GET `/sessions/:id/status` (lojas, POs confirmados, códigos, EBITDA último).
+ * 2) Em SETUP pode criar lojas (POST `/stores`); vê stepper de fases e ações contextuais (avançar PATCH `/advance`, executar rodada POST `/execute`).
+ * 3) Link para gerenciar quiz e, quando aplicável, bloco `SessionQuizProgress` (WebSocket + API de score por loja).
+ * 4) Cards de loja com copiar código; reconfiguração lembra transferências (rota separada no app).
+ */
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
@@ -105,11 +112,12 @@ const ROLE_LABELS: Record<StoreRole, string> = {
 const brl = formatBrl;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
+/** Índice do passo no stepper visual conforme o enum de status da sessão. */
 function getActiveStepIndex(status: SessionStatus): number {
   return PHASE_STEPS.findIndex((s) => s.statuses.includes(status));
 }
 
-/** Rodada de quiz ativa para a fase atual (alinhado ao fluxo do jogador em /store/.../quiz). */
+/** Qual número de quiz (1–3) faz sentido exibir para o status atual — alinhado à página do jogador `/store/.../quiz`. */
 function facilitatorQuizRound(status: SessionStatus): 1 | 2 | 3 | null {
   switch (status) {
     case 'ROUND_1_CONFIG':
@@ -129,6 +137,7 @@ const FACILITATOR_QUIZ_MIN_QUESTIONS = 10;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+/** Painel operacional da partida: fase, lojas, ações e progresso de quiz. */
 export default function SessionManagementPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -476,6 +485,7 @@ export default function SessionManagementPage() {
 
 // ── PhaseStepper ──────────────────────────────────────────────────────────────
 
+/** Linha de etapas (configuração → rodadas → resultado) com nó ativo e concluído. */
 function PhaseStepper({ activeIndex }: { activeIndex: number }) {
   return (
     <div className="flex items-center w-full overflow-x-auto pb-1">
@@ -522,6 +532,7 @@ function PhaseStepper({ activeIndex }: { activeIndex: number }) {
 
 // ── ContextualActions ─────────────────────────────────────────────────────────
 
+/** Props dos botões laterais que mudam conforme a fase (ex.: só avança R1 config se todos confirmaram PO). */
 interface ContextualActionsProps {
   status: SessionStatus;
   allConfirmed: boolean;
@@ -533,6 +544,10 @@ interface ContextualActionsProps {
   onNavigate: (path: string) => void;
 }
 
+/**
+ * Botões “Avançar” / “Executar rodada” / links para quiz, transferências e resultados conforme `status`.
+ * **API:** `onAdvance` → PATCH advance; `onExecute` → POST execute (dispara motor no backend).
+ */
 function ContextualActions({
   status,
   allConfirmed,
@@ -658,6 +673,7 @@ function ContextualActions({
 
 // ── InfoTile ──────────────────────────────────────────────────────────────────
 
+/** Pequeno bloco rótulo + valor monoespaçado na grade “Sessão”. */
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -669,6 +685,7 @@ function InfoTile({ label, value }: { label: string; value: string }) {
 
 // ── StoreCard ─────────────────────────────────────────────────────────────────
 
+/** Dados de uma loja no painel + callback de copiar código de acesso. */
 interface StoreCardProps {
   store: StoreStatus;
   initialCash: number;
@@ -676,6 +693,7 @@ interface StoreCardProps {
   onCopy: (code: string) => void;
 }
 
+/** Cartão da loja: código, status do PO, resumo de caixa/EBITDA e lista de papéis preenchidos ou vazios. */
 function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
   const ALL_ROLES: StoreRole[] = [
     'STORE_MANAGER',

@@ -1,3 +1,4 @@
+/** Campo de texto padrão do design system (bordas, foco e estado desabilitado alinhados ao Tailwind). */
 import { forwardRef, InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 

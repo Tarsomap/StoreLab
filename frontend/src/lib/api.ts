@@ -1,27 +1,35 @@
+/**
+ * Cliente HTTP do front: base URL do backend, cabeçalho JSON e token Bearer quando o usuário está logado.
+ * Mantém tokens em variáveis do módulo (sincronizadas pelo authStore) para não passar token em todo `fetch` manualmente.
+ * Em 401 tenta renovar com `/auth/refresh` uma vez — assim o jogador não cai do app só porque o JWT curto expirou.
+ */
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
-// ── Module-level token state ─────────────────────────────────────────────────
-// Populated by authStore on hydration / login / logout.
+// Preenchido pelo authStore ao carregar do localStorage, login ou logout.
 
 let _accessToken: string | null = null;
 let _refreshToken: string | null = null;
 let _onLogout: (() => void) | null = null;
 let _onTokensRefreshed: ((token: string) => void) | null = null;
 
+/** Chamado pelo store após login/logout/reidratação para o próximo `apiFetch` já levar o token certo. */
 export function setApiTokens(access: string | null, refresh: string | null) {
   _accessToken = access;
   _refreshToken = refresh;
 }
 
+/** Se o refresh falhar, disparamos logout para limpar UI e mandar ao login. */
 export function setOnLogout(fn: () => void) {
   _onLogout = fn;
 }
 
+/** Quando o backend devolve JWT novo, atualizamos o Zustand sem o usuário perceber. */
 export function setOnTokensRefreshed(fn: (token: string) => void) {
   _onTokensRefreshed = fn;
 }
 
-// ── Refresh logic ────────────────────────────────────────────────────────────
+// ── Renovação silenciosa ─────────────────────────────────────────────────────
 
 async function tryRefresh(): Promise<boolean> {
   if (!_refreshToken) return false;
@@ -44,8 +52,12 @@ async function tryRefresh(): Promise<boolean> {
   }
 }
 
-// ── Main fetch wrapper ───────────────────────────────────────────────────────
+// ── Fetch central ────────────────────────────────────────────────────────────
 
+/**
+ * `fetch` para a API do jogo: anexa Authorization, trata 401 com refresh, converte erro em ApiError legível.
+ * **Quando usar:** qualquer chamada REST; após sucesso o componente atualiza a tela (lista, formulário, etc.).
+ */
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -61,7 +73,6 @@ export async function apiFetch<T = unknown>(
 
   let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  // Auto-refresh on 401
   if (res.status === 401 && _refreshToken) {
     const refreshed = await tryRefresh();
     if (refreshed) {
@@ -82,8 +93,7 @@ export async function apiFetch<T = unknown>(
   return res.json() as Promise<T>;
 }
 
-// ── Typed helpers ────────────────────────────────────────────────────────────
-
+/** Atalhos GET/POST/PATCH/DELETE com o mesmo comportamento de `apiFetch`. */
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body: unknown) =>
@@ -95,8 +105,7 @@ export const api = {
   delete: <T>(path: string) => apiFetch<T>(path, { method: 'DELETE' }),
 };
 
-// ── Error class ──────────────────────────────────────────────────────────────
-
+/** Erro com status HTTP para o componente mostrar toast ou mensagem inline. */
 export class ApiError extends Error {
   constructor(
     message: string,

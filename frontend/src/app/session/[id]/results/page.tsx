@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo — Resultados / ranking (`/session/[id]/results`):
+ * 1) GET agrega resultados por loja e ranking; enquanto carrega mostra esqueleto.
+ * 2) WebSocket na sessão escuta `round:results` e `session:finished` para atualizar placar quando o motor roda ou a partida termina.
+ * 3) Pódio visual por colocação, detalhes por rodada e cores de medalha; facilitador e jogador usam a mesma rota autenticada.
+ */
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -63,7 +69,7 @@ const fmtNum = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits:
 
 const ebitdaClass = (pct: number) => (pct >= 0 ? 'text-accent' : 'text-destructive');
 
-// ── Rank inline styles (safe, no JIT issues) ─────────────────────────────────
+// ── Estilos inline por colocação (ouro/prata/bronze) — evitam classes Tailwind dinâmicas que o JIT poderia não gerar ──
 
 function rankHeaderStyle(rank: number): React.CSSProperties {
   switch (rank) {
@@ -117,6 +123,12 @@ const RANK_LABEL: Record<number, string> = {
 
 // ── PodiumCard ────────────────────────────────────────────────────────────────
 
+/**
+ * Cartão de uma loja no pódio: faixa de classificação, EBITDA médio e mini-barras por rodada.
+ *
+ * @param entry - Dados de ranking da loja.
+ * @param podiumBaseStrip - Ajuste visual opcional da base do pódio.
+ */
 function PodiumCard({
   entry,
   podiumBaseStrip = false,
@@ -246,6 +258,7 @@ function PodiumCard({
 
 // ── RankingTable ──────────────────────────────────────────────────────────────
 
+/** Tabela compacta com posição, loja e EBITDA médio para leitura rápida além do pódio. */
 function RankingTable({ ranking }: { ranking: RankingEntry[] }) {
   const maxRounds = Math.max(...ranking.map((r) => r.rounds.length), 0);
 
@@ -361,6 +374,7 @@ function RankingTable({ ranking }: { ranking: RankingEntry[] }) {
 
 // ── StoreBreakdownCard ────────────────────────────────────────────────────────
 
+/** Expansível: uma loja com todas as rodadas e métricas financeiras detalhadas. */
 function StoreBreakdownCard({
   store,
   rank,
@@ -426,6 +440,7 @@ function StoreBreakdownCard({
 
 // ── RoundBreakdown ────────────────────────────────────────────────────────────
 
+/** Lista os números de uma rodada específica (receita, EBITDA, caixa final, etc.). */
 function RoundBreakdown({
   round,
   initialCash,
@@ -610,6 +625,7 @@ function RoundBreakdown({
 
 // ── Facilitator back nav ───────────────────────────────────────────────────────
 
+/** Atalho para voltar ao painel da sessão quando o usuário é facilitador. */
 function FacilitatorResultsBackNav({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   return (
@@ -630,6 +646,7 @@ function FacilitatorResultsBackNav({ sessionId }: { sessionId: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/** Página de ranking final e histórico por loja com atualização em tempo real após cálculos do motor. */
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
   const sessionId = params.id;

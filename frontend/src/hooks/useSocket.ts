@@ -10,6 +10,7 @@ type SocketPool = { socket: Socket; token: string; refs: number };
 
 let pool: SocketPool | null = null;
 
+/** Abre ou reutiliza uma única conexão Socket.io por token (vários componentes compartilham a mesma “linha ao vivo”). */
 function acquireSocket(token: string): Socket {
   if (pool && pool.token !== token) {
     pool.socket.disconnect();
@@ -23,6 +24,7 @@ function acquireSocket(token: string): Socket {
   return pool.socket;
 }
 
+/** Quando o último hook desmonta, desliga o socket para não manter canal aberto à toa. */
 function releaseSocket(): void {
   if (!pool) return;
   pool.refs -= 1;
@@ -34,13 +36,14 @@ function releaseSocket(): void {
 
 export type SocketConnectionState = 'connected' | 'reconnecting' | 'disconnected';
 
-/** Estado da conexão Socket.io compartilhada (mesmo socket que useSocket). */
+/**
+ * Lê se a conexão tempo real está verde, amarela (tentando de novo) ou vermelha — usado no ponto da TopBar.
+ * Usa `useLayoutEffect` para alinhar o estado antes de pintar a tela e evitar um flash “desconectado” quando o pool já está ligado.
+ */
 export function useSocketConnectionState(): SocketConnectionState {
   const token = useAuthStore((s) => s.token);
   const [state, setState] = useState<SocketConnectionState>('disconnected');
 
-  // useLayoutEffect: aplica estado real antes do paint — evita flash vermelho quando o pool
-  // já tem socket conectado ou quando `connect` dispara antes dos listeners no mesmo tick.
   useLayoutEffect(() => {
     if (!token) {
       setState('disconnected');
@@ -49,7 +52,7 @@ export function useSocketConnectionState(): SocketConnectionState {
 
     const socket = acquireSocket(token);
 
-    // Estado inicial síncrono: o evento `connect` pode já ter ocorrido antes dos .on().
+    // O evento `connect` pode ter disparado antes de registrarmos listeners — consultamos `connected` na hora.
     setState(socket.connected ? 'connected' : 'disconnected');
 
     const onConnect = () => setState('connected');
@@ -74,6 +77,15 @@ export function useSocketConnectionState(): SocketConnectionState {
   return state;
 }
 
+/**
+ * Conecta ao servidor WebSocket com o JWT atual e entra nas salas `session` e/ou `store` (e lojas extras se precisar).
+ * **Por que separado do componente:** qualquer tela pode ouvir `plan:updated` ou `round:results` sem duplicar lógica de conexão.
+ * **Eventos:** `on(event, handler)` retorna função de cleanup ao desmontar — o backend emite para quem está na sala correspondente.
+ *
+ * @param sessionId - Se informado, após `connect` envia `join:session` (recebe `round:started`, `round:results`, etc. para toda a partida).
+ * @param storeId - Se informado, envia `join:store` (recebe `plan:updated`, `sla:event`, `quiz:player-answered` daquela loja).
+ * @param extraStoreIds - Facilitador pode ouvir várias lojas (ex.: progresso de quiz) entrando em cada sala `store:*`.
+ */
 export function useSocket(
   sessionId?: string,
   storeId?: string,

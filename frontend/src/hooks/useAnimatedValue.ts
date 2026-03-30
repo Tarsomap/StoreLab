@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 export type ValueFlash = 'up' | 'down' | null;
 
 /**
- * Destaca variação de valor (ex.: atualização via WebSocket).
- * `active`: só compara após dados reais existirem (evita flash na carga inicial).
- * `resetKey`: ao mudar (ex.: plan.id), reinicia o valor de referência.
+ * Quando um número na tela muda (ex.: total vindo do WebSocket), devolve um sinal curto “subiu” ou “desceu”
+ * para pintar borda/cor de destaque. Fica fora do componente grande do PO para reutilizar e manter a regra de comparação num só lugar.
+ *
+ * @param value - Valor atual exibido.
+ * @param active - Só começa a comparar quando `true` (evita piscar na primeira carga antes de ter dado real).
+ * @param resetKey - Ao mudar (ex.: id do plano), zera a referência para não comparar com número da sessão anterior.
  */
 export function useAnimatedValue(
   value: number,

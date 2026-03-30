@@ -1,3 +1,8 @@
+/**
+ * Moldura das rotas `/login` e `/register`: painel de marca à esquerda (desktop) e cartão branco com o formulário à direita.
+ *
+ * @param children - Conteúdo da página de auth (login ou registro).
+ */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const stores = [
     { color: 'hsl(142 71% 45%)', barPct: 100, label: 'Loja A', value: '+18,3%', delay: '0ms',   rank: '1°' },

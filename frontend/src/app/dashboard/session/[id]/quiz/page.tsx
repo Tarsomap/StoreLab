@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo do facilitador — Quiz (`/dashboard/session/[id]/quiz`):
+ * 1) Escolhe rodada 1, 2 ou 3; GET carrega perguntas salvas ou formulário em branco (10×4 opções).
+ * 2) Validação local antes de POST `/sessions/:id/quiz/questions` — uma resposta correta por pergunta.
+ * 3) Após salvar, indicador ✓ na aba; jogadores usam essas perguntas na tela de quiz da loja.
+ */
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
@@ -46,6 +52,7 @@ interface SavedQuestion {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Estrutura vazia de uma pergunta com quatro alternativas. */
 function makeBlankQuestion(): QuestionDraft {
   return {
     prompt: '',
@@ -56,10 +63,12 @@ function makeBlankQuestion(): QuestionDraft {
   };
 }
 
+/** Dez perguntas em branco (regra do jogo). */
 function makeBlankQuestions(): QuestionDraft[] {
   return Array.from({ length: QUESTIONS_COUNT }, makeBlankQuestion);
 }
 
+/** Mescla resposta da API nas posições por `order` (1-based). */
 function fromSaved(saved: SavedQuestion[]): QuestionDraft[] {
   const drafts = makeBlankQuestions();
   for (const q of saved) {
@@ -74,6 +83,7 @@ function fromSaved(saved: SavedQuestion[]): QuestionDraft[] {
   return drafts;
 }
 
+/** Lista mensagens amigáveis se faltar texto, opção ou se houver mais de uma correta. */
 function validate(questions: QuestionDraft[]): string[] {
   const errors: string[] = [];
   questions.forEach((q, qi) => {
@@ -96,6 +106,7 @@ function validate(questions: QuestionDraft[]): string[] {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+/** Formulário completo de cadastro do quiz por rodada. */
 export default function QuizManagementPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();

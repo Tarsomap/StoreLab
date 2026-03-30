@@ -2,6 +2,10 @@
 
 import { useSocketConnectionState } from '@/hooks/useSocket';
 
+/**
+ * Bolinha na TopBar: verde = canal tempo real ligado; amarelo piscando = tentando reconectar; vermelho = offline.
+ * Ajuda o usuário a entender se atualizações ao vivo (plano, resultados) devem chegar sem recarregar.
+ */
 export function WsStatusDot() {
   const state = useSocketConnectionState();
 

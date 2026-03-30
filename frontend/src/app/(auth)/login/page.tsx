@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Fluxo do usuário — Login:
+ * 1) Digita e-mail e senha → envia POST `/auth/login` via `useAuthStore.login`.
+ * 2) Em sucesso, toast “Bem-vindo” e redireciona: URL `?from=` se existir, senão dashboard (facilitador) ou `/join` (jogador).
+ * 3) Em erro, mensagem no formulário e toast — a tela não muda de rota.
+ */
 import { useState, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -9,6 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+/**
+ * Formulário de entrada: campos controlados, loading no botão e tratamento de erro da API.
+ * Não recebe props — lê `useSearchParams` para o redirect opcional após login.
+ */
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,6 +160,7 @@ function LoginForm() {
   );
 }
 
+/** Página `/login` com Suspense porque `useSearchParams` exige boundary no Next.js 14. */
 export default function LoginPage() {
   return (
     <Suspense>

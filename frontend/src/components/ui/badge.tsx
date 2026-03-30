@@ -1,3 +1,4 @@
+/** Etiqueta compacta (status, contagem) com variantes de cor. */
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 

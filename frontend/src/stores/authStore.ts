@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Estado global de autenticação (Zustand + persist no localStorage): usuário, JWT e refresh.
+ * No login/registro também grava cookie `user_role` para o **middleware** decidir rotas antes do React.
+ * Sincroniza tokens com `lib/api.ts` para todas as requisições usarem o mesmo Bearer e renovação automática.
+ */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
@@ -48,18 +53,22 @@ interface AuthState {
 }
 
 interface AuthActions {
+  /** POST `/auth/login` — guarda tokens, usuário e cookie de papel. */
   login: (email: string, password: string) => Promise<void>;
+  /** POST `/auth/register` — mesmo efeito do login após criar conta. */
   register: (
     name: string,
     email: string,
     password: string,
     role?: UserRole,
   ) => Promise<void>;
+  /** Limpa storage, cookies e tokens do módulo `api`. */
   logout: () => void;
-  /** Called by onRehydrateStorage to sync module-level api vars */
+  /** Usado pelo persist ao reabrir o site: recoloca tokens no `apiFetch` e liga callbacks de refresh/logout. */
   _hydrate: () => void;
 }
 
+/** Hook React para ler/atualizar sessão; estado persiste entre abas do mesmo navegador. */
 export const useAuthStore = create<AuthState & AuthActions>()(
   persist(
     (set, get) => ({

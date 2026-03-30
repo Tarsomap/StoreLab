@@ -16,7 +16,16 @@ import {
   UserStoreEntry,
 } from './interfaces/store.interface';
 
+/**
+ * Teto de lojas por partida — o jogo foi desenhado para até quatro equipes competindo lado a lado.
+ * Impedir a quinta loja evita diluir demais a demanda e manter o tabuleiro gerenciável para o facilitador.
+ */
 const MAX_STORES_PER_SESSION = 4;
+
+/**
+ * Lista de todos os papéis distintos que uma loja pode ter; o tamanho do array é o tamanho máximo do time (5 pessoas).
+ * Usamos isso no join para não aceitar um sexto membro “sem papel” ou com papel duplicado fora da regra.
+ */
 const ALL_STORE_ROLES: StoreRole[] = [
   StoreRole.STORE_MANAGER,
   StoreRole.SUPPLY_MANAGER,
@@ -25,10 +34,25 @@ const ALL_STORE_ROLES: StoreRole[] = [
   StoreRole.SERVICE_MANAGER,
 ];
 
+/**
+ * Regras de lojas no StoreLab: criar unidade na sessão, montar equipe por código e realocar jogadores entre lojas na reconfiguração.
+ * A “transferência” aqui move **pessoas** (papéis) de uma loja para outra na mesma partida — como quando a rede realoca um gestor
+ * ou especialista de uma filial para outra após uma temporada, equilibrando força de trabalho antes da próxima rodada de decisões.
+ */
 @Injectable()
 export class StoresService {
+  /**
+   * Única dependência é o acesso ao banco — todas as regras de loja, membro e transferência passam pelo Prisma.
+   */
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Abre uma nova loja na sessão com código de acesso aleatório para o time convidar jogadores.
+   *
+   * Por que limitar a 4: a dinâmica e o motor assumem no máximo quatro competidores; passar disso quebraria o desenho da sala.
+   *
+   * @throws NotFoundException se a sessão não existir; BadRequestException se já houver 4 lojas.
+   */
   async create(dto: CreateStoreDto): Promise<StoreSummary> {
     const session = await this.prisma.session.findUnique({
       where: { id: dto.sessionId },
@@ -53,6 +77,16 @@ export class StoresService {
     return this.toSummary(store);
   }
 
+  /**
+   * Vincula o usuário logado a uma loja existente, desde que o código seja válido e o papel esteja livre.
+   *
+   * Idempotência: se o jogador já está naquela loja, devolvemos a loja de novo — assim o app pode chamar “join” ao reabrir
+   * sem tomar erro de duplicidade. Dois jogadores no mesmo papel são proibidos porque cada função (suprimentos, serviço…) é única no time.
+   * Limite de 5 membros = um por papel; lotamos a “mesa redonda” do planejamento colaborativo do PO.
+   *
+   * @throws NotFoundException código inválido; ConflictException papel ocupado ou já membro do destino em fluxos inconsistentes;
+   *         BadRequestException loja cheia.
+   */
   async join(dto: JoinStoreDto, userId: string): Promise<StoreSummary> {
     const store = await this.prisma.store.findUnique({
       where: { accessCode: dto.accessCode },
@@ -60,13 +94,13 @@ export class StoresService {
     });
     if (!store) throw new NotFoundException('Código de acesso inválido');
 
-    // Idempotent: player already in this store → return existing membership
+    // Se o jogador já entrou antes, não criamos outra linha — evita erro ao atualizar página ou reentrar pelo mesmo código.
     const alreadyMember = store.members.find((m) => m.userId === userId);
     if (alreadyMember) {
       return this.toSummary(store);
     }
 
-    // Another player already occupies this role
+    // Cada cadeira é única: dois “gerentes comerciais” confundiria quem responde pelo que no plano operacional.
     const roleAlreadyTaken = store.members.some((m) => m.role === dto.role);
     if (roleAlreadyTaken) {
       throw new ConflictException(`O papel ${dto.role} já está ocupado nesta loja`);
@@ -87,6 +121,9 @@ export class StoresService {
     return this.toSummary(store);
   }
 
+  /**
+   * Lista todas as lojas em que o usuário tem personagem — ordenado pela data de entrada para manter hábito previsível na UI.
+   */
   async findMine(userId: string): Promise<UserStoreEntry[]> {
     const memberships = await this.prisma.storeMember.findMany({
       where: { userId },
@@ -104,12 +141,18 @@ export class StoresService {
     }));
   }
 
+  /**
+   * Busca uma loja pelo id (resumo com código de acesso).
+   */
   async findById(storeId: string): Promise<StoreSummary> {
     const store = await this.prisma.store.findUnique({ where: { id: storeId } });
     if (!store) throw new NotFoundException('Loja não encontrada');
     return this.toSummary(store);
   }
 
+  /**
+   * Retorna a equipe completa com e-mail e data de filiação — o facilitador e o time veem quem falta para fechar os cinco papéis.
+   */
   async getMembers(storeId: string): Promise<StoreMembersResponse> {
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
@@ -135,8 +178,27 @@ export class StoresService {
     };
   }
 
+  /**
+   * Move um jogador da loja A para a loja B dentro da mesma sessão, **somente** durante RECONFIGURATION.
+   *
+   * No jogo, depois de uma rodada o facilitador pode “rebalancear equipes” entre unidades — como transferir um analista de uma filial
+   * para outra antes do próximo ciclo de metas. Isso não altera produtos nem estoque no código: altera **quem** está em qual loja,
+   * mantendo o papel profissional (exceto o Gerente da Loja, que permanece âncora da unidade).
+   *
+   * Validações em ordem:
+   * - Só na reconfiguração: fora dessa janela, mudar time bagunçaria PO/quiz alinhados ao estado da sessão.
+   * - Origem e destino na mesma sessão: impede cruzar partidas acidentalmente.
+   * - Origem ≠ destino: não há “transferência” para a mesma loja.
+   * - Jogador tem de estar na origem: não dá para mover quem não faz parte da equipe de saída.
+   * - Gerente da loja não sai: é o pivô da narrativa daquela unidade; trocá-lo quebraria a continuidade da “casa”.
+   * - No máximo 2 saídas por loja de origem na sessão: regra de desafio do StoreLab (1–2 jogadores por loja), para forçar decisão de RH, não turismo infinito.
+   * - Papel livre no destino: não podemos ter dois com o mesmo cargo na loja de chegada.
+   * - Jogador ainda não pode já ser membro do destino: evita duplicidade de vínculo.
+   *
+   * A transação garante que atualizar membro e criar registro histórico de transferência aconteçam juntos ou nada grava — evita jogador “sumido” ou histórico mentiroso.
+   */
   async transfer(sessionId: string, dto: TransferDto): Promise<TransferResponse> {
-    // ── 1. Session must be in RECONFIGURATION ───────────────────────────────
+    // ── 1. Sessão deve estar em RECONFIGURATION ───────────────────────────────
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: { stores: { select: { id: true } } },
@@ -148,7 +210,7 @@ export class StoresService {
       );
     }
 
-    // ── 2. Both stores must belong to this session ──────────────────────────
+    // ── 2. Ambas as lojas precisam ser da mesma sessão informada na URL ────────
     const sessionStoreIds = new Set(session.stores.map((s) => s.id));
     if (!sessionStoreIds.has(dto.fromStoreId)) {
       throw new BadRequestException('Loja de origem não pertence a esta sessão');
@@ -160,7 +222,7 @@ export class StoresService {
       throw new BadRequestException('Loja de origem e destino devem ser diferentes');
     }
 
-    // ── 3. Player must be a member of fromStore ──────────────────────────────
+    // ── 3. Quem será movido precisa estar na loja de origem ───────────────────
     const member = await this.prisma.storeMember.findUnique({
       where: { storeId_userId: { storeId: dto.fromStoreId, userId: dto.userId } },
     });
@@ -168,12 +230,12 @@ export class StoresService {
       throw new NotFoundException('Jogador não encontrado na loja de origem');
     }
 
-    // ── 4. STORE_MANAGER cannot be transferred ───────────────────────────────
+    // ── 4. Gerente da loja não pode ser transferido ─────────────────────────────
     if (member.role === StoreRole.STORE_MANAGER) {
       throw new BadRequestException('O Gerente da Loja não pode ser transferido');
     }
 
-    // ── 5. Max 2 transfers OUT of fromStore in this session ──────────────────
+    // ── 5. No máximo 2 transferências de saída por loja nesta sessão ──────────
     const outboundCount = await this.prisma.playerTransfer.count({
       where: { sessionId, fromStoreId: dto.fromStoreId },
     });
@@ -183,7 +245,7 @@ export class StoresService {
       );
     }
 
-    // ── 6. Role must not already exist in toStore ────────────────────────────
+    // ── 6. Destino não pode já ter alguém no mesmo papel ───────────────────────
     const roleConflict = await this.prisma.storeMember.findUnique({
       where: { storeId_role: { storeId: dto.toStoreId, role: member.role } },
     });
@@ -193,7 +255,7 @@ export class StoresService {
       );
     }
 
-    // ── 7. Player must not already be in toStore ─────────────────────────────
+    // ── 7. Jogador não pode já estar no destino (dupla filiação) ───────────────
     const alreadyInTarget = await this.prisma.storeMember.findUnique({
       where: { storeId_userId: { storeId: dto.toStoreId, userId: dto.userId } },
     });
@@ -201,7 +263,7 @@ export class StoresService {
       throw new ConflictException('Jogador já é membro da loja de destino');
     }
 
-    // ── 8. Execute in transaction ────────────────────────────────────────────
+    // ── 8. Atualização do vínculo + auditoria da movimentação no mesmo passo atômico ──
     const playerTransfer = await this.prisma.$transaction(async (tx) => {
       await tx.storeMember.update({
         where: { id: member.id },
@@ -229,6 +291,9 @@ export class StoresService {
     };
   }
 
+  /**
+   * Gera código curto alfanumérico para o jogador digitar na entrada — fácil de ler em sala de aula ou videoconferência.
+   */
   private generateAccessCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
@@ -238,6 +303,9 @@ export class StoresService {
     return code;
   }
 
+  /**
+   * Converte o registro do Prisma no formato estável da API.
+   */
   private toSummary(store: {
     id: string;
     sessionId: string;

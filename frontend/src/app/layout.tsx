@@ -1,3 +1,7 @@
+/**
+ * Layout raiz do Next.js: carrega fontes do design system (Sora, DM Sans, JetBrains Mono) e envolve toda a árvore
+ * com AppProviders (toasts e animação de troca de página).
+ */
 import type { Metadata } from 'next';
 import { Sora, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import { AppProviders } from '@/components/providers';
@@ -23,6 +27,7 @@ export const metadata: Metadata = {
   description: 'Simulação gamificada de gestão de varejo',
 };
 
+/** Estrutura HTML comum (`lang=pt-BR`), classes de fonte no body e filhos dentro dos providers globais. */
 export default function RootLayout({
   children,
 }: {

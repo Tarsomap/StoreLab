@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Painel do facilitador: progresso “quantos do time já responderam o quiz” por loja.
+ * Combina GET inicial em cada loja com evento WebSocket `quiz:player-answered` (entra na sessão + em todas as salas `store:*`).
+ * Clique abre sheet com score consolidado da equipe (não mostra resposta individual).
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
@@ -33,6 +38,7 @@ interface QuizPlayerAnsweredPayload {
   total: number;
 }
 
+/** Linha resumida passada pela página de gestão da sessão. */
 export interface QuizProgressStoreRow {
   storeId: string;
   storeName: string;
@@ -40,11 +46,15 @@ export interface QuizProgressStoreRow {
 }
 
 interface SessionQuizProgressProps {
+  /** Partida monitorada. */
   sessionId: string;
+  /** Qual rodada de quiz (alinhada à fase). */
   quizRound: 1 | 2 | 3;
+  /** Lojas para exibir um card de progresso cada. */
   stores: QuizProgressStoreRow[];
 }
 
+/** Grade de progresso + painel lateral com score ao clicar na loja. */
 export function SessionQuizProgress({ sessionId, quizRound, stores }: SessionQuizProgressProps) {
   const storeIds = useMemo(() => stores.map((s) => s.storeId), [stores]);
   const storeIdSet = useMemo(() => new Set(storeIds), [storeIds]);

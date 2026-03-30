@@ -8,6 +8,10 @@ import { ShrinkageService } from './shrinkage.service';
 import { FinancialService } from './financial.service';
 import { SlaService } from './sla.service';
 
+/**
+ * Módulo NestJS do motor de cálculo: agrupa serviços que simulam uma rodada
+ * (demanda, receita, SLA, perdas, EBITDA) e expõe o endpoint para o facilitador rodar a rodada.
+ */
 @Module({
   imports: [AuthModule],
   controllers: [EngineController],

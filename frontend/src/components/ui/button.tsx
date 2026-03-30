@@ -1,3 +1,4 @@
+/** Botão shadcn/ui com variantes (primário, outline, ghost…) e tamanhos — base de todas as ações clicáveis. */
 import { forwardRef, ButtonHTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,7 @@ export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {}
 
+/** Elemento `<button>` estilizado; repassa `ref` para uso com formulários e foco. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => (
     <button

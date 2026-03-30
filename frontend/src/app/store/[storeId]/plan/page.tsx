@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * Fluxo do jogador — Plano Operacional (`/store/[storeId]/plan`):
+ * 1) Carrega loja, plano atual, papel do usuário, estoque compartilhado (GET) e status da sessão para saber `configVersion`.
+ * 2) Campos por categoria e CAPEX; salvamento via API; confirmação do PO quando permitido.
+ * 3) WebSocket `join:store` + evento `plan:updated`: quando outro membro altera algo, a tabela e o DRE atualizam sem recarregar a página.
+ * 4) Coluna DRE mostra projeção local; `useAnimatedValue` destaca mudanças vindas do tempo real.
+ */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -116,6 +123,7 @@ interface StoreMemberEntry {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+/** Versão do plano no backend conforme fase da sessão (1 na primeira config/R1, 2 após reconfig, 3 na R3). */
 function configVersionFromStatus(status: string): number {
   if (status === 'ROUND_3') return 3;
   if (status === 'RECONFIGURATION' || status === 'ROUND_2') return 2;
@@ -123,7 +131,9 @@ function configVersionFromStatus(status: string): number {
 }
 
 const brl = formatBrl;
+/** Formata fração (0–1) como texto de percentual com uma casa decimal, para rótulos do DRE. */
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+/** Formata número inteiro no padrão pt-BR (milhares), usado em quantidades na tabela. */
 const num = (n: number) => n.toLocaleString('pt-BR');
 
 interface CatRow extends CategoryDecisionEntry {
@@ -135,6 +145,7 @@ interface CatRow extends CategoryDecisionEntry {
   agingR: number;
 }
 
+/** Calcula linhas de categoria com preço de venda, imposto, estoque e perdas para montar o DRE resumido na lateral. */
 function buildCatRows(cats: CategoryDecisionEntry[]): CatRow[] {
   return cats.map((c) => {
     const sellPrice = c.unitCost * (1 + c.priceMargin);
@@ -164,6 +175,7 @@ interface DreLines {
   ebitdaPct: number;
 }
 
+/** Agrega vendas, CMV, quebras/envelhecimento e custos fixos do plano em um único objeto para exibir na UI. */
 function buildDre(rows: CatRow[], financials: PlanFinancials): DreLines {
   const totalVendas = rows.reduce((s, r) => s + r.totalVenda, 0);
   const impostos = rows.reduce((s, r) => s + r.impostos, 0);
@@ -196,6 +208,7 @@ const CATEGORY_STYLE: Record<string, {
   'Hipel':       { border: 'border-l-cat-hipel',      text: 'text-cat-hipel',       bg: 'bg-cat-hipel/8',       dot: 'bg-cat-hipel',       inputBorder: 'focus-visible:ring-cat-hipel/50 border-cat-hipel/30' },
 };
 
+/** Cores Tailwind por nome de categoria (design system do jogo). */
 function getCatStyle(name: string) {
   return CATEGORY_STYLE[name] ?? {
     border: 'border-l-muted-foreground',
@@ -208,6 +221,7 @@ function getCatStyle(name: string) {
 
 // CAPEX items with SLA risk
 const SLA_RISK_KEYWORDS = ['segurança', 'freezer', 'redes', 'câmera', 'camera', 'seguranca'];
+/** Heurística para avisar na UI quais CAPEX têm risco de SLA no motor (palavras-chave no nome). */
 function hasSlaRisk(name: string): boolean {
   const lower = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return SLA_RISK_KEYWORDS.some((k) => lower.includes(k));
@@ -217,6 +231,7 @@ type ConfirmState = 'idle' | 'loading' | 'success' | 'error';
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
+/** Tela colaborativa do PO: decisões por papel, DRE e sincronização em tempo real da loja. */
 export default function PlanPage() {
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
@@ -1052,6 +1067,11 @@ export default function PlanPage() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
+/**
+ * Uma linha do painel DRE: rótulo à esquerda, percentual opcional no meio e valor monetário à direita.
+ * Props: `label` (nome da linha), `value` (texto já formatado em R$), `pctVal` (fração para %), `bold`/`subtotal`/`indent`/`danger` para ênfase visual.
+ * Papel no jogo: deixa o resumo financeiro do PO legível e alinhado ao design system (EBITDA negativo em vermelho).
+ */
 function DreLine({
   label,
   value,
@@ -1094,6 +1114,12 @@ function DreLine({
 interface CatRowData {
   categoryId: string;
 }
+
+/**
+ * Linha de tabela transversal: uma métrica (`label`) repetida por coluna de categoria + coluna de total.
+ * Props: `rows` (categorias), `getValue` (como mostrar cada célula), `total` opcional (soma por linha).
+ * Papel no jogo: compara Perecíveis, Mercearia, Eletro e Hipel na mesma grade sem duplicar JSX na página principal.
+ */
 function CatTableRow<T extends CatRowData>({
   label,
   rows,
@@ -1137,7 +1163,11 @@ function CatTableRow<T extends CatRowData>({
   );
 }
 
-// Editable stock input
+/**
+ * Campo numérico de compra de estoque por categoria; ao sair do campo (`blur`), envia o valor para o pai se mudou.
+ * Props: `value` atual, `disabled` conforme papel/PO confirmado, `onCommit`, `maxAvailable` (estoque compartilhado), `catInputClass` (cor da categoria).
+ * Papel no jogo: o Supply Manager ajusta quantidades respeitando o que ainda resta no pool da sessão; aviso visual se passar do disponível.
+ */
 function StockInput({
   value,
   disabled,
@@ -1187,7 +1217,11 @@ function StockInput({
   );
 }
 
-// Editable margin input
+/**
+ * Campo de margem em percentual (0–500 na UI = 0%–500% em decimal no plano); confirma no `blur`.
+ * Props: `value` em fração (ex.: 0,15), `disabled`, `onCommit`, classes da categoria.
+ * Papel no jogo: o Commercial Manager define markup sobre custo; valores ficam separados do componente da página para reutilizar a mesma lógica de rascunho/commit.
+ */
 function MarginInput({
   value,
   disabled,
@@ -1226,7 +1260,11 @@ function MarginInput({
   );
 }
 
-// Operadores form
+/**
+ * Bloco de operadores de caixa e serviço com custo estimado, barra de “CSAT (caixa)” e total da folha.
+ * Props: contagens atuais, `editable`/`saving`, `onSave(cashier, service)` quando o usuário termina de editar um campo.
+ * Papel no jogo: Operational Manager ajusta headcount; o custo segue constantes do motor (R$ 1.000 / R$ 1.200) e o indicador lembra a meta de 10 caixas para CSAT.
+ */
 function OperadoresForm({
   cashierOperators,
   serviceOperators,
@@ -1246,6 +1284,7 @@ function OperadoresForm({
   useEffect(() => setCashier(String(cashierOperators)), [cashierOperators]);
   useEffect(() => setService(String(serviceOperators)), [serviceOperators]);
 
+  /** Converte strings dos inputs em números e chama `onSave` só se ambos forem válidos — evita salvar estado quebrado a cada tecla. */
   function commit(newCashier: string, newService: string) {
     const c = Number(newCashier);
     const s = Number(newService);

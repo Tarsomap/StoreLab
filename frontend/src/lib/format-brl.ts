@@ -1,6 +1,9 @@
 /**
- * Formata valor em BRL com font-mono nos consumidores.
- * Garante prefixo "R$ " (com espaço) para consistência visual.
+ * Formata número em reais para mostrar na interface (sempre com estilo brasileiro).
+ * Garante o prefixo `R$ ` com espaço após o símbolo, alinhado ao guia do projeto para valores monetários.
+ *
+ * @param value - Valor numérico em reais.
+ * @param maximumFractionDigits - Quantas casas decimais mostrar (padrão 0 para valores inteiros comuns).
  */
 export function formatBrl(value: number, maximumFractionDigits = 0): string {
   const raw = new Intl.NumberFormat('pt-BR', {
