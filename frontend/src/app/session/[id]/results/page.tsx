@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
 import { formatBrl } from '@/lib/format-brl';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Trophy, Award, Medal, TrendingUp, TrendingDown,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, ChevronLeft,
 } from 'lucide-react';
 import { ResultsSkeleton } from '@/components/skeletons/results-skeleton';
 
@@ -607,6 +608,26 @@ function RoundBreakdown({
   );
 }
 
+// ── Facilitator back nav ───────────────────────────────────────────────────────
+
+function FacilitatorResultsBackNav({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  return (
+    <div className="-mt-1 mb-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 gap-1 text-muted-foreground hover:text-foreground"
+        onClick={() => router.push(`/dashboard/session/${sessionId}`)}
+      >
+        <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+        Voltar para a Sessão
+      </Button>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ResultsPage() {
@@ -679,13 +700,21 @@ export default function ResultsPage() {
   // ── States ────────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return <ResultsSkeleton />;
+    return (
+      <div className="max-w-5xl mx-auto pb-16">
+        {user?.role === 'FACILITATOR' && <FacilitatorResultsBackNav sessionId={sessionId} />}
+        <ResultsSkeleton />
+      </div>
+    );
   }
 
   if (loadError) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-destructive">{loadError}</p>
+      <div className="max-w-5xl mx-auto">
+        {user?.role === 'FACILITATOR' && <FacilitatorResultsBackNav sessionId={sessionId} />}
+        <div className="flex items-center justify-center py-32">
+          <p className="text-destructive">{loadError}</p>
+        </div>
       </div>
     );
   }
@@ -715,6 +744,7 @@ export default function ResultsPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-16">
+      {user?.role === 'FACILITATOR' && <FacilitatorResultsBackNav sessionId={sessionId} />}
 
       {/* ── HERO HEADER ───────────────────────────────────────────────────── */}
       <div className="space-y-2 pt-2">

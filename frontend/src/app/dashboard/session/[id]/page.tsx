@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Clock, Store } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { SessionSkeleton } from '@/components/skeletons/session-skeleton';
+import { SessionQuizProgress } from '@/components/session/session-quiz-progress';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,24 @@ function getActiveStepIndex(status: SessionStatus): number {
   return PHASE_STEPS.findIndex((s) => s.statuses.includes(status));
 }
 
+/** Rodada de quiz ativa para a fase atual (alinhado ao fluxo do jogador em /store/.../quiz). */
+function facilitatorQuizRound(status: SessionStatus): 1 | 2 | 3 | null {
+  switch (status) {
+    case 'ROUND_1_CONFIG':
+    case 'ROUND_1':
+      return 1;
+    case 'RECONFIGURATION':
+    case 'ROUND_2':
+      return 2;
+    case 'ROUND_3':
+      return 3;
+    default:
+      return null;
+  }
+}
+
+const FACILITATOR_QUIZ_MIN_QUESTIONS = 10;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SessionManagementPage() {
@@ -130,6 +149,7 @@ export default function SessionManagementPage() {
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
+  const [quizProgressRound, setQuizProgressRound] = useState<1 | 2 | 3 | null>(null);
 
   async function fetchData() {
     setError('');
@@ -151,6 +171,32 @@ export default function SessionManagementPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  useEffect(() => {
+    const r = session ? facilitatorQuizRound(session.status) : null;
+    if (!sessionId || !r) {
+      setQuizProgressRound(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.get<{ id: string }[]>(
+          `/sessions/${sessionId}/quiz/questions?round=${r}`,
+        );
+        if (!cancelled && data.length >= FACILITATOR_QUIZ_MIN_QUESTIONS) {
+          setQuizProgressRound(r);
+        } else if (!cancelled) {
+          setQuizProgressRound(null);
+        }
+      } catch {
+        if (!cancelled) setQuizProgressRound(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, session?.status]);
 
   async function handleCreateStore(e: FormEvent) {
     e.preventDefault();
@@ -331,6 +377,21 @@ export default function SessionManagementPage() {
             </CardContent>
           </Card>
         </div>
+
+        {quizProgressRound !== null && storeCount > 0 && (
+          <>
+            <Separator />
+            <SessionQuizProgress
+              sessionId={sessionId}
+              quizRound={quizProgressRound}
+              stores={statusData.stores.map((s) => ({
+                storeId: s.storeId,
+                storeName: s.storeName,
+                memberCount: s.memberCount,
+              }))}
+            />
+          </>
+        )}
 
         {/* ── Stores ── */}
         <div className="space-y-4">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBrl } from '@/lib/format-brl';
@@ -15,7 +15,33 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Plus, LayoutDashboard } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import type { TooltipContentProps } from 'recharts';
+import { Plus, LayoutDashboard, History, Play, Store, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '@/components/skeletons/dashboard-skeleton';
 import {
@@ -25,6 +51,7 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/** Campos opcionais caso a API evolua sem mudar o fetch desta página. */
 interface Session {
   id: string;
   name: string;
@@ -32,6 +59,14 @@ interface Session {
   totalDemand: number;
   initialCash: number;
   createdAt: string;
+  storeCount?: number;
+  /** POs confirmados na sessão, se a API enviar. */
+  confirmedPos?: number;
+  stores?: unknown[];
+  winnerStoreName?: string;
+  winningStoreName?: string;
+  firstPlaceStoreName?: string;
+  winner?: { storeName?: string; name?: string };
 }
 
 const STATUS_PROGRESS: Record<string, string> = {
@@ -43,6 +78,288 @@ const STATUS_PROGRESS: Record<string, string> = {
   ROUND_3: 'Rodada 3 de 3',
   FINISHED: 'Finalizada',
 };
+
+function formatSessionWinner(session: Session): string {
+  if (typeof session.winnerStoreName === 'string' && session.winnerStoreName.trim()) {
+    return session.winnerStoreName.trim();
+  }
+  if (typeof session.winningStoreName === 'string' && session.winningStoreName.trim()) {
+    return session.winningStoreName.trim();
+  }
+  if (typeof session.firstPlaceStoreName === 'string' && session.firstPlaceStoreName.trim()) {
+    return session.firstPlaceStoreName.trim();
+  }
+  const w = session.winner;
+  if (w) {
+    if (typeof w.storeName === 'string' && w.storeName.trim()) return w.storeName.trim();
+    if (typeof w.name === 'string' && w.name.trim()) return w.name.trim();
+  }
+  return '—';
+}
+
+function formatStoreCount(session: Session): string {
+  if (typeof session.storeCount === 'number' && Number.isFinite(session.storeCount)) {
+    return String(session.storeCount);
+  }
+  if (Array.isArray(session.stores)) {
+    return String(session.stores.length);
+  }
+  return '—';
+}
+
+function sumTrainedStoresForFinished(finished: Session[]): number | '—' {
+  if (finished.length === 0) return 0;
+  let sum = 0;
+  for (const s of finished) {
+    if (typeof s.storeCount === 'number' && Number.isFinite(s.storeCount)) {
+      sum += s.storeCount;
+    } else {
+      return '—';
+    }
+  }
+  return sum;
+}
+
+function formatConfirmedStores(session: Session): string {
+  const c = session.confirmedPos;
+  const sc = session.storeCount;
+  const hasC = typeof c === 'number' && Number.isFinite(c);
+  const hasSc = typeof sc === 'number' && Number.isFinite(sc);
+  if (hasC && hasSc) return `${c}/${sc}`;
+  return '—/—';
+}
+
+// ── Desempenho histórico (ranking / gráfico) ─────────────────────────────────
+
+interface RankingEntry {
+  rank: number;
+  storeId: string;
+  storeName: string;
+  avgEbitdaPercentage: number;
+  totalEbitda: number;
+  rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
+}
+
+const ROUNDS_AXIS = [1, 2, 3] as const;
+
+/** Cores por loja — alinhadas às categorias do design system (CLAUDE.md). */
+const STORE_LINE_COLORS = [
+  'hsl(142 71% 45%)',
+  'hsl(38 92% 50%)',
+  'hsl(217 91% 60%)',
+  'hsl(280 68% 60%)',
+];
+
+type EbitdaChartRow = { round: number } & Record<string, number | null>;
+
+function buildEbitdaChartRows(ranking: RankingEntry[]): EbitdaChartRow[] {
+  return ROUNDS_AXIS.map((round) => {
+    const row: EbitdaChartRow = { round };
+    for (const entry of ranking) {
+      const hit = entry.rounds.find((x) => x.round === round);
+      row[entry.storeId] = hit != null ? hit.ebitdaPercentage : null;
+    }
+    return row;
+  });
+}
+
+function rankingHasRoundData(ranking: RankingEntry[]): boolean {
+  return ranking.some((e) => e.rounds.length > 0);
+}
+
+function EbitdaLineTooltip({ active, payload, label }: TooltipContentProps) {
+  if (!active || !payload?.length) return null;
+  const roundLabel =
+    typeof label === 'number' ? `Rodada ${label}` : `Rodada ${String(label ?? '')}`;
+  return (
+    <div className="rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-md">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {roundLabel}
+      </p>
+      <ul className="space-y-1">
+        {payload.map((item) => {
+          const v = item.value;
+          const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+          const pct = Number.isFinite(n) ? `${n.toFixed(1)}%` : '—';
+          return (
+            <li key={String(item.dataKey)} className="flex items-baseline justify-between gap-6">
+              <span className="font-medium text-foreground" style={{ color: item.color }}>
+                {item.name}
+              </span>
+              <span className="font-mono tabular-nums text-foreground">{pct}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function HistoricPerformanceSection({ finishedSessions }: { finishedSessions: Session[] }) {
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    () => finishedSessions[0]?.id ?? null,
+  );
+  const [ranking, setRanking] = useState<RankingEntry[] | null>(null);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [rankingError, setRankingError] = useState(false);
+
+  useEffect(() => {
+    if (finishedSessions.length === 0) {
+      setSelectedSessionId(null);
+      return;
+    }
+    setSelectedSessionId((prev) => {
+      if (prev && finishedSessions.some((s) => s.id === prev)) return prev;
+      return finishedSessions[0].id;
+    });
+  }, [finishedSessions]);
+
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    let cancelled = false;
+    setRankingLoading(true);
+    setRankingError(false);
+    setRanking(null);
+    api
+      .get<RankingEntry[]>(`/results/${selectedSessionId}/ranking`)
+      .then((data) => {
+        if (!cancelled) setRanking(data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRankingError(true);
+          setRanking(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRankingLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSessionId]);
+
+  const chartData = useMemo(() => {
+    if (!ranking) return [];
+    return buildEbitdaChartRows(ranking);
+  }, [ranking]);
+
+  const showSessionSelect = finishedSessions.length >= 1;
+  const showChart =
+    !rankingLoading &&
+    !rankingError &&
+    ranking !== null &&
+    rankingHasRoundData(ranking);
+
+  return (
+    <section className="space-y-4" aria-labelledby="historic-performance-heading">
+      <h3
+        id="historic-performance-heading"
+        className="font-display text-xl font-bold text-foreground"
+      >
+        Desempenho Histórico
+      </h3>
+      <Card className="rounded-xl border shadow-sm transition-colors duration-200 hover:shadow-md">
+        <CardHeader className="pb-2">
+          <CardTitle className="font-display text-base font-semibold text-foreground">
+            EBITDA % por rodada
+          </CardTitle>
+          <CardDescription className="text-sm text-muted-foreground">
+            Comparativo das lojas nas rodadas 1 a 3 da sessão selecionada.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {showSessionSelect && selectedSessionId && (
+            <div className="space-y-2 max-w-md">
+              <Label htmlFor="historic-session" className="text-sm text-muted-foreground">
+                Sessão
+              </Label>
+              <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
+                <SelectTrigger id="historic-session" className="w-full">
+                  <SelectValue placeholder="Escolha a sessão" />
+                </SelectTrigger>
+                <SelectContent>
+                  {finishedSessions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {rankingLoading && (
+            <div
+              className="h-48 w-full animate-pulse rounded-xl bg-muted"
+              aria-hidden
+            />
+          )}
+
+          {rankingError && (
+            <p className="text-sm text-destructive">Não foi possível carregar os dados.</p>
+          )}
+
+          {!rankingLoading &&
+            !rankingError &&
+            ranking !== null &&
+            !rankingHasRoundData(ranking) && (
+              <p className="text-sm text-muted-foreground">
+                Nenhum resultado disponível para esta sessão.
+              </p>
+            )}
+
+          {showChart && ranking && (
+            <div className="h-72 w-full min-h-[288px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 88%)" />
+                  <XAxis
+                    dataKey="round"
+                    type="number"
+                    domain={[1, 3]}
+                    ticks={[1, 2, 3]}
+                    tickFormatter={(v) => `Rodada ${v}`}
+                    className="text-xs text-muted-foreground"
+                  />
+                  <YAxis
+                    domain={[0, 'auto']}
+                    tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
+                    className="text-xs text-muted-foreground"
+                    width={48}
+                  />
+                  <Tooltip content={(props) => <EbitdaLineTooltip {...props} />} />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    formatter={(value) => (
+                      <span className="text-sm text-foreground">{value}</span>
+                    )}
+                  />
+                  {ranking.map((entry, index) => (
+                    <Line
+                      key={entry.storeId}
+                      type="monotone"
+                      dataKey={entry.storeId}
+                      name={entry.storeName}
+                      stroke={STORE_LINE_COLORS[index % STORE_LINE_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -57,6 +374,33 @@ export default function DashboardPage() {
   const [newCash, setNewCash] = useState('700000');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+
+  const { activeSessions, finishedSessions, kpi, featuredSession } = useMemo(() => {
+    const active = sessions.filter((s) => s.status !== 'FINISHED');
+    const finished = sessions
+      .filter((s) => s.status === 'FINISHED')
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    const total = sessions.length;
+    const finishedCount = finished.length;
+    const trainedStores = sumTrainedStoresForFinished(finished);
+    const completionPct =
+      total === 0 ? 0 : Math.round((finishedCount / total) * 100);
+    return {
+      activeSessions: active,
+      finishedSessions: finished,
+      kpi: {
+        total,
+        activeCount: active.length,
+        trainedStores,
+        completionPct,
+      },
+      featuredSession: active.length > 0 ? active[0] : null,
+    };
+  }, [sessions]);
 
   useEffect(() => {
     api
@@ -178,6 +522,56 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      <div
+        className="grid grid-cols-2 gap-4 sm:grid-cols-4"
+        aria-label="Indicadores do dashboard"
+      >
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors duration-200">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Total de sessões
+            </span>
+            <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </div>
+          <p className="mt-3 font-mono text-2xl font-bold text-foreground tabular-nums">
+            {kpi.total}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors duration-200">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Sessões ativas
+            </span>
+            <Play className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </div>
+          <p className="mt-3 font-mono text-2xl font-bold text-foreground tabular-nums">
+            {kpi.activeCount}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors duration-200">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Lojas treinadas
+            </span>
+            <Store className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </div>
+          <p className="mt-3 font-mono text-2xl font-bold text-foreground tabular-nums">
+            {kpi.trainedStores}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors duration-200">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Taxa de conclusão
+            </span>
+            <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </div>
+          <p className="mt-3 font-mono text-2xl font-bold text-foreground tabular-nums">
+            {kpi.completionPct}%
+          </p>
+        </div>
+      </div>
+
       {sessions.length === 0 ? (
         <Card className="shadow-sm border">
           <CardContent className="py-16 px-6 text-center space-y-4">
@@ -203,44 +597,190 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sessions.map((s) => (
-            <Card
-              key={s.id}
-              className="cursor-pointer shadow-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
-              onClick={() => router.push(`/dashboard/session/${s.id}`)}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="font-display font-semibold text-base leading-tight">
-                    {s.name}
-                  </CardTitle>
-                  <SessionStatusBadge status={s.status} />
+        <div className="space-y-10">
+          {featuredSession && (
+            <Card className="shadow-sm border rounded-xl transition-colors duration-200 hover:shadow-md">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle className="font-display text-lg font-semibold text-foreground">
+                        {featuredSession.name}
+                      </CardTitle>
+                      <SessionStatusBadge status={featuredSession.status} />
+                    </div>
+                    <CardDescription className="text-sm text-muted-foreground">
+                      Sessão em destaque
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full shrink-0 sm:w-auto rounded-xl"
+                    onClick={() => router.push(`/dashboard/session/${featuredSession.id}`)}
+                  >
+                    Acompanhar sessão →
+                  </Button>
                 </div>
-                <CardDescription className="flex items-center justify-between mt-1 text-sm">
-                  <span>{new Date(s.createdAt).toLocaleDateString('pt-BR')}</span>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {STATUS_PROGRESS[s.status] ?? SESSION_STATUS_LABEL[s.status] ?? s.status}
-                  </span>
-                </CardDescription>
               </CardHeader>
               <Separator />
-              <CardContent className="text-sm text-muted-foreground space-y-1 pt-4">
-                <p>
-                  Demanda:{' '}
-                  <span className="font-mono font-medium text-foreground">
-                    {s.totalDemand.toLocaleString('pt-BR')}
-                  </span>
-                </p>
-                <p>
-                  Caixa:{' '}
-                  <span className="font-mono font-medium text-foreground">
-                    {formatBrl(s.initialCash)}
-                  </span>
-                </p>
+              <CardContent className="flex flex-col gap-3 pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Rodada atual
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {STATUS_PROGRESS[featuredSession.status] ??
+                      SESSION_STATUS_LABEL[featuredSession.status] ??
+                      featuredSession.status}
+                  </p>
+                </div>
+                <div className="sm:text-right">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Lojas confirmadas
+                  </p>
+                  <p className="mt-1 font-mono font-medium text-foreground">
+                    {formatConfirmedStores(featuredSession)}
+                  </p>
+                </div>
               </CardContent>
             </Card>
-          ))}
+          )}
+
+          <section className="space-y-4" aria-labelledby="active-sessions-heading">
+            <h3
+              id="active-sessions-heading"
+              className="font-display text-xl font-bold text-foreground"
+            >
+              Sessões Ativas
+            </h3>
+            {activeSessions.length === 0 ? (
+              <Card className="shadow-sm border transition-colors duration-200 hover:shadow-md">
+                <CardContent className="py-16 px-6 text-center space-y-4">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                    <LayoutDashboard className="h-7 w-7" aria-hidden />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-display text-base font-semibold text-foreground">
+                      Nenhuma sessão ativa
+                    </p>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      Não há sessões em andamento. Crie uma nova ou consulte o histórico abaixo.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setShowCreate(true)}
+                    className="rounded-xl"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova sessão
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {activeSessions.map((s) => (
+                  <Card
+                    key={s.id}
+                    className="cursor-pointer shadow-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+                    onClick={() => router.push(`/dashboard/session/${s.id}`)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="font-display font-semibold text-base leading-tight">
+                          {s.name}
+                        </CardTitle>
+                        <SessionStatusBadge status={s.status} />
+                      </div>
+                      <CardDescription className="mt-1 text-sm text-muted-foreground">
+                        {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                      </CardDescription>
+                    </CardHeader>
+                    <Separator />
+                    <CardContent className="text-sm text-muted-foreground space-y-1 pt-4">
+                      <p>
+                        Demanda:{' '}
+                        <span className="font-mono font-medium text-foreground">
+                          {s.totalDemand.toLocaleString('pt-BR')}
+                        </span>
+                      </p>
+                      <p>
+                        Caixa:{' '}
+                        <span className="font-mono font-medium text-foreground">
+                          {formatBrl(s.initialCash)}
+                        </span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {finishedSessions.length > 0 && (
+            <HistoricPerformanceSection finishedSessions={finishedSessions} />
+          )}
+
+          <section className="space-y-4" aria-labelledby="history-heading">
+            <h3 id="history-heading" className="font-display text-xl font-bold text-foreground">
+              Histórico
+            </h3>
+            {finishedSessions.length === 0 ? (
+              <Card className="shadow-sm border rounded-xl transition-colors duration-200">
+                <CardContent className="py-14 px-6 text-center space-y-3">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                    <History className="h-6 w-6" aria-hidden />
+                  </div>
+                  <p className="text-sm text-muted-foreground">Nenhuma sessão finalizada ainda</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="shadow-sm border rounded-xl transition-colors duration-200 hover:shadow-md">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-display text-foreground">Nome da sessão</TableHead>
+                        <TableHead className="font-display text-foreground">Data</TableHead>
+                        <TableHead className="font-display text-foreground text-right">
+                          Nº de lojas
+                        </TableHead>
+                        <TableHead className="font-display text-foreground">Vencedor</TableHead>
+                        <TableHead className="font-display text-foreground text-right w-[140px]">
+                          Ações
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {finishedSessions.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="font-medium text-foreground">{s.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-foreground">
+                            {formatStoreCount(s)}
+                          </TableCell>
+                          <TableCell className="text-foreground">{formatSessionWinner(s)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-md"
+                              onClick={() => router.push(`/session/${s.id}/results`)}
+                            >
+                              Ver resultados
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </section>
         </div>
       )}
     </div>

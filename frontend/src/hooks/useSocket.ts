@@ -74,9 +74,15 @@ export function useSocketConnectionState(): SocketConnectionState {
   return state;
 }
 
-export function useSocket(sessionId?: string, storeId?: string) {
+export function useSocket(
+  sessionId?: string,
+  storeId?: string,
+  /** Salas `store:*` adicionais (ex.: facilitador ouvindo `quiz:player-answered` de todas as lojas). */
+  extraStoreIds?: readonly string[],
+) {
   const token = useAuthStore((s) => s.token);
   const socketRef = useRef<Socket | null>(null);
+  const extraJoinKey = extraStoreIds?.length ? [...extraStoreIds].sort().join('\0') : '';
 
   useEffect(() => {
     if (!token) {
@@ -90,6 +96,11 @@ export function useSocket(sessionId?: string, storeId?: string) {
     const flushJoins = () => {
       if (sessionId) socket.emit('join:session', { sessionId });
       if (storeId) socket.emit('join:store', { storeId });
+      if (extraStoreIds?.length) {
+        for (const id of extraStoreIds) {
+          socket.emit('join:store', { storeId: id });
+        }
+      }
     };
 
     socket.on('connect', flushJoins);
@@ -100,7 +111,7 @@ export function useSocket(sessionId?: string, storeId?: string) {
       releaseSocket();
       socketRef.current = null;
     };
-  }, [token, sessionId, storeId]);
+  }, [token, sessionId, storeId, extraJoinKey]);
 
   const on = useCallback(<T,>(event: string, handler: (data: T) => void) => {
     socketRef.current?.on(event, handler);
