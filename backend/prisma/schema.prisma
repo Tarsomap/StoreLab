@@ -117,6 +117,7 @@ model Session {
   facilitator  User          @relation(fields: [facilitatorId], references: [id])
   totalDemand  Float         // demanda total da sessão distribuída entre as lojas
   initialCash  Float         @default(700000) // R$700.000 por loja; configurável pelo facilitador
+  disponibilidade Int[]      @default([])     // estoque disponível por categoria, ex: [600, 1500, 200, 1500]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

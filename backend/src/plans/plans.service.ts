@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   CapexOption,
   Category,
@@ -11,18 +11,18 @@ import {
   PoCapexDecision,
   PoCategoryDecision,
   StoreRole,
-} from '@prisma/client';
-import { PrismaService } from '../common/prisma.service';
-import { GameGateway } from '../gateway/game.gateway';
-import { CategoryDecisionDto } from './dto/category-decision.dto';
-import { CapexDecisionDto } from './dto/capex-decision.dto';
-import { WorkforceDto } from './dto/workforce.dto';
+} from "@prisma/client";
+import { PrismaService } from "../common/prisma.service";
+import { GameGateway } from "../gateway/game.gateway";
+import { CategoryDecisionDto } from "./dto/category-decision.dto";
+import { CapexDecisionDto } from "./dto/capex-decision.dto";
+import { WorkforceDto } from "./dto/workforce.dto";
 import {
   CapexDecisionEntry,
   CategoryDecisionEntry,
   PlanFinancials,
   PlanFullResponse,
-} from './interfaces/plan.interface';
+} from "./interfaces/plan.interface";
 
 // ─── Business constants ───────────────────────────────────────────────────────
 const CASHIER_SALARY = 1_000;
@@ -55,8 +55,8 @@ export class PlansService {
     let plan = await this.loadPlan(storeId, configVersion);
     if (!plan) {
       const [categories, capexOptions] = await Promise.all([
-        this.prisma.category.findMany({ orderBy: { name: 'asc' } }),
-        this.prisma.capexOption.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.category.findMany({ orderBy: { name: "asc" } }),
+        this.prisma.capexOption.findMany({ orderBy: { name: "asc" } }),
       ]);
 
       plan = await this.prisma.operationalPlan.create({
@@ -86,7 +86,10 @@ export class PlansService {
       });
     }
 
-    const availableCash = await this.resolveAvailableCash(storeId, configVersion);
+    const availableCash = await this.resolveAvailableCash(
+      storeId,
+      configVersion,
+    );
     return this.toFullResponse(plan, availableCash);
   }
 
@@ -103,9 +106,12 @@ export class PlansService {
     // Validate session-wide stock: totalAvailable minus what OTHER stores already bought
     const [availableStock, store] = await Promise.all([
       this.resolveStockAvailable(plan.storeId, dto.categoryId),
-      this.prisma.store.findUnique({ where: { id: plan.storeId }, select: { sessionId: true } }),
+      this.prisma.store.findUnique({
+        where: { id: plan.storeId },
+        select: { sessionId: true },
+      }),
     ]);
-    if (!store) throw new NotFoundException('Loja não encontrada');
+    if (!store) throw new NotFoundException("Loja não encontrada");
 
     const { _sum } = await this.prisma.poCategoryDecision.aggregate({
       where: {
@@ -134,7 +140,10 @@ export class PlansService {
     if (existing) {
       await this.prisma.poCategoryDecision.update({
         where: { id: existing.id },
-        data: { stockPurchased: dto.stockPurchased, priceMargin: dto.priceMargin },
+        data: {
+          stockPurchased: dto.stockPurchased,
+          priceMargin: dto.priceMargin,
+        },
       });
     } else {
       await this.prisma.poCategoryDecision.create({
@@ -171,7 +180,7 @@ export class PlansService {
         );
         if (alreadyDone && dto.implemented) {
           throw new BadRequestException(
-            'Este CAPEX já foi implementado na 1ª Configuração',
+            "Este CAPEX já foi implementado na 1ª Configuração",
           );
         }
       }
@@ -188,7 +197,11 @@ export class PlansService {
       });
     } else {
       await this.prisma.poCapexDecision.create({
-        data: { planId, capexOptionId: dto.capexOptionId, implemented: dto.implemented },
+        data: {
+          planId,
+          capexOptionId: dto.capexOptionId,
+          implemented: dto.implemented,
+        },
       });
     }
 
@@ -209,7 +222,10 @@ export class PlansService {
 
     await this.prisma.operationalPlan.update({
       where: { id: planId },
-      data: { cashierOperators: dto.cashierOperators, serviceOperators: dto.serviceOperators },
+      data: {
+        cashierOperators: dto.cashierOperators,
+        serviceOperators: dto.serviceOperators,
+      },
     });
 
     const response = await this.refreshAndRespond(planId);
@@ -229,7 +245,7 @@ export class PlansService {
     const [totalMembers, answeredMembers] = await Promise.all([
       this.prisma.storeMember.count({ where: { storeId: plan.storeId } }),
       this.prisma.userQuizAnswer.groupBy({
-        by: ['userId'],
+        by: ["userId"],
         where: { storeId: plan.storeId, round },
       }),
     ]);
@@ -280,7 +296,7 @@ export class PlansService {
         capexDecisions: { include: { capexOption: true } },
       },
     });
-    if (!plan) throw new NotFoundException('Plano não encontrado');
+    if (!plan) throw new NotFoundException("Plano não encontrado");
     return plan;
   }
 
@@ -305,7 +321,7 @@ export class PlansService {
       where: { id: storeId },
       include: { session: { select: { initialCash: true } } },
     });
-    if (!store) throw new NotFoundException('Loja não encontrada');
+    if (!store) throw new NotFoundException("Loja não encontrada");
 
     const initialCash = store.session.initialCash;
     if (configVersion === 1) return initialCash;
@@ -335,29 +351,47 @@ export class PlansService {
   ): Promise<number> {
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
-      select: { sessionId: true },
+      select: { session: { select: { id: true, disponibilidade: true } } },
     });
-    if (!store) throw new NotFoundException('Loja não encontrada');
+    if (!store) throw new NotFoundException("Loja não encontrada");
 
-    // Check session-level override first
+    const sessionId = store.session.id;
+
+    // Check sessionCategoryConfig table first (legacy/explicit config)
     const sessionConfig = await this.prisma.sessionCategoryConfig.findUnique({
-      where: { sessionId_categoryId: { sessionId: store.sessionId, categoryId } },
+      where: { sessionId_categoryId: { sessionId, categoryId } },
     });
     if (sessionConfig) return sessionConfig.stockAvailable;
 
-    // Fall back to category default
+    // Fall back to the array or category default
+    const allCategories = await this.prisma.category.findMany({
+      orderBy: { name: "asc" },
+    });
+    const catIndex = allCategories.findIndex((c) => c.id === categoryId);
+
+    if (
+      catIndex !== -1 &&
+      store.session.disponibilidade &&
+      store.session.disponibilidade[catIndex] !== undefined
+    ) {
+      return store.session.disponibilidade[catIndex];
+    }
+
     const category = await this.prisma.category.findUnique({
       where: { id: categoryId },
     });
-    if (!category) throw new NotFoundException('Categoria não encontrada');
+    if (!category) throw new NotFoundException("Categoria não encontrada");
     return category.stockAvailable;
   }
 
-  private async assertStoreMember(storeId: string, userId: string): Promise<void> {
+  private async assertStoreMember(
+    storeId: string,
+    userId: string,
+  ): Promise<void> {
     const member = await this.prisma.storeMember.findUnique({
       where: { storeId_userId: { storeId, userId } },
     });
-    if (!member) throw new ForbiddenException('Você não é membro desta loja');
+    if (!member) throw new ForbiddenException("Você não é membro desta loja");
   }
 
   private async assertStoreRole(
@@ -375,7 +409,9 @@ export class PlansService {
 
   private assertNotConfirmed(plan: OperationalPlan): void {
     if (plan.confirmed) {
-      throw new BadRequestException('Plano já confirmado — não pode ser alterado');
+      throw new BadRequestException(
+        "Plano já confirmado — não pode ser alterado",
+      );
     }
   }
 
@@ -405,7 +441,7 @@ export class PlansService {
 
     // Maintenance: R$400 unless FREEZER is implemented
     const freezerImplemented = plan.capexDecisions.some(
-      (d) => d.implemented && d.capexOption.type === 'FREEZER',
+      (d) => d.implemented && d.capexOption.type === "FREEZER",
     );
     const maintenanceCost = freezerImplemented ? 0 : MAINTENANCE_COST;
 
@@ -438,9 +474,7 @@ export class PlansService {
       licenseCost -
       interestCost;
     const projectedEbitdaPercentage =
-      projectedGrossRevenue > 0
-        ? projectedEbitda / projectedGrossRevenue
-        : 0;
+      projectedGrossRevenue > 0 ? projectedEbitda / projectedGrossRevenue : 0;
 
     return {
       cashUsed,
@@ -459,8 +493,8 @@ export class PlansService {
     plan: PlanWithRelations,
     availableCash: number,
   ): PlanFullResponse {
-    const categoryDecisions: CategoryDecisionEntry[] = plan.categoryDecisions.map(
-      (d) => ({
+    const categoryDecisions: CategoryDecisionEntry[] =
+      plan.categoryDecisions.map((d) => ({
         id: d.id,
         categoryId: d.categoryId,
         categoryName: d.category.name,
@@ -471,16 +505,17 @@ export class PlansService {
         stockPurchased: d.stockPurchased,
         priceMargin: d.priceMargin,
         lineCost: d.stockPurchased * d.category.unitCost,
+      }));
+
+    const capexDecisions: CapexDecisionEntry[] = plan.capexDecisions.map(
+      (d) => ({
+        id: d.id,
+        capexOptionId: d.capexOptionId,
+        capexName: d.capexOption.name,
+        acquisitionCost: d.capexOption.acquisitionCost,
+        implemented: d.implemented,
       }),
     );
-
-    const capexDecisions: CapexDecisionEntry[] = plan.capexDecisions.map((d) => ({
-      id: d.id,
-      capexOptionId: d.capexOptionId,
-      capexName: d.capexOption.name,
-      acquisitionCost: d.capexOption.acquisitionCost,
-      implemented: d.implemented,
-    }));
 
     return {
       id: plan.id,

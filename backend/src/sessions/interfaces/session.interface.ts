@@ -1,4 +1,4 @@
-import { SessionStatus, StoreRole } from '@prisma/client';
+import { SessionStatus, StoreRole } from "@prisma/client";
 
 /**
  * Visão resumida de uma sessão para listagens e respostas simples (sem lojas aninhadas).
@@ -11,6 +11,7 @@ export interface SessionSummary {
   facilitatorId: string;
   totalDemand: number;
   initialCash: number;
+  disponibilidade: number[];
   createdAt: Date;
   updatedAt: Date;
 }
