@@ -65,6 +65,7 @@ interface Session {
   status: string;
   totalDemand: number;
   initialCash: number;
+  disponibilidade?: number[];
   createdAt: string;
   storeCount?: number;
   /** POs confirmados na sessão, se a API enviar. */
@@ -74,6 +75,14 @@ interface Session {
   winningStoreName?: string;
   firstPlaceStoreName?: string;
   winner?: { storeName?: string; name?: string };
+}
+
+interface CategoryCatalogEntry {
+  id: string;
+  name: 'PERECIVEIS' | 'MERCEARIA' | 'ELETRO' | 'HIPEL';
+  stockAvailable: number;
+  unitCost: number;
+  taxRate: number;
 }
 
 const STATUS_PROGRESS: Record<string, string> = {
@@ -393,6 +402,8 @@ export default function DashboardPage() {
   const [newCash, setNewCash] = useState('700000');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [categoryCatalog, setCategoryCatalog] = useState<CategoryCatalogEntry[]>([]);
+  const [categoryStocks, setCategoryStocks] = useState<Record<string, string>>({});
 
   const { activeSessions, finishedSessions, kpi, featuredSession } = useMemo(() => {
     const active = sessions.filter((s) => s.status !== 'FINISHED');
@@ -429,6 +440,20 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    api
+      .get<CategoryCatalogEntry[]>('/sessions/catalog/categories')
+      .then((catalog) => {
+        setCategoryCatalog(catalog);
+        setCategoryStocks(
+          Object.fromEntries(catalog.map((category) => [category.id, String(category.stockAvailable)])),
+        );
+      })
+      .catch(() => {
+        setCategoryCatalog([]);
+      });
+  }, []);
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setCreateError('');
@@ -439,6 +464,10 @@ export default function DashboardPage() {
         name: newName.trim(),
         totalDemand: Number(newDemand),
         initialCash: Number(newCash),
+        categoryConfigs: categoryCatalog.map((category) => ({
+          categoryId: category.id,
+          stockAvailable: Number(categoryStocks[category.id] ?? category.stockAvailable),
+        })),
       });
       toast.success('Sessão criada');
       setSessions((prev) => [session, ...prev]);
@@ -446,6 +475,11 @@ export default function DashboardPage() {
       setNewName('');
       setNewDemand('1000');
       setNewCash('700000');
+      setCategoryStocks(
+        Object.fromEntries(
+          categoryCatalog.map((category) => [category.id, String(category.stockAvailable)]),
+        ),
+      );
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Erro ao criar sessão');
     } finally {
@@ -531,6 +565,33 @@ export default function DashboardPage() {
                   />
                 </div>
               </div>
+
+              {categoryCatalog.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-foreground">Disponibilidade por categoria</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {categoryCatalog.map((category) => (
+                      <div key={category.id} className="space-y-2">
+                        <Label htmlFor={`stock-${category.id}`} className="text-sm text-muted-foreground">
+                          {category.name}
+                        </Label>
+                        <Input
+                          id={`stock-${category.id}`}
+                          type="number"
+                          min={0}
+                          value={categoryStocks[category.id] ?? ''}
+                          onChange={(e) =>
+                            setCategoryStocks((prev) => ({
+                              ...prev,
+                              [category.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
             <div className="px-6 pb-6">
               <Button type="submit" disabled={creating}>

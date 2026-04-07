@@ -13,6 +13,7 @@ import {
   StoreMembersResponse,
   StoreSummary,
   TransferResponse,
+  TransferSessionSummary,
   UserStoreEntry,
 } from './interfaces/store.interface';
 
@@ -288,6 +289,44 @@ export class StoresService {
       toStoreId: dto.toStoreId,
       role: member.role,
       transferredAt: playerTransfer.transferredAt,
+    };
+  }
+
+  /**
+   * Retorna, por loja, quantas saídas já ocorreram nesta sessão para guiar a regra obrigatória (1-2 por loja).
+   */
+  async getTransferSummary(sessionId: string): Promise<TransferSessionSummary> {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { stores: { select: { id: true, name: true } } },
+    });
+    if (!session) throw new NotFoundException('Sessão não encontrada');
+
+    const outboundByStore = await this.prisma.playerTransfer.groupBy({
+      by: ['fromStoreId'],
+      where: { sessionId },
+      _count: { fromStoreId: true },
+    });
+    const countMap = new Map(
+      outboundByStore.map((row) => [row.fromStoreId, row._count.fromStoreId]),
+    );
+
+    const stores = session.stores.map((store) => {
+      const outboundTransfers = countMap.get(store.id) ?? 0;
+      return {
+        storeId: store.id,
+        storeName: store.name,
+        outboundTransfers,
+        minimumRequired: 1,
+        maximumAllowed: 2,
+        requirementMet: outboundTransfers >= 1 && outboundTransfers <= 2,
+      };
+    });
+
+    return {
+      sessionId,
+      canAdvanceToRound2: stores.length > 0 && stores.every((store) => store.requirementMet),
+      stores,
     };
   }
 

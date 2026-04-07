@@ -70,6 +70,16 @@ export class SessionsController {
   }
 
   /**
+   * Catálogo de categorias para parametrização de estoque por sessão na UI do facilitador.
+   */
+  @Get('catalog/categories')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  getCategoryCatalog() {
+    return this.sessionsService.getCategoryCatalog();
+  }
+
+  /**
    * Detalhe simples de uma sessão por id — qualquer usuário logado pode ver (ex.: jogador entrou pelo código e precisa do contexto).
    */
   @Get(':id')

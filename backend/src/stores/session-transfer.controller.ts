@@ -1,11 +1,11 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { StoresService } from './stores.service';
 import { TransferDto } from './dto/transfer.dto';
-import { TransferResponse } from './interfaces/store.interface';
+import { TransferResponse, TransferSessionSummary } from './interfaces/store.interface';
 
 /**
  * Endpoint REST aninhado na sessão: `POST /sessions/:sessionId/transfers`.
@@ -28,5 +28,16 @@ export class SessionTransferController {
     @Body() dto: TransferDto,
   ): Promise<TransferResponse> {
     return this.storesService.transfer(sessionId, dto);
+  }
+
+  /**
+   * Mostra progresso da regra de transferências obrigatórias por loja (1-2 saídas).
+   */
+  @Get(':sessionId/transfers/summary')
+  @Roles(UserRole.FACILITATOR)
+  getSummary(
+    @Param('sessionId') sessionId: string,
+  ): Promise<TransferSessionSummary> {
+    return this.storesService.getTransferSummary(sessionId);
   }
 }
