@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   IsArray,
   IsInt,
@@ -9,7 +9,7 @@ import {
   IsUUID,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 /**
  * Uma linha de configuração de estoque por categoria na sessão (quanto o “mercado” oferece naquela partida).
@@ -47,6 +47,15 @@ export class CreateSessionDto {
   @IsNumber()
   @IsPositive()
   totalDemand: number;
+
+  /**
+   * Valores de disponibilidade, um por categoria de produto (ex: [600, 1500, 200, 1500]).
+   * Opcional com fallback para null ou 0 (controlado pela lógica/default).
+   */
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @IsOptional()
+  disponibilidade?: number[];
 
   /**
    * Lista opcional de tetos de estoque por categoria; sem ela, o jogo usa os padrões do cadastro de categorias.

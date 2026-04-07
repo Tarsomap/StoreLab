@@ -1,17 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../common/prisma.service';
-import { GameGateway } from '../gateway/game.gateway';
-import { CsatService } from './csat.service';
-import { DemandService } from './demand.service';
-import { ShrinkageService } from './shrinkage.service';
-import { FinancialService } from './financial.service';
-import { SlaService } from './sla.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../common/prisma.service";
+import { GameGateway } from "../gateway/game.gateway";
+import { CsatService } from "./csat.service";
+import { DemandService } from "./demand.service";
+import { ShrinkageService } from "./shrinkage.service";
+import { FinancialService } from "./financial.service";
+import { SlaService } from "./sla.service";
 import {
   CategoryEngineInput,
   CapexEngineInput,
   StoreIndicators,
   ShrinkageCategoryInput,
-} from './interfaces';
+} from "./interfaces";
 
 /**
  * Orquestra o cálculo de uma rodada: carrega sessão e planos, chama cada subserviço na ordem correta
@@ -87,39 +87,59 @@ export class EngineService {
 
       const quizAnswer = store.quizAnswers.find((q) => q.round === round);
       // Banco guarda percentual 0–100; o motor usa decimal 0–1 para combinar com CSAT e limites.
-      const quizScorePercentage = quizAnswer ? quizAnswer.scorePercentage / 100 : 0;
+      const quizScorePercentage = quizAnswer
+        ? quizAnswer.scorePercentage / 100
+        : 0;
 
-      const categories: CategoryEngineInput[] = plan.categoryDecisions.map((dec) => {
-        const sessionConfig = session.categoryConfigs.find(
-          (c) => c.categoryId === dec.categoryId,
-        );
-        // Facilitador pode ajustar estoque global da sessão; se não houver, cai no padrão da categoria.
-        const sessionStockAvailable =
-          sessionConfig?.stockAvailable ?? dec.category.stockAvailable;
+      const allCategoriesDesc = [...plan.categoryDecisions]
+        .map((d) => d.category)
+        .sort((a, b) => a.name.localeCompare(b.name));
 
-        return {
-          categoryId: dec.categoryId,
-          categoryName: dec.category.name,
-          unitCost: dec.category.unitCost,
-          taxRate: dec.category.taxRate,
-          breakageRate: dec.category.breakageRate,
-          agingRate: dec.category.agingRate,
-          sessionStockAvailable,
-          stockPurchased: dec.stockPurchased,
-          priceMargin: dec.priceMargin,
-        };
-      });
+      const categories: CategoryEngineInput[] = plan.categoryDecisions.map(
+        (dec) => {
+          const sessionConfig = session.categoryConfigs.find(
+            (c) => c.categoryId === dec.categoryId,
+          );
 
-      const capexDecisions: CapexEngineInput[] = plan.capexDecisions.map((dec) => ({
-        capexOptionId: dec.capexOptionId,
-        type: dec.capexOption.type,
-        acquisitionCost: dec.capexOption.acquisitionCost,
-        downtimeFixedDays: dec.capexOption.downtimeFixedDays,
-        monthlyLicenseDelta: dec.capexOption.monthlyLicenseDelta,
-        maintenanceSaving: dec.capexOption.maintenanceSaving,
-        slaRiskPercent: dec.capexOption.slaRiskPercent,
-        implemented: dec.implemented,
-      }));
+          const catIndex = allCategoriesDesc.findIndex(
+            (c) => c.id === dec.categoryId,
+          );
+          const arrayVal =
+            session.disponibilidade &&
+            session.disponibilidade[catIndex] !== undefined
+              ? session.disponibilidade[catIndex]
+              : dec.category.stockAvailable;
+
+          // Facilitador pode ajustar estoque global da sessão; se não houver, cai no padrão da categoria.
+          const sessionStockAvailable =
+            sessionConfig?.stockAvailable ?? arrayVal;
+
+          return {
+            categoryId: dec.categoryId,
+            categoryName: dec.category.name,
+            unitCost: dec.category.unitCost,
+            taxRate: dec.category.taxRate,
+            breakageRate: dec.category.breakageRate,
+            agingRate: dec.category.agingRate,
+            sessionStockAvailable,
+            stockPurchased: dec.stockPurchased,
+            priceMargin: dec.priceMargin,
+          };
+        },
+      );
+
+      const capexDecisions: CapexEngineInput[] = plan.capexDecisions.map(
+        (dec) => ({
+          capexOptionId: dec.capexOptionId,
+          type: dec.capexOption.type,
+          acquisitionCost: dec.capexOption.acquisitionCost,
+          downtimeFixedDays: dec.capexOption.downtimeFixedDays,
+          monthlyLicenseDelta: dec.capexOption.monthlyLicenseDelta,
+          maintenanceSaving: dec.capexOption.maintenanceSaving,
+          slaRiskPercent: dec.capexOption.slaRiskPercent,
+          implemented: dec.implemented,
+        }),
+      );
 
       // Caixa usado na rodada = compra de estoque + CAPEX efetivamente implementado (saída de caixa).
       const stockCost = categories.reduce(
@@ -144,7 +164,10 @@ export class EngineService {
 
     const storeIndicators: StoreIndicators[] = storeInputs.map((s) => ({
       storeId: s.storeId,
-      csat: this.csatService.calculate(s.cashierOperators, s.quizScorePercentage),
+      csat: this.csatService.calculate(
+        s.cashierOperators,
+        s.quizScorePercentage,
+      ),
       availability: this.demandService.computeAvailability(s.categories),
       basketPrice: this.demandService.computeBasketPrice(s.categories),
     }));
@@ -152,10 +175,14 @@ export class EngineService {
     const demandResults = this.demandService.computeDemand(storeIndicators);
 
     for (const storeInput of storeInputs) {
-      const demandResult = demandResults.find((d) => d.storeId === storeInput.storeId);
+      const demandResult = demandResults.find(
+        (d) => d.storeId === storeInput.storeId,
+      );
       if (!demandResult) continue;
 
-      const indicators = storeIndicators.find((i) => i.storeId === storeInput.storeId)!;
+      const indicators = storeIndicators.find(
+        (i) => i.storeId === storeInput.storeId,
+      )!;
 
       const categoryRevenues = this.financialService.computeCategoryRevenues(
         storeInput.categories,
@@ -338,16 +365,13 @@ export class EngineService {
     }
 
     for (const plan of prevPlans) {
-      const result = prevResults.find(
-        (r) => r.round === plan.configVersion,
-      );
+      const result = prevResults.find((r) => r.round === plan.configVersion);
       if (!result) continue;
 
       for (const dec of plan.categoryDecisions) {
         // Sem CMV na rodada de referência, tratamos como nada vendido (evita divisão estranha).
-        const sold = result.costOfGoods > 0
-          ? dec.stockPurchased * (result.demandShare)
-          : 0;
+        const sold =
+          result.costOfGoods > 0 ? dec.stockPurchased * result.demandShare : 0;
         const actualSold = Math.min(dec.stockPurchased, sold);
         const unsold = dec.stockPurchased - actualSold;
         const current = unsoldByCategory.get(dec.categoryId) ?? 0;

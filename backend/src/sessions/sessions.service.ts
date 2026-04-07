@@ -3,17 +3,17 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { SessionStatus } from '@prisma/client';
-import { PrismaService } from '../common/prisma.service';
-import { GameGateway } from '../gateway/game.gateway';
-import { ResultsService } from '../results/results.service';
-import { CreateSessionDto } from './dto/create-session.dto';
+} from "@nestjs/common";
+import { SessionStatus } from "@prisma/client";
+import { PrismaService } from "../common/prisma.service";
+import { GameGateway } from "../gateway/game.gateway";
+import { ResultsService } from "../results/results.service";
+import { CreateSessionDto } from "./dto/create-session.dto";
 import {
   SessionStatusResponse,
   SessionSummary,
   StockAvailabilityEntry,
-} from './interfaces/session.interface';
+} from "./interfaces/session.interface";
 
 /**
  * “Próximo passo” da partida: cada chave é o estado atual e o valor é o único estado permitido depois.
@@ -66,7 +66,10 @@ export class SessionsService {
    * @param dto - Nome, demanda, caixa opcional e configs de categoria.
    * @param facilitatorId - Dono da sessão (só ele pode avançar estados depois — evita outro usuário comandar a partida).
    */
-  async create(dto: CreateSessionDto, facilitatorId: string): Promise<SessionSummary> {
+  async create(
+    dto: CreateSessionDto,
+    facilitatorId: string,
+  ): Promise<SessionSummary> {
     const session = await this.prisma.session.create({
       data: {
         name: dto.name,
@@ -74,6 +77,7 @@ export class SessionsService {
         totalDemand: dto.totalDemand,
         // Padrão alinhado ao jogo quando o facilitador não manda valor — partidas ficam comparáveis.
         initialCash: dto.initialCash ?? 700_000,
+        disponibilidade: dto.disponibilidade ?? [],
         categoryConfigs: dto.categoryConfigs?.length
           ? {
               create: dto.categoryConfigs.map((c) => ({
@@ -95,7 +99,7 @@ export class SessionsService {
    */
   async findById(id: string): Promise<SessionSummary> {
     const session = await this.prisma.session.findUnique({ where: { id } });
-    if (!session) throw new NotFoundException('Sessão não encontrada');
+    if (!session) throw new NotFoundException("Sessão não encontrada");
     return this.toSummary(session);
   }
 
@@ -105,7 +109,7 @@ export class SessionsService {
   async getByFacilitator(facilitatorId: string): Promise<SessionSummary[]> {
     const sessions = await this.prisma.session.findMany({
       where: { facilitatorId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     return sessions.map((s) => this.toSummary(s));
   }
@@ -122,16 +126,21 @@ export class SessionsService {
    *
    * @throws NotFoundException sessão inexistente; ForbiddenException se não for o dono; BadRequestException se já estiver encerrada.
    */
-  async advanceStatus(id: string, facilitatorId: string): Promise<SessionSummary> {
+  async advanceStatus(
+    id: string,
+    facilitatorId: string,
+  ): Promise<SessionSummary> {
     const session = await this.prisma.session.findUnique({ where: { id } });
-    if (!session) throw new NotFoundException('Sessão não encontrada');
+    if (!session) throw new NotFoundException("Sessão não encontrada");
     if (session.facilitatorId !== facilitatorId) {
-      throw new ForbiddenException('Apenas o facilitador pode avançar o estado');
+      throw new ForbiddenException(
+        "Apenas o facilitador pode avançar o estado",
+      );
     }
 
     const nextStatus = NEXT_STATUS[session.status];
     if (!nextStatus) {
-      throw new BadRequestException('Sessão já está no estado final');
+      throw new BadRequestException("Sessão já está no estado final");
     }
 
     const updated = await this.prisma.session.update({
@@ -167,7 +176,9 @@ export class SessionsService {
       include: {
         stores: {
           include: {
-            members: { include: { user: { select: { id: true, name: true } } } },
+            members: {
+              include: { user: { select: { id: true, name: true } } },
+            },
             plans: {
               include: {
                 categoryDecisions: {
@@ -175,14 +186,16 @@ export class SessionsService {
                 },
                 capexDecisions: {
                   where: { implemented: true },
-                  include: { capexOption: { select: { acquisitionCost: true } } },
+                  include: {
+                    capexOption: { select: { acquisitionCost: true } },
+                  },
                 },
               },
-              orderBy: { configVersion: 'desc' },
+              orderBy: { configVersion: "desc" },
               take: 1,
             },
             roundResults: {
-              orderBy: { round: 'desc' },
+              orderBy: { round: "desc" },
               take: 1,
               select: { ebitda: true, ebitdaPercentage: true, round: true },
             },
@@ -190,7 +203,7 @@ export class SessionsService {
         },
       },
     });
-    if (!session) throw new NotFoundException('Sessão não encontrada');
+    if (!session) throw new NotFoundException("Sessão não encontrada");
 
     return {
       sessionId: session.id,
@@ -241,18 +254,25 @@ export class SessionsService {
     sessionId: string,
     configVersion: number,
   ): Promise<StockAvailabilityEntry[]> {
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) throw new NotFoundException('Sessão não encontrada');
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
 
-    const categories = await this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+    const categories = await this.prisma.category.findMany({
+      orderBy: { name: "asc" },
+    });
 
+    // Carrega configuração de sessionCategoryConfig ou disponibilidade baseada no array da sessão
     const sessionConfigs = await this.prisma.sessionCategoryConfig.findMany({
       where: { sessionId },
     });
-    const configMap = new Map(sessionConfigs.map((c) => [c.categoryId, c.stockAvailable]));
+    const configMap = new Map(
+      sessionConfigs.map((c) => [c.categoryId, c.stockAvailable]),
+    );
 
     const purchased = await this.prisma.poCategoryDecision.groupBy({
-      by: ['categoryId'],
+      by: ["categoryId"],
       where: {
         plan: {
           configVersion,
@@ -265,8 +285,14 @@ export class SessionsService {
       purchased.map((p) => [p.categoryId, p._sum.stockPurchased ?? 0]),
     );
 
-    return categories.map((cat) => {
-      const totalAvailable = configMap.get(cat.id) ?? cat.stockAvailable;
+    return categories.map((cat, idx) => {
+      // Prioridade: tabela de config > array `disponibilidade` na session > fallback da categoria.
+      const arrayVal =
+        session.disponibilidade && session.disponibilidade[idx] !== undefined
+          ? session.disponibilidade[idx]
+          : cat.stockAvailable;
+
+      const totalAvailable = configMap.get(cat.id) ?? arrayVal;
       const totalPurchased = purchasedMap.get(cat.id) ?? 0;
       return {
         categoryId: cat.id,
@@ -288,6 +314,7 @@ export class SessionsService {
     facilitatorId: string;
     totalDemand: number;
     initialCash: number;
+    disponibilidade: number[];
     createdAt: Date;
     updatedAt: Date;
   }): SessionSummary {
@@ -298,6 +325,7 @@ export class SessionsService {
       facilitatorId: session.facilitatorId,
       totalDemand: session.totalDemand,
       initialCash: session.initialCash,
+      disponibilidade: session.disponibilidade,
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     };
