@@ -10,6 +10,7 @@ import { GameGateway } from "../gateway/game.gateway";
 import { ResultsService } from "../results/results.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import {
+  SessionCategoryCatalogEntry,
   SessionStatusResponse,
   SessionSummary,
   StockAvailabilityEntry,
@@ -143,6 +144,13 @@ export class SessionsService {
       throw new BadRequestException("Sessão já está no estado final");
     }
 
+    if (
+      session.status === SessionStatus.RECONFIGURATION &&
+      nextStatus === SessionStatus.ROUND_2
+    ) {
+      await this.assertMandatoryTransfers(id);
+    }
+
     const updated = await this.prisma.session.update({
       where: { id },
       data: { status: nextStatus },
@@ -161,6 +169,30 @@ export class SessionsService {
     }
 
     return this.toSummary(updated);
+  }
+
+  /**
+   * Catálogo para o facilitador preencher configurações de estoque por categoria na criação da sessão.
+   */
+  async getCategoryCatalog(): Promise<SessionCategoryCatalogEntry[]> {
+    const categories = await this.prisma.category.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        stockAvailable: true,
+        unitCost: true,
+        taxRate: true,
+      },
+    });
+
+    return categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      stockAvailable: category.stockAvailable,
+      unitCost: category.unitCost,
+      taxRate: category.taxRate,
+    }));
   }
 
   /**
@@ -329,5 +361,40 @@ export class SessionsService {
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     };
+  }
+
+  /**
+   * Regra do jogo: ao sair da reconfiguração, cada loja precisa ter feito 1 a 2 transferências de saída.
+   */
+  private async assertMandatoryTransfers(sessionId: string): Promise<void> {
+    const stores = await this.prisma.store.findMany({
+      where: { sessionId },
+      select: { id: true, name: true },
+    });
+    if (stores.length === 0) {
+      throw new BadRequestException("A sessão precisa de lojas para avançar");
+    }
+
+    const outboundByStore = await this.prisma.playerTransfer.groupBy({
+      by: ["fromStoreId"],
+      where: { sessionId },
+      _count: { fromStoreId: true },
+    });
+    const countMap = new Map(
+      outboundByStore.map((row) => [row.fromStoreId, row._count.fromStoreId]),
+    );
+
+    const pendingStores = stores
+      .filter((store) => {
+        const count = countMap.get(store.id) ?? 0;
+        return count < 1 || count > 2;
+      })
+      .map((store) => store.name);
+
+    if (pendingStores.length > 0) {
+      throw new BadRequestException(
+        `Transferências obrigatórias pendentes (1-2 por loja): ${pendingStores.join(", ")}`,
+      );
+    }
   }
 }

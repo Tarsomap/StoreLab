@@ -19,6 +19,14 @@ export class ResultsService {
       orderBy: [{ storeId: 'asc' }, { round: 'asc' }],
     });
 
+    const quizAnswers = await this.prisma.quizAnswer.findMany({
+      where: { store: { sessionId } },
+      select: { storeId: true, round: true, scorePercentage: true },
+    });
+    const quizScoreMap = new Map(
+      quizAnswers.map((qa) => [`${qa.storeId}:${qa.round}`, qa.scorePercentage]),
+    );
+
     const storeMap = new Map<string, StoreResultEntry>();
     for (const r of results) {
       if (!storeMap.has(r.storeId)) {
@@ -29,7 +37,10 @@ export class ResultsService {
           rounds: [],
         });
       }
-      storeMap.get(r.storeId)!.rounds.push(this.toRoundEntry(r, session.initialCash));
+      const quizScorePercentage = quizScoreMap.get(`${r.storeId}:${r.round}`) ?? 0;
+      storeMap
+        .get(r.storeId)!
+        .rounds.push(this.toRoundEntry(r, session.initialCash, quizScorePercentage));
     }
 
     return [...storeMap.values()];
@@ -117,12 +128,14 @@ export class ResultsService {
       cashUsed: number;
     },
     initialCash: number,
+    quizScorePercentage: number,
   ): RoundResultEntry {
     // cashFinal = initialCash - cashUsed + grossRevenue - totalCosts
     //           = initialCash - cashUsed + ebitda  (since ebitda = grossRevenue - totalCosts)
     const cashFinal = initialCash - r.cashUsed + r.ebitda;
     return {
       round: r.round,
+      quizScorePercentage,
       csat: r.csat,
       availability: r.availability,
       basketPrice: r.basketPrice,

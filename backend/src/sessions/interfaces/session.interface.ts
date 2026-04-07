@@ -72,3 +72,14 @@ export interface StockAvailabilityEntry {
   /** Espaço ainda disponível para novas compras naquela configuração. */
   remaining: number;
 }
+
+/**
+ * Catálogo de categorias disponível para o facilitador parametrizar estoque na criação da sessão.
+ */
+export interface SessionCategoryCatalogEntry {
+  id: string;
+  name: string;
+  stockAvailable: number;
+  unitCost: number;
+  taxRate: number;
+}

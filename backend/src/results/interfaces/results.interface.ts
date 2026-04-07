@@ -1,5 +1,6 @@
 export interface RoundResultEntry {
   round: number;
+  quizScorePercentage: number;
   csat: number;
   availability: number;
   basketPrice: number;

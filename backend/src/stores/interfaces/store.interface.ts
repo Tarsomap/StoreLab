@@ -54,3 +54,24 @@ export interface TransferResponse {
   role: StoreRole;
   transferredAt: Date;
 }
+
+/**
+ * Status de transferências por loja para validar regra obrigatória na fase de reconfiguração.
+ */
+export interface TransferSummaryEntry {
+  storeId: string;
+  storeName: string;
+  outboundTransfers: number;
+  minimumRequired: number;
+  maximumAllowed: number;
+  requirementMet: boolean;
+}
+
+/**
+ * Visão agregada da sessão: se todas as lojas já cumpriram a regra 1-2 transferências de saída.
+ */
+export interface TransferSessionSummary {
+  sessionId: string;
+  canAdvanceToRound2: boolean;
+  stores: TransferSummaryEntry[];
+}

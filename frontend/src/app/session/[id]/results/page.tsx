@@ -24,6 +24,7 @@ import { ResultsSkeleton } from '@/components/skeletons/results-skeleton';
 
 interface RoundResultEntry {
   round: number;
+  quizScorePercentage: number;
   csat: number;
   availability: number;
   basketPrice: number;
@@ -474,6 +475,7 @@ function RoundBreakdown({
   ];
 
   const metrics: { label: string; value: string }[] = [
+    { label: 'Quiz (loja)', value: `${round.quizScorePercentage.toFixed(1)}%` },
     { label: 'CSAT', value: fmtNum(round.csat) },
     { label: 'Disponibilidade', value: fmtNum(round.availability) },
     { label: 'Preço médio', value: fmtNum(round.basketPrice) },
