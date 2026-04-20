@@ -7,233 +7,55 @@
  * 3) Link para gerenciar quiz e, quando aplicável, bloco `SessionQuizProgress` (WebSocket + API de score por loja).
  * 4) Cards de loja com copiar código; reconfiguração lembra transferências (rota separada no app).
  */
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { formatBrl } from '@/lib/format-brl';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Check, Clock, Store } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Store } from 'lucide-react';
 import { SessionSkeleton } from '@/components/skeletons/session-skeleton';
 import { SessionQuizProgress } from '@/components/session/session-quiz-progress';
+import { PhaseStepper } from '@/features/session/components/PhaseStepper';
+import { ContextualActions } from '@/features/session/components/ContextualActions';
+import { InfoTile } from '@/features/session/components/InfoTile';
+import { StoreCard } from '@/features/session/components/StoreCard';
+import { CreateStoreForm } from '@/features/session/components/CreateStoreForm';
+import { useSession } from '@/features/session/hooks/use-session';
+import { PHASE_LABEL, getActiveStepIndex, facilitatorQuizRound } from '@/features/session/lib/session-phases';
+import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type SessionStatus =
-  | 'SETUP'
-  | 'ROUND_1_CONFIG'
-  | 'ROUND_1'
-  | 'RECONFIGURATION'
-  | 'ROUND_2'
-  | 'ROUND_3'
-  | 'FINISHED';
-
-type StoreRole =
-  | 'STORE_MANAGER'
-  | 'SUPPLY_MANAGER'
-  | 'COMMERCIAL_MANAGER'
-  | 'OPERATIONAL_MANAGER'
-  | 'SERVICE_MANAGER';
-
-interface StoreMember {
-  userId: string;
-  name: string;
-  role: StoreRole;
-}
-
-interface StoreStatus {
-  storeId: string;
-  storeName: string;
-  accessCode: string;
-  memberCount: number;
-  members: StoreMember[];
-  planConfirmed: boolean;
-  cashUsed: number;
-  availableCash: number;
-  lastRound: number | null;
-  lastRoundEbitda: number | null;
-  lastRoundEbitdaPct: number | null;
-}
-
-interface SessionDetail {
-  id: string;
-  name: string;
-  status: SessionStatus;
-  totalDemand: number;
-  initialCash: number;
-}
-
-interface SessionStatusResponse {
-  sessionId: string;
-  status: SessionStatus;
-  stores: StoreStatus[];
-}
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PHASE_LABEL: Record<SessionStatus, string> = {
-  SETUP: '1ª Configuração — Preparação',
-  ROUND_1_CONFIG: '1ª Configuração — Aguardando POs',
-  ROUND_1: 'Rodada 1 em andamento',
-  RECONFIGURATION: '2ª Configuração (Reconfiguração)',
-  ROUND_2: 'Rodada 2 em andamento',
-  ROUND_3: 'Rodada 3 em andamento',
-  FINISHED: 'Resultado Final',
-};
-
-const PHASE_STEPS: { label: string; statuses: SessionStatus[] }[] = [
-  { label: '1ª Configuração', statuses: ['SETUP', 'ROUND_1_CONFIG'] },
-  { label: 'Rodada 1', statuses: ['ROUND_1'] },
-  { label: '2ª Configuração', statuses: ['RECONFIGURATION'] },
-  { label: 'Rodada 2', statuses: ['ROUND_2'] },
-  { label: 'Rodada 3', statuses: ['ROUND_3'] },
-  { label: 'Resultado', statuses: ['FINISHED'] },
-];
-
-const ROLE_LABELS: Record<StoreRole, string> = {
-  STORE_MANAGER: 'Gerente da Loja',
-  SUPPLY_MANAGER: 'Abastecimento',
-  COMMERCIAL_MANAGER: 'Comercial',
-  OPERATIONAL_MANAGER: 'Operacional',
-  SERVICE_MANAGER: 'Serviços',
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const brl = formatBrl;
-const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
-
-/** Índice do passo no stepper visual conforme o enum de status da sessão. */
-function getActiveStepIndex(status: SessionStatus): number {
-  return PHASE_STEPS.findIndex((s) => s.statuses.includes(status));
-}
-
-/** Qual número de quiz (1–3) faz sentido exibir para o status atual — alinhado à página do jogador `/store/.../quiz`. */
-function facilitatorQuizRound(status: SessionStatus): 1 | 2 | 3 | null {
-  switch (status) {
-    case 'ROUND_1_CONFIG':
-    case 'ROUND_1':
-      return 1;
-    case 'RECONFIGURATION':
-    case 'ROUND_2':
-      return 2;
-    case 'ROUND_3':
-      return 3;
-    default:
-      return null;
-  }
-}
-
-const FACILITATOR_QUIZ_MIN_QUESTIONS = 10;
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
-/** Painel operacional da partida: fase, lojas, ações e progresso de quiz. */
 export default function SessionManagementPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
-  const [session, setSession] = useState<SessionDetail | null>(null);
-  const [statusData, setStatusData] = useState<SessionStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
+  const { session, statusData, loading, error, refetch } = useSession(sessionId);
   const [showCreateStore, setShowCreateStore] = useState(false);
-  const [newStoreName, setNewStoreName] = useState('');
-  const [creatingStore, setCreatingStore] = useState(false);
-  const [createStoreError, setCreateStoreError] = useState('');
-
   const [advancing, setAdvancing] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [actionError, setActionError] = useState('');
-
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const [quizProgressRound, setQuizProgressRound] = useState<1 | 2 | 3 | null>(null);
-
-  async function fetchData() {
-    setError('');
-    try {
-      const [sessionRes, statusRes] = await Promise.all([
-        api.get<SessionDetail>(`/sessions/${sessionId}`),
-        api.get<SessionStatusResponse>(`/sessions/${sessionId}/status`),
-      ]);
-      setSession(sessionRes);
-      setStatusData(statusRes);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao carregar sessão');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const quizRound = session ? facilitatorQuizRound(session.status) : null;
+  const { hasQuestions } = useQuizRoundProgress(sessionId, quizRound, session?.status ?? 'SETUP');
+  const quizProgressRound = hasQuestions ? quizRound : null;
 
   useEffect(() => {
-    fetchData();
+    refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
-
-  useEffect(() => {
-    const r = session ? facilitatorQuizRound(session.status) : null;
-    if (!sessionId || !r) {
-      setQuizProgressRound(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.get<{ id: string }[]>(
-          `/sessions/${sessionId}/quiz/questions?round=${r}`,
-        );
-        if (!cancelled && data.length >= FACILITATOR_QUIZ_MIN_QUESTIONS) {
-          setQuizProgressRound(r);
-        } else if (!cancelled) {
-          setQuizProgressRound(null);
-        }
-      } catch {
-        if (!cancelled) setQuizProgressRound(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, session?.status]);
-
-  async function handleCreateStore(e: FormEvent) {
-    e.preventDefault();
-    setCreateStoreError('');
-    setCreatingStore(true);
-    try {
-      await api.post('/stores', { sessionId, name: newStoreName.trim() });
-      setNewStoreName('');
-      setShowCreateStore(false);
-      await fetchData();
-    } catch (err) {
-      setCreateStoreError(err instanceof ApiError ? err.message : 'Erro ao criar loja');
-    } finally {
-      setCreatingStore(false);
-    }
-  }
 
   async function handleAdvance() {
     setActionError('');
     setAdvancing(true);
     try {
       await api.patch(`/sessions/${sessionId}/advance`, {});
-      await fetchData();
+      await refetch();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Erro ao avançar fase');
-    } finally {
-      setAdvancing(false);
-    }
+    } finally { setAdvancing(false); }
   }
 
   async function handleExecute() {
@@ -241,12 +63,10 @@ export default function SessionManagementPage() {
     setExecuting(true);
     try {
       await api.post(`/sessions/${sessionId}/execute`, {});
-      await fetchData();
+      await refetch();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Erro ao executar rodada');
-    } finally {
-      setExecuting(false);
-    }
+    } finally { setExecuting(false); }
   }
 
   async function copyCode(code: string) {
@@ -255,11 +75,7 @@ export default function SessionManagementPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return <SessionSkeleton />;
-  }
+  if (loading) return <SessionSkeleton />;
 
   if (error || !session || !statusData) {
     return (
@@ -267,16 +83,14 @@ export default function SessionManagementPage() {
         <Card className="max-w-sm w-full">
           <CardContent className="pt-6 text-center space-y-4">
             <p className="text-destructive">{error || 'Sessão não encontrada'}</p>
-            <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Voltar ao dashboard
-            </Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard')}>Voltar ao dashboard</Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const status = session.status as SessionStatus;
+  const status = session.status;
   const storeCount = statusData.stores.length;
   const confirmedCount = statusData.stores.filter((s) => s.planConfirmed).length;
   const allConfirmed = storeCount > 0 && confirmedCount === storeCount;
@@ -284,524 +98,127 @@ export default function SessionManagementPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push('/dashboard')}
-          className="text-muted-foreground px-0 hover:bg-transparent"
-        >
+        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="text-muted-foreground px-0 hover:bg-transparent">
           ← Dashboard
         </Button>
         <span>/</span>
         <span className="font-medium text-foreground truncate max-w-[200px]">{session.name}</span>
       </div>
 
-        {/* ── Phase Banner + Stepper ── */}
-        <Card>
-          <CardContent className="pt-5 pb-5 space-y-4">
-            {/* Phase label */}
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-0.5">
-                  Fase atual
-                </p>
-                <h2 className="font-display text-lg font-bold text-foreground">{PHASE_LABEL[status]}</h2>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{confirmedCount}/{storeCount} POs confirmados</span>
-              </div>
+      <Card>
+        <CardContent className="pt-5 pb-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-0.5">Fase atual</p>
+              <h2 className="font-display text-lg font-bold text-foreground">{PHASE_LABEL[status]}</h2>
             </div>
+            <span className="text-sm text-muted-foreground">{confirmedCount}/{storeCount} POs confirmados</span>
+          </div>
+          <Separator />
+          <div className="pt-4"><PhaseStepper activeIndex={getActiveStepIndex(status)} /></div>
+        </CardContent>
+      </Card>
 
-            {/* Stepper */}
-            <Separator />
-            <div className="pt-4">
-              <PhaseStepper activeIndex={getActiveStepIndex(status)} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-base font-semibold font-display">Sessão</CardTitle>
+          </CardHeader>
+          <Separator className="my-3" />
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+              <InfoTile label="Demanda Total" value={session.totalDemand.toLocaleString('pt-BR')} />
+              <InfoTile label="Caixa Inicial" value={formatBrl(session.initialCash)} />
+              <InfoTile label="Lojas" value={`${storeCount} / 4`} />
+              <InfoTile label="POs Confirmados" value={`${confirmedCount} / ${storeCount}`} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/session/${sessionId}/quiz`)}>
+                Gerenciar Quiz
+              </Button>
+              {['ROUND_1', 'RECONFIGURATION', 'ROUND_2', 'ROUND_3', 'FINISHED'].includes(status) && (
+                <Button size="sm" variant="outline" onClick={() => router.push(`/session/${sessionId}/results`)}>
+                  Ver Resultados
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* ── Session Info + Contextual Actions ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Session info */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="pb-0">
-              <CardTitle className="text-base font-semibold font-display">Sessão</CardTitle>
-            </CardHeader>
-            <Separator className="my-3" />
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <InfoTile label="Demanda Total" value={session.totalDemand.toLocaleString('pt-BR')} />
-                <InfoTile label="Caixa Inicial" value={brl(session.initialCash)} />
-                <InfoTile label="Lojas" value={`${storeCount} / 4`} />
-                <InfoTile label="POs Confirmados" value={`${confirmedCount} / ${storeCount}`} />
-              </div>
-              {/* Quick links */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/session/${sessionId}/quiz`)}
-                >
-                  Gerenciar Quiz
-                </Button>
-                {['ROUND_1', 'RECONFIGURATION', 'ROUND_2', 'ROUND_3', 'FINISHED'].includes(status) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push(`/session/${sessionId}/results`)}
-                  >
-                    Ver Resultados
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Contextual actions */}
-          <Card className="border-l-4 border-l-accent">
-            <CardHeader className="pb-0">
-              <CardTitle className="font-display font-semibold text-sm uppercase tracking-wide">
-                Ações
-              </CardTitle>
-            </CardHeader>
-            <Separator className="my-3" />
-            <CardContent className="space-y-3 pt-0">
-              {actionError && (
-                <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">
-                  {actionError}
-                </p>
-              )}
-              <ContextualActions
-                status={status}
-                allConfirmed={allConfirmed}
-                advancing={advancing}
-                executing={executing}
-                sessionId={sessionId}
-                onAdvance={handleAdvance}
-                onExecute={handleExecute}
-                onNavigate={router.push}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {quizProgressRound !== null && storeCount > 0 && (
-          <>
-            <Separator />
-            <SessionQuizProgress
+        <Card className="border-l-4 border-l-accent">
+          <CardHeader className="pb-0">
+            <CardTitle className="font-display font-semibold text-sm uppercase tracking-wide">Ações</CardTitle>
+          </CardHeader>
+          <Separator className="my-3" />
+          <CardContent className="space-y-3 pt-0">
+            {actionError && <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">{actionError}</p>}
+            <ContextualActions
+              status={status}
+              allConfirmed={allConfirmed}
+              advancing={advancing}
+              executing={executing}
               sessionId={sessionId}
-              quizRound={quizProgressRound}
-              stores={statusData.stores.map((s) => ({
-                storeId: s.storeId,
-                storeName: s.storeName,
-                memberCount: s.memberCount,
-              }))}
+              onAdvance={handleAdvance}
+              onExecute={handleExecute}
+              onNavigate={router.push}
             />
-          </>
+          </CardContent>
+        </Card>
+      </div>
+
+      {quizProgressRound !== null && storeCount > 0 && (
+        <>
+          <Separator />
+          <SessionQuizProgress
+            sessionId={sessionId}
+            quizRound={quizProgressRound}
+            stores={statusData.stores.map((s) => ({ storeId: s.storeId, storeName: s.storeName, memberCount: s.memberCount }))}
+          />
+        </>
+      )}
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-base font-semibold text-foreground">Lojas ({storeCount}/4)</h2>
+          {canCreateStore && (
+            <Button size="sm" variant="outline" onClick={() => setShowCreateStore((v) => !v)}>
+              {showCreateStore ? 'Cancelar' : '+ Nova loja'}
+            </Button>
+          )}
+        </div>
+
+        {showCreateStore && (
+          <CreateStoreForm
+            sessionId={sessionId}
+            onCreated={async () => { setShowCreateStore(false); await refetch(); }}
+            onCancel={() => setShowCreateStore(false)}
+          />
         )}
 
-        {/* ── Stores ── */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-semibold text-foreground">
-              Lojas ({storeCount}/4)
-            </h2>
-            {canCreateStore && (
-              <Button size="sm" variant="outline" onClick={() => setShowCreateStore((v) => !v)}>
-                {showCreateStore ? 'Cancelar' : '+ Nova loja'}
-              </Button>
-            )}
-          </div>
-
-          {showCreateStore && (
-            <Card>
-              <form onSubmit={handleCreateStore}>
-                <CardContent className="pt-4 space-y-4">
-                  {createStoreError && (
-                    <p className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">
-                      {createStoreError}
-                    </p>
-                  )}
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 space-y-2">
-                      <Label htmlFor="store-name">Nome da loja</Label>
-                      <Input
-                        id="store-name"
-                        placeholder="Ex: Loja Bretas"
-                        required
-                        value={newStoreName}
-                        onChange={(e) => setNewStoreName(e.target.value)}
-                      />
-                    </div>
-                    <Button type="submit" disabled={creatingStore}>
-                      {creatingStore ? 'Criando...' : 'Criar'}
-                    </Button>
-                  </div>
-                </CardContent>
-              </form>
-            </Card>
-          )}
-
-          {storeCount === 0 ? (
-            <Card className="shadow-sm border">
-              <CardContent className="py-12 px-6 text-center space-y-4">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                  <Store className="h-7 w-7" aria-hidden />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-display text-base font-semibold text-foreground">
-                    Nenhuma loja criada ainda
-                  </p>
-                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                    Crie até 4 lojas para gerar códigos de acesso e os times entrarem na partida.
-                  </p>
-                </div>
-                {canCreateStore && (
-                  <Button type="button" size="sm" onClick={() => setShowCreateStore(true)}>
-                    + Nova loja
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {statusData.stores.map((store) => (
-                <StoreCard
-                  key={store.storeId}
-                  store={store}
-                  initialCash={session.initialCash}
-                  copiedCode={copiedCode}
-                  onCopy={copyCode}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-    </div>
-  );
-}
-
-// ── PhaseStepper ──────────────────────────────────────────────────────────────
-
-/** Linha de etapas (configuração → rodadas → resultado) com nó ativo e concluído. */
-function PhaseStepper({ activeIndex }: { activeIndex: number }) {
-  return (
-    <div className="flex w-full items-start gap-2 overflow-x-auto pb-2">
-      {PHASE_STEPS.map((step, idx) => {
-        const isDone = idx < activeIndex;
-        const isActive = idx === activeIndex;
-        return (
-          <div key={step.label} className="flex min-w-[88px] items-start sm:flex-1 sm:min-w-0">
-            {/* Node */}
-            <div className="flex shrink-0 flex-col items-center">
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                  isDone
-                    ? 'bg-accent text-accent-foreground'
-                    : isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground border border-muted-foreground/20'
-                }`}
-              >
-                {isDone ? <Check className="h-3.5 w-3.5" /> : idx + 1}
+        {storeCount === 0 ? (
+          <Card className="shadow-sm border">
+            <CardContent className="py-12 px-6 text-center space-y-4">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <Store className="h-7 w-7" aria-hidden />
               </div>
-              <span
-                className={`mt-1 max-w-[88px] text-center text-[11px] leading-tight whitespace-normal sm:max-w-[96px] ${
-                  isActive ? 'text-primary font-semibold' : isDone ? 'text-muted-foreground' : 'text-muted-foreground/50'
-                }`}
-              >
-                {step.label}
-              </span>
-            </div>
-            {/* Connector line */}
-            {idx < PHASE_STEPS.length - 1 && (
-              <div
-                className={`mt-3 h-0.5 w-8 shrink-0 sm:mx-1 sm:flex-1 ${
-                  idx < activeIndex ? 'bg-accent' : 'bg-muted-foreground/20'
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── ContextualActions ─────────────────────────────────────────────────────────
-
-/** Props dos botões laterais que mudam conforme a fase (ex.: só avança R1 config se todos confirmaram PO). */
-interface ContextualActionsProps {
-  status: SessionStatus;
-  allConfirmed: boolean;
-  advancing: boolean;
-  executing: boolean;
-  sessionId: string;
-  onAdvance: () => void;
-  onExecute: () => void;
-  onNavigate: (path: string) => void;
-}
-
-/**
- * Botões “Avançar” / “Executar rodada” / links para quiz, transferências e resultados conforme `status`.
- * **API:** `onAdvance` → PATCH advance; `onExecute` → POST execute (dispara motor no backend).
- */
-function ContextualActions({
-  status,
-  allConfirmed,
-  advancing,
-  executing,
-  sessionId,
-  onAdvance,
-  onExecute,
-  onNavigate,
-}: ContextualActionsProps) {
-  const busy = advancing || executing;
-
-  switch (status) {
-    case 'SETUP':
-      return (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Crie as 4 lojas e aguarde os times entrarem antes de iniciar.
-          </p>
-          <Button className="w-full" onClick={onAdvance} disabled={busy}>
-            {advancing ? 'Iniciando...' : 'Iniciar 1ª Configuração →'}
-          </Button>
-        </div>
-      );
-
-    case 'ROUND_1_CONFIG':
-      return (
-        <div className="space-y-2">
-          {allConfirmed ? (
-            <p className="text-xs text-accent bg-accent/10 rounded px-2 py-1.5 border border-accent/20">
-              Todas as lojas confirmaram o PO.
-            </p>
-          ) : (
-            <p className="text-xs text-warning bg-warning/10 rounded px-2 py-1.5 border border-warning/20 flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 shrink-0" />
-              Aguardando confirmação de todos os POs...
-            </p>
-          )}
-          <Button
-            className="w-full shadow-sm hover:bg-accent/90"
-            onClick={onAdvance}
-            disabled={busy || !allConfirmed}
-          >
-            {advancing ? 'Iniciando...' : 'Iniciar Rodada 1 →'}
-          </Button>
-        </div>
-      );
-
-    case 'ROUND_1':
-      return (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Execute o motor de cálculo após todas as lojas confirmarem.
-          </p>
-          <Button className="w-full" onClick={onExecute} disabled={busy}>
-            {executing ? 'Executando...' : 'Executar Rodada 1'}
-          </Button>
-          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
-            {advancing ? 'Avançando...' : 'Avançar para Reconfiguração →'}
-          </Button>
-        </div>
-      );
-
-    case 'RECONFIGURATION':
-      return (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Gerencie as transferências obrigatórias entre lojas.
-          </p>
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => onNavigate(`/dashboard/session/${sessionId}/transfers`)}
-          >
-            Gerenciar Transferências
-          </Button>
-          <Button className="w-full" onClick={onAdvance} disabled={busy}>
-            {advancing ? 'Iniciando...' : 'Iniciar 2ª Configuração →'}
-          </Button>
-        </div>
-      );
-
-    case 'ROUND_2':
-      return (
-        <div className="space-y-2">
-          <Button className="w-full" onClick={onExecute} disabled={busy}>
-            {executing ? 'Executando...' : 'Executar Rodada 2'}
-          </Button>
-          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
-            {advancing ? 'Avançando...' : 'Avançar para Rodada 3 →'}
-          </Button>
-        </div>
-      );
-
-    case 'ROUND_3':
-      return (
-        <div className="space-y-2">
-          <Button className="w-full" onClick={onExecute} disabled={busy}>
-            {executing ? 'Executando...' : 'Executar Rodada 3'}
-          </Button>
-          <Button className="w-full" variant="outline" onClick={onAdvance} disabled={busy}>
-            {advancing ? 'Finalizando...' : 'Finalizar Sessão →'}
-          </Button>
-        </div>
-      );
-
-    case 'FINISHED':
-      return (
-        <div className="space-y-2">
-          <p className="text-xs text-accent bg-accent/10 rounded px-2 py-1.5 border border-accent/25">
-            Sessão finalizada. Confira o placar final!
-          </p>
-          <Button
-            className="w-full"
-            onClick={() => onNavigate(`/session/${sessionId}/results`)}
-          >
-            Ver Resultado Final →
-          </Button>
-        </div>
-      );
-  }
-}
-
-// ── InfoTile ──────────────────────────────────────────────────────────────────
-
-/** Pequeno bloco rótulo + valor monoespaçado na grade “Sessão”. */
-function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">{label}</p>
-      <p className="font-mono font-semibold text-sm">{value}</p>
-    </div>
-  );
-}
-
-// ── StoreCard ─────────────────────────────────────────────────────────────────
-
-/** Dados de uma loja no painel + callback de copiar código de acesso. */
-interface StoreCardProps {
-  store: StoreStatus;
-  initialCash: number;
-  copiedCode: string | null;
-  onCopy: (code: string) => void;
-}
-
-/** Cartão da loja: código, status do PO, resumo de caixa/EBITDA e lista de papéis preenchidos ou vazios. */
-function StoreCard({ store, initialCash, copiedCode, onCopy }: StoreCardProps) {
-  const ALL_ROLES: StoreRole[] = [
-    'STORE_MANAGER',
-    'SUPPLY_MANAGER',
-    'COMMERCIAL_MANAGER',
-    'OPERATIONAL_MANAGER',
-    'SERVICE_MANAGER',
-  ];
-
-  const hasPlan = store.cashUsed > 0 || store.planConfirmed;
-  const cashDanger = store.availableCash < 0;
-
-  const borderClass = store.planConfirmed
-    ? 'border-l-4 border-l-accent'
-    : store.memberCount > 0
-      ? 'border-l-4 border-l-warning'
-      : 'border-l-4 border-l-muted';
-
-  return (
-    <Card
-      className={`${borderClass} shadow-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md`}
-    >
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="font-display font-semibold text-base">
-            {store.storeName}
-          </CardTitle>
-          <Badge
-            className={
-              store.planConfirmed
-                ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/10'
-                : 'bg-warning/10 text-warning border border-warning/20 hover:bg-warning/10'
-            }
-            variant="outline"
-          >
-            {store.planConfirmed ? 'PO confirmado' : 'PO pendente'}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Access code */}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-lg font-bold tracking-widest bg-primary text-primary-foreground px-3 py-1 rounded-lg">
-            {store.accessCode}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-xs h-8"
-            onClick={() => onCopy(store.accessCode)}
-          >
-            {copiedCode === store.accessCode ? 'Copiado!' : 'Copiar'}
-          </Button>
-        </div>
-
-        {/* Financial summary */}
-        {hasPlan && (
-          <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 rounded-md p-2.5">
-            <div>
-              <p className="text-muted-foreground mb-0.5">Caixa usado</p>
-              <p className="font-mono font-semibold tabular-nums">{brl(store.cashUsed)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-0.5">Disponível</p>
-              <p className={`font-mono font-semibold tabular-nums ${cashDanger ? 'text-destructive' : ''}`}>
-                {brl(store.availableCash)}
-              </p>
-            </div>
-            {store.lastRoundEbitda !== null && store.lastRound !== null && (
-              <div className="col-span-2 border-t pt-2 mt-0.5">
-                <p className="text-muted-foreground mb-0.5">EBITDA R{store.lastRound}</p>
-                <p
-                  className={`font-mono font-semibold tabular-nums ${
-                    (store.lastRoundEbitdaPct ?? 0) < 0 ? 'text-destructive' : 'text-accent'
-                  }`}
-                >
-                  {brl(store.lastRoundEbitda)}{' '}
-                  <span className="font-normal text-muted-foreground">
-                    ({store.lastRoundEbitdaPct !== null ? pct(store.lastRoundEbitdaPct) : '—'})
-                  </span>
+              <div className="space-y-1">
+                <p className="font-display text-base font-semibold text-foreground">Nenhuma loja criada ainda</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Crie até 4 lojas para gerar códigos de acesso e os times entrarem na partida.
                 </p>
               </div>
-            )}
+              {canCreateStore && <Button type="button" size="sm" onClick={() => setShowCreateStore(true)}>+ Nova loja</Button>}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {statusData.stores.map((store) => (
+              <StoreCard key={store.storeId} store={store} initialCash={session.initialCash} copiedCode={copiedCode} onCopy={copyCode} />
+            ))}
           </div>
         )}
-
-        {/* Members */}
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Membros ({store.memberCount}/5)
-          </p>
-          <div className="space-y-0.5">
-            {ALL_ROLES.map((role) => {
-              const member = store.members.find((m) => m.role === role);
-              return (
-                <div key={role} className="flex items-center justify-between text-sm py-0.5">
-                  <span className="text-muted-foreground text-xs">{ROLE_LABELS[role]}</span>
-                  {member ? (
-                    <span className="font-medium text-xs truncate max-w-[130px]">{member.name}</span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/50 italic">vazio</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
