@@ -762,7 +762,7 @@ export default function ResultsPage() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10 pb-16">
+    <div className="mx-auto max-w-5xl space-y-10 px-4 pb-16 sm:px-6 lg:px-0">
       {user?.role === 'FACILITATOR' && <FacilitatorResultsBackNav sessionId={sessionId} />}
 
       {/* ── HERO HEADER ───────────────────────────────────────────────────── */}
@@ -796,11 +796,17 @@ export default function ResultsPage() {
       {ranking.length > 0 && (
         <section>
           {/* 1st, 2nd, 3rd in podium layout */}
-          <div className="grid grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
             {podiumTop.map((entry, idx) => (
               <div
                 key={entry.storeId}
-                className={idx === 1 ? '-translate-y-5' : ''}
+                className={
+                  idx === 1
+                    ? 'order-1 sm:order-2 sm:-translate-y-5'
+                    : idx === 0
+                      ? 'order-2 sm:order-1'
+                      : 'order-3'
+                }
               >
                 <PodiumCard entry={entry} podiumBaseStrip />
               </div>
@@ -809,7 +815,7 @@ export default function ResultsPage() {
 
           {/* 4th place below the podium */}
           {fourthPlace && (
-            <div className="mt-5 max-w-xs mx-auto">
+            <div className="mx-auto mt-4 max-w-xs sm:mt-5">
               <PodiumCard entry={fourthPlace} />
             </div>
           )}

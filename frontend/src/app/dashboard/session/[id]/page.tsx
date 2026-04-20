@@ -488,14 +488,14 @@ export default function SessionManagementPage() {
 /** Linha de etapas (configuração → rodadas → resultado) com nó ativo e concluído. */
 function PhaseStepper({ activeIndex }: { activeIndex: number }) {
   return (
-    <div className="flex items-center w-full overflow-x-auto pb-1">
+    <div className="flex w-full items-start gap-2 overflow-x-auto pb-2">
       {PHASE_STEPS.map((step, idx) => {
         const isDone = idx < activeIndex;
         const isActive = idx === activeIndex;
         return (
-          <div key={step.label} className="flex items-center flex-1 min-w-0">
+          <div key={step.label} className="flex min-w-[88px] items-start sm:flex-1 sm:min-w-0">
             {/* Node */}
-            <div className="flex flex-col items-center shrink-0">
+            <div className="flex shrink-0 flex-col items-center">
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                   isDone
@@ -508,7 +508,7 @@ function PhaseStepper({ activeIndex }: { activeIndex: number }) {
                 {isDone ? <Check className="h-3.5 w-3.5" /> : idx + 1}
               </div>
               <span
-                className={`mt-1 text-xs text-center leading-tight whitespace-nowrap max-w-[72px] ${
+                className={`mt-1 max-w-[88px] text-center text-[11px] leading-tight whitespace-normal sm:max-w-[96px] ${
                   isActive ? 'text-primary font-semibold' : isDone ? 'text-muted-foreground' : 'text-muted-foreground/50'
                 }`}
               >
@@ -518,7 +518,7 @@ function PhaseStepper({ activeIndex }: { activeIndex: number }) {
             {/* Connector line */}
             {idx < PHASE_STEPS.length - 1 && (
               <div
-                className={`flex-1 h-0.5 mx-1 ${
+                className={`mt-3 h-0.5 w-8 shrink-0 sm:mx-1 sm:flex-1 ${
                   idx < activeIndex ? 'bg-accent' : 'bg-muted-foreground/20'
                 }`}
               />

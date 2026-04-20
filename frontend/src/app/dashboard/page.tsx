@@ -492,15 +492,15 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-6 sm:px-6 lg:px-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-2xl font-bold text-foreground">Minhas Sessões</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Gerencie as sessões de jogo
           </p>
         </div>
-        <Button onClick={() => setShowCreate((v) => !v)}>
+        <Button onClick={() => setShowCreate((v) => !v)} className="w-full sm:w-auto">
           {showCreate ? (
             'Cancelar'
           ) : (
@@ -525,8 +525,8 @@ export default function DashboardPage() {
                   {createError}
                 </p>
               )}
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-1 space-y-2">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
                   <Label htmlFor="new-name" className="text-sm text-muted-foreground">
                     Nome da sessão
                   </Label>
@@ -594,7 +594,7 @@ export default function DashboardPage() {
               )}
             </CardContent>
             <div className="px-6 pb-6">
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating} className="w-full sm:w-auto">
                 {creating ? 'Criando...' : 'Criar sessão'}
               </Button>
             </div>
@@ -603,7 +603,7 @@ export default function DashboardPage() {
       )}
 
       <div
-        className="grid grid-cols-2 gap-4 sm:grid-cols-4"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
         aria-label="Indicadores do dashboard"
       >
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors duration-200">
@@ -758,7 +758,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {activeSessions.map((s) => (
                   <Card
                     key={s.id}
@@ -766,7 +766,7 @@ export default function DashboardPage() {
                     onClick={() => router.push(`/dashboard/session/${s.id}`)}
                   >
                     <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
                         <CardTitle className="font-display font-semibold text-base leading-tight">
                           {s.name}
                         </CardTitle>
@@ -815,9 +815,10 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="shadow-sm border rounded-xl transition-colors duration-200 hover:shadow-md">
+              <Card className="shadow-sm border rounded-xl transition-colors duration-200">
                 <CardContent className="p-0">
-                  <Table>
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[640px]">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-display text-foreground">Nome da sessão</TableHead>
@@ -833,7 +834,7 @@ export default function DashboardPage() {
                     </TableHeader>
                     <TableBody>
                       {finishedSessions.map((s) => (
-                        <TableRow key={s.id}>
+                        <TableRow key={s.id} className="hover:bg-transparent">
                           <TableCell className="font-medium text-foreground">{s.name}</TableCell>
                           <TableCell className="text-muted-foreground">
                             {new Date(s.createdAt).toLocaleDateString('pt-BR')}
@@ -845,9 +846,8 @@ export default function DashboardPage() {
                           <TableCell className="text-right">
                             <Button
                               type="button"
-                              variant="outline"
                               size="sm"
-                              className="rounded-md"
+                              className="w-full shrink-0 whitespace-nowrap rounded-xl px-4 sm:min-w-[148px] sm:w-auto"
                               onClick={() => router.push(`/session/${s.id}/results`)}
                             >
                               Ver resultados
@@ -856,7 +856,8 @@ export default function DashboardPage() {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
