@@ -1,10 +1,10 @@
 frontend/src/app/(auth)/login/page.tsx	170
-frontend/src/app/(auth)/register/page.tsx	317
-frontend/src/app/dashboard/page.tsx	869
-frontend/src/app/dashboard/session/[id]/page.tsx	807
+frontend/src/app/(auth)/register/page.tsx	169
+frontend/src/app/dashboard/page.tsx	218
+frontend/src/app/dashboard/session/[id]/page.tsx	224
 frontend/src/app/dashboard/session/[id]/quiz/page.tsx	393
 frontend/src/app/dashboard/session/[id]/transfers/page.tsx	326
-frontend/src/app/join/page.tsx	426
+frontend/src/app/join/page.tsx	147
 frontend/src/app/page.tsx	14
 frontend/src/app/session/[id]/results/page.tsx	860
 frontend/src/app/store/[storeId]/plan/page.tsx	242
