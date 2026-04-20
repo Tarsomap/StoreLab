@@ -1,0 +1,16 @@
+af3813ea726bdd6ba20dddf675c6207a *backend/src/engine/__tests__/csat.service.spec.ts
+3dcfa30666d086b8f47c2f9da42a505c *backend/src/engine/__tests__/demand.service.spec.ts
+4a382e9edc19898734ec89e227ed1039 *backend/src/engine/__tests__/financial.service.spec.ts
+b456510ff5da8683983b8e9f724f5dce *backend/src/engine/__tests__/shrinkage.service.spec.ts
+8c4a786f2377f905e9b8ae9f730bf52e *backend/src/engine/__tests__/sla.service.spec.ts
+07a6ae70fa86bb1b4d821b3fc067349d *backend/src/engine/constants.ts
+2e3412240a48fdb9e27916e4264f8bba *backend/src/engine/csat.service.ts
+a2e35d014ac255ee76ed50d2531189f6 *backend/src/engine/demand.service.ts
+721322016872bce9556067a09971c7ce *backend/src/engine/dto/run-round.dto.ts
+c1f17354a309fa3d93542eb99db49451 *backend/src/engine/engine.controller.ts
+2ae6c38391d9d745f42813946b25a071 *backend/src/engine/engine.module.ts
+75eec553eafc02f4ada471b0f3abd927 *backend/src/engine/engine.service.ts
+527de4f9f76e546f13c54d231c231ee5 *backend/src/engine/financial.service.ts
+ea768aec8a37751c72b35b384ea30f0d *backend/src/engine/interfaces/index.ts
+1dffaff998f73868284e1b1a96fe63ff *backend/src/engine/shrinkage.service.ts
+54b24f5c3f4629a5aa48479d0904c5d2 *backend/src/engine/sla.service.ts

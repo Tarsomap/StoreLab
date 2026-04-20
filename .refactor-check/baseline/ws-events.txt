@@ -1,0 +1,6 @@
+connect
+disconnect
+join:session
+join:store
+reconnect
+reconnect_attempt
