@@ -6,73 +6,27 @@
  * 2) Digita código de 6 caracteres + papel → POST `/stores/join`; sucesso mostra confirmação e redireciona ao PO em ~2s.
  * 3) Pode colar código inteiro no primeiro campo; navegação entre caixas com teclado.
  */
-import { useState, useEffect, useRef, FormEvent, ClipboardEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, ApiError } from '@/lib/api';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import { Store } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useJoinSession } from '@/features/auth/hooks/use-join-session';
+import { OtpInput } from '@/features/auth/components/OtpInput';
+import { JoinSuccessScreen } from '@/features/auth/components/JoinSuccessScreen';
+import { MyStoresList } from '@/features/auth/components/MyStoresList';
+import type { StoreRole } from '@/features/auth/types';
+import { ROLE_LABELS } from '@/features/auth/types';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type StoreRole =
-  | 'STORE_MANAGER'
-  | 'SUPPLY_MANAGER'
-  | 'COMMERCIAL_MANAGER'
-  | 'OPERATIONAL_MANAGER'
-  | 'SERVICE_MANAGER';
-
-const ROLE_LABELS: Record<StoreRole, string> = {
-  STORE_MANAGER: 'Gerente da Loja',
-  SUPPLY_MANAGER: 'Gerente de Abastecimento',
-  COMMERCIAL_MANAGER: 'Gerente Comercial',
-  OPERATIONAL_MANAGER: 'Gerente Operacional',
-  SERVICE_MANAGER: 'Gerente de Serviços',
-};
-
-interface JoinResponse {
-  id: string;
-  name: string;
-  sessionId: string;
-}
-
-interface UserStoreEntry {
-  storeId: string;
-  storeName: string;
-  sessionId: string;
-  role: StoreRole;
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-
-/** Tela de entrada do jogador na loja com código e seleção de papel. */
 export default function JoinPage() {
   const router = useRouter();
+  const { myStores, loadingMine, joined, loading, error, join, reset } = useJoinSession();
 
-  // Existing memberships
-  const [myStores, setMyStores] = useState<UserStoreEntry[]>([]);
-  const [loadingMine, setLoadingMine] = useState(true);
-
-  // OTP code input
   const [chars, setChars] = useState<string[]>(['', '', '', '', '', '']);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const accessCode = chars.join('');
-
   const [role, setRole] = useState<StoreRole>('SUPPLY_MANAGER');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [joined, setJoined] = useState<JoinResponse | null>(null);
 
-  useEffect(() => {
-    api
-      .get<UserStoreEntry[]>('/stores/mine')
-      .then(setMyStores)
-      .catch(() => setMyStores([]))
-      .finally(() => setLoadingMine(false));
-  }, []);
+  const accessCode = chars.join('');
+  const codeComplete = accessCode.length === 6;
 
-  // Auto-redirect after joining
   useEffect(() => {
     if (joined) {
       const t = setTimeout(() => router.push(`/store/${joined.id}/plan`), 2000);
@@ -82,135 +36,25 @@ export default function JoinPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const store = await api.post<JoinResponse>('/stores/join', {
-        accessCode: accessCode.toUpperCase().trim(),
-        role,
-      });
-      setJoined(store);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao entrar na loja');
-    } finally {
-      setLoading(false);
-    }
+    await join(accessCode, role);
   }
-
-  function handleCharChange(idx: number, value: string) {
-    const char = value.slice(-1).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const next = [...chars];
-    next[idx] = char;
-    setChars(next);
-    if (char && idx < 5) {
-      inputRefs.current[idx + 1]?.focus();
-    }
-  }
-
-  function handleCharKeyDown(idx: number, e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !chars[idx] && idx > 0) {
-      inputRefs.current[idx - 1]?.focus();
-    }
-  }
-
-  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
-    e.preventDefault();
-    const pasted = e.clipboardData
-      .getData('text')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6);
-    const next = ['', '', '', '', '', ''];
-    pasted.split('').forEach((c, i) => {
-      next[i] = c;
-    });
-    setChars(next);
-    inputRefs.current[Math.min(pasted.length, 5)]?.focus();
-  }
-
-  const codeComplete = accessCode.length === 6;
-
-  // ── Post-join success screen ──────────────────────────────────────────────
 
   if (joined) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center space-y-6 join-success-enter max-w-sm mx-auto">
-        {/* Success icon */}
-        <div className="relative">
-          <div
-            className="w-24 h-24 rounded-full flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, hsl(142 71% 45% / 0.15), hsl(142 71% 45% / 0.06))',
-              border: '2px solid hsl(142 71% 45% / 0.4)',
-              boxShadow: '0 0 40px hsl(142 71% 45% / 0.2)',
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-11 h-11 check-icon-pop"
-              fill="none"
-              stroke="hsl(142 71% 45%)"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Store info */}
-        <div className="space-y-1.5">
-          <p className="text-xs font-body text-muted-foreground uppercase tracking-wider">
-            Entrada confirmada
-          </p>
-          <h2 className="font-display font-bold text-2xl text-foreground leading-tight">
-            {joined.name}
-          </h2>
-          <p className="text-sm text-muted-foreground font-body">
-            Papel:{' '}
-            <span className="font-semibold text-foreground">{ROLE_LABELS[role]}</span>
-          </p>
-        </div>
-
-        {/* Redirect indicator */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
-          <svg className="animate-spin w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          Redirecionando para o Plano Operacional...
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex flex-col gap-2 w-full">
-          <Button
-            className="w-full rounded-xl"
-            onClick={() => router.push(`/store/${joined.id}/plan`)}
-          >
-            Ir para o PO agora
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full rounded-xl"
-            onClick={() => {
-              setJoined(null);
-              setChars(['', '', '', '', '', '']);
-            }}
-          >
-            Entrar em outra loja
-          </Button>
-        </div>
-      </div>
+      <JoinSuccessScreen
+        joined={joined}
+        role={role}
+        onGoToPlan={() => router.push(`/store/${joined.id}/plan`)}
+        onJoinAnother={() => {
+          reset();
+          setChars(['', '', '', '', '', '']);
+        }}
+      />
     );
   }
 
-  // ── Main page ─────────────────────────────────────────────────────────────
-
   return (
     <div className="max-w-lg mx-auto py-4 space-y-7">
-      {/* Page heading */}
       <div className="text-center space-y-2">
         <div
           className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-1"
@@ -219,15 +63,7 @@ export default function JoinPage() {
             boxShadow: '0 4px 16px hsl(222 47% 21% / 0.25)',
           }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="w-6 h-6 text-white"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5z" />
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />
@@ -239,140 +75,31 @@ export default function JoinPage() {
         </p>
       </div>
 
-      {!loadingMine && myStores.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-5 py-8 text-center space-y-3">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-card text-muted-foreground border shadow-sm">
-            <Store className="h-6 w-6" aria-hidden />
-          </div>
-          <p className="font-display text-sm font-semibold text-foreground">
-            Nenhuma loja vinculada ainda
-          </p>
-          <p className="text-xs text-muted-foreground font-body max-w-xs mx-auto leading-relaxed">
-            Quando entrar com um código válido, sua loja aparecerá aqui para acesso rápido ao Plano Operacional.
-          </p>
-        </div>
+      {!loadingMine && (
+        <MyStoresList
+          stores={myStores}
+          onNavigateToPlan={(storeId) => router.push(`/store/${storeId}/plan`)}
+        />
       )}
 
-      {/* Existing memberships */}
-      {!loadingMine && myStores.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-center text-muted-foreground uppercase tracking-wider font-body">
-            Suas lojas atuais
-          </p>
-          {myStores.map((s) => (
-            <div
-              key={s.storeId}
-              className="bg-card rounded-xl border border-primary/15 px-4 py-3 flex items-center justify-between gap-3 hover:shadow-md hover:border-primary/30"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
-                    <rect x="2" y="7" width="20" height="14" rx="2" />
-                    <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-                  </svg>
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-foreground font-body truncate">{s.storeName}</p>
-                  <p className="text-xs text-muted-foreground font-body">{ROLE_LABELS[s.role]}</p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="rounded-lg shrink-0"
-                onClick={() => router.push(`/store/${s.storeId}/plan`)}
-              >
-                Ir para o PO
-              </Button>
-            </div>
-          ))}
-          <p className="text-xs text-center text-muted-foreground pt-1 font-body">
-            Ou entre em uma nova loja abaixo
-          </p>
-        </div>
-      )}
-
-      {/* Join form */}
       <div className="bg-card rounded-xl border shadow-sm p-6 space-y-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 flex items-start gap-2">
-              <svg
-                viewBox="0 0 16 16"
-                className="w-4 h-4 shrink-0 mt-0.5"
-                fill="currentColor"
-              >
+              <svg viewBox="0 0 16 16" className="w-4 h-4 shrink-0 mt-0.5" fill="currentColor">
                 <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 9.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5v-4h1.5v4z" />
               </svg>
               <span>{error}</span>
             </div>
           )}
 
-          {/* OTP Code Input */}
           <div className="space-y-3">
             <Label className="text-sm font-medium text-foreground block text-center">
               Código de acesso
             </Label>
-
-            {/* Code inputs container — glows green when complete */}
-            <div
-              className="flex gap-2.5 justify-center rounded-2xl py-3 px-2"
-              style={{
-                background: codeComplete ? 'hsl(142 71% 45% / 0.06)' : 'transparent',
-                boxShadow: codeComplete ? '0 0 0 2px hsl(142 71% 45% / 0.25)' : 'none',
-                transition: 'background 400ms, box-shadow 400ms',
-              }}
-            >
-              {chars.map((char, idx) => (
-                <input
-                  key={idx}
-                  ref={(el) => {
-                    inputRefs.current[idx] = el;
-                  }}
-                  type="text"
-                  inputMode="text"
-                  maxLength={2}
-                  value={char}
-                  onChange={(e) => handleCharChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleCharKeyDown(idx, e)}
-                  onPaste={idx === 0 ? handlePaste : undefined}
-                  className={cn(
-                    'w-12 h-[3.75rem] text-center text-2xl font-mono font-bold uppercase rounded-xl border-2 bg-background outline-none select-none',
-                    char
-                      ? 'border-accent text-foreground'
-                      : 'border-border text-foreground',
-                    'focus:border-primary focus:ring-0',
-                  )}
-                  style={
-                    char
-                      ? { boxShadow: '0 0 0 4px hsl(142 71% 45% / 0.12)' }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-
-            {codeComplete ? (
-              <p className="text-xs text-accent text-center font-body flex items-center justify-center gap-1.5 font-medium">
-                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
-                  <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
-                </svg>
-                Código completo — selecione seu papel abaixo
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center font-body">
-                Cole ou digite o código da sua loja
-              </p>
-            )}
+            <OtpInput chars={chars} onChange={setChars} />
           </div>
 
-          {/* Role selector */}
           <div className="space-y-1.5">
             <Label htmlFor="store-role" className="text-sm font-medium text-foreground">
               Seu papel na loja
@@ -385,17 +112,11 @@ export default function JoinPage() {
                 className="w-full h-11 appearance-none rounded-xl border-2 border-border bg-background px-4 pr-10 text-sm font-body cursor-pointer focus:outline-none focus:border-primary focus:ring-0 hover:border-primary/35"
               >
                 {(Object.entries(ROLE_LABELS) as [StoreRole, string][]).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
+                  <option key={value} value={value}>{label}</option>
                 ))}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <svg
-                  viewBox="0 0 16 16"
-                  className="w-4 h-4 text-muted-foreground"
-                  fill="currentColor"
-                >
+                <svg viewBox="0 0 16 16" className="w-4 h-4 text-muted-foreground" fill="currentColor">
                   <path d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" />
                 </svg>
               </div>
