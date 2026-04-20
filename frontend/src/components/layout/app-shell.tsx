@@ -87,11 +87,58 @@ export default function AppShell({ children, userRole }: AppShellProps) {
         </div>
       </header>
 
+      {showSidebar && (
+        <div className="border-b bg-card px-4 py-3 lg:hidden">
+          {sessionId ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  SessÃ£o
+                </p>
+                <p className="mt-1 font-display text-sm font-semibold text-foreground">
+                  {sessionName ?? '...'}
+                </p>
+              </div>
+              <nav className="flex flex-wrap gap-2">
+                <Link
+                  href={`/dashboard/session/${sessionId}`}
+                  className={navLinkClass(pathname === `/dashboard/session/${sessionId}`)}
+                >
+                  <Store className="h-4 w-4 shrink-0" />
+                  Lojas
+                </Link>
+                <Link
+                  href={`/dashboard/session/${sessionId}/quiz`}
+                  className={navLinkClass(pathname.startsWith(`/dashboard/session/${sessionId}/quiz`))}
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  Quiz
+                </Link>
+                <Link href="/dashboard" className={navLinkClass(false)}>
+                  <ArrowLeft className="h-4 w-4 shrink-0" />
+                  Dashboard
+                </Link>
+              </nav>
+            </div>
+          ) : (
+            <nav className="flex flex-wrap gap-2">
+              <Link
+                href="/dashboard"
+                className={navLinkClass(pathname === '/dashboard' || pathname.startsWith('/dashboard/'))}
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                Dashboard
+              </Link>
+            </nav>
+          )}
+        </div>
+      )}
+
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar — FACILITATOR only */}
         {showSidebar && (
-          <aside className="w-[260px] bg-card border-r shrink-0 py-6 px-4">
+          <aside className="hidden w-[260px] shrink-0 border-r bg-card px-4 py-6 lg:block">
             {sessionId ? (
               <nav className="space-y-1">
                 {/* Session header */}
@@ -143,7 +190,7 @@ export default function AppShell({ children, userRole }: AppShellProps) {
         )}
 
         {/* Content */}
-        <div className="flex-1 bg-background p-8 overflow-auto">
+        <div className="flex-1 overflow-auto bg-background p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </div>
