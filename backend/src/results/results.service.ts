@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../common/prisma.service';
-import { RankingEntry, RoundResultEntry, StoreResultEntry } from './interfaces/results.interface';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../common/prisma.service";
+import {
+  RankingEntry,
+  RoundResultEntry,
+  StoreResultEntry,
+} from "./interfaces/results.interface";
 
 @Injectable()
 export class ResultsService {
@@ -16,7 +20,7 @@ export class ResultsService {
     const results = await this.prisma.roundResult.findMany({
       where: { sessionId },
       include: { store: { select: { name: true } } },
-      orderBy: [{ storeId: 'asc' }, { round: 'asc' }],
+      orderBy: [{ storeId: "asc" }, { round: "asc" }],
     });
 
     const quizAnswers = await this.prisma.quizAnswer.findMany({
@@ -24,7 +28,10 @@ export class ResultsService {
       select: { storeId: true, round: true, scorePercentage: true },
     });
     const quizScoreMap = new Map(
-      quizAnswers.map((qa) => [`${qa.storeId}:${qa.round}`, qa.scorePercentage]),
+      quizAnswers.map((qa) => [
+        `${qa.storeId}:${qa.round}`,
+        qa.scorePercentage,
+      ]),
     );
 
     const storeMap = new Map<string, StoreResultEntry>();
@@ -37,10 +44,13 @@ export class ResultsService {
           rounds: [],
         });
       }
-      const quizScorePercentage = quizScoreMap.get(`${r.storeId}:${r.round}`) ?? 0;
+      const quizScorePercentage =
+        quizScoreMap.get(`${r.storeId}:${r.round}`) ?? 0;
       storeMap
         .get(r.storeId)!
-        .rounds.push(this.toRoundEntry(r, session.initialCash, quizScorePercentage));
+        .rounds.push(
+          this.toRoundEntry(r, session.initialCash, quizScorePercentage),
+        );
     }
 
     return [...storeMap.values()];
@@ -56,14 +66,19 @@ export class ResultsService {
     const results = await this.prisma.roundResult.findMany({
       where: { sessionId },
       include: { store: { select: { name: true } } },
-      orderBy: { round: 'asc' },
+      orderBy: { round: "asc" },
     });
 
     const storeMap = new Map<
       string,
       {
         storeName: string;
-        rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
+        rounds: {
+          round: number;
+          ebitda: number;
+          ebitdaPercentage: number;
+          cashFinal: number;
+        }[];
         totalEbitda: number;
         sumEbitdaPct: number;
       }
@@ -80,7 +95,12 @@ export class ResultsService {
       }
       const entry = storeMap.get(r.storeId)!;
       const cashFinal = session.initialCash - r.cashUsed + r.ebitda;
-      entry.rounds.push({ round: r.round, ebitda: r.ebitda, ebitdaPercentage: r.ebitdaPercentage, cashFinal });
+      entry.rounds.push({
+        round: r.round,
+        ebitda: r.ebitda,
+        ebitdaPercentage: r.ebitdaPercentage,
+        cashFinal,
+      });
       entry.totalEbitda += r.ebitda;
       entry.sumEbitdaPct += r.ebitdaPercentage;
     }
@@ -88,7 +108,8 @@ export class ResultsService {
     const unsorted = [...storeMap.entries()].map(([storeId, data]) => ({
       storeId,
       storeName: data.storeName,
-      avgEbitdaPercentage: data.rounds.length > 0 ? data.sumEbitdaPct / data.rounds.length : 0,
+      avgEbitdaPercentage:
+        data.rounds.length > 0 ? data.sumEbitdaPct / data.rounds.length : 0,
       totalEbitda: data.totalEbitda,
       rounds: data.rounds,
     }));
@@ -97,7 +118,10 @@ export class ResultsService {
 
     let rank = 1;
     return unsorted.map((entry, index) => {
-      if (index > 0 && entry.avgEbitdaPercentage < unsorted[index - 1].avgEbitdaPercentage) {
+      if (
+        index > 0 &&
+        entry.avgEbitdaPercentage < unsorted[index - 1].avgEbitdaPercentage
+      ) {
         rank = index + 1;
       }
       return { rank, ...entry };
@@ -133,10 +157,14 @@ export class ResultsService {
     // cashFinal = initialCash - cashUsed + grossRevenue - totalCosts
     //           = initialCash - cashUsed + ebitda  (since ebitda = grossRevenue - totalCosts)
     const cashFinal = initialCash - r.cashUsed + r.ebitda;
+    const finalScore = quizScorePercentage * r.csat;
+
     return {
       round: r.round,
       quizScorePercentage,
       csat: r.csat,
+      finalScore, //
+
       availability: r.availability,
       basketPrice: r.basketPrice,
       rankScore: r.rankScore,

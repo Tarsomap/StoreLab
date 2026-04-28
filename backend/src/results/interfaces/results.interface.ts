@@ -2,6 +2,7 @@ export interface RoundResultEntry {
   round: number;
   quizScorePercentage: number;
   csat: number;
+  finalScore: number;
   availability: number;
   basketPrice: number;
   rankScore: number;
@@ -36,5 +37,10 @@ export interface RankingEntry {
   storeName: string;
   avgEbitdaPercentage: number;
   totalEbitda: number;
-  rounds: { round: number; ebitda: number; ebitdaPercentage: number; cashFinal: number }[];
+  rounds: {
+    round: number;
+    ebitda: number;
+    ebitdaPercentage: number;
+    cashFinal: number;
+  }[];
 }
