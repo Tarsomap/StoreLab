@@ -47,7 +47,8 @@ else
 fi
 
 # 9. Contagem de imports diretos `api.` fora de hooks (métrica do acoplamento alvo)
-grep -rE "api\.(get|post|patch|put|delete)" frontend/src/app 2>/dev/null | wc -l > "${OUT}/direct-api-calls-in-pages.txt"
+# grep retorna código 1 quando não há matches; subshell + || true evita falha com pipefail
+(grep -rE "api\.(get|post|patch|put|delete)" frontend/src/app 2>/dev/null || true) | wc -l > "${OUT}/direct-api-calls-in-pages.txt"
 
 echo "✅ Snapshot ${MODE} salvo em ${OUT}/"
 ls -la "${OUT}/"

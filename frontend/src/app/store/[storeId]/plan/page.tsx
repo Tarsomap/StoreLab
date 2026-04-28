@@ -9,7 +9,6 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { api, ApiError } from '@/lib/api';
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { POSkeleton } from '@/components/skeletons/po-skeleton';
 import { toast } from 'sonner';
@@ -20,6 +19,9 @@ import { Users } from 'lucide-react';
 import { usePlan } from '@/features/plan/hooks/use-plan';
 import { useRealtimePlan } from '@/features/plan/hooks/use-realtime-plan';
 import { useStockAvailability } from '@/features/plan/hooks/use-stock-availability';
+import { useSavePlan } from '@/features/plan/hooks/use-save-plan';
+import { useSaveCategoryDecision } from '@/features/plan/hooks/use-save-category-decision';
+import { useConfirmPlan } from '@/features/plan/hooks/use-confirm-plan';
 import { buildCatRows, buildDre } from '@/features/plan/lib/plan-math';
 import { PlanFullResponse, ConfirmState } from '@/features/plan/types';
 import { PlanHeader } from '@/features/plan/components/PlanHeader';
@@ -39,14 +41,17 @@ export default function PlanPage() {
 
   const { plan, store, myRole, quizScore, isLoading, error, setPlan } = usePlan(storeId);
   const { stockAvailMap, fetchStockAvailability } = useStockAvailability();
+  const { mutate: savePlan, isLoading: savingPlan, error: savePlanError } = useSavePlan();
+  const { mutate: saveCategoryDecision, isLoading: savingCat, error: saveCatError } = useSaveCategoryDecision();
+  const { mutate: confirmPlan } = useConfirmPlan();
 
   const handleRealtimeUpdate = useCallback((updated: PlanFullResponse) => {
     setPlan(updated);
   }, [setPlan]);
   useRealtimePlan(store?.sessionId, storeId, handleRealtimeUpdate);
 
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
+  const saving = savingPlan || savingCat;
+  const saveError = savePlanError ?? saveCatError ?? '';
   const [confirmState, setConfirmState] = useState<ConfirmState>('idle');
 
   const finFirst = useRef(true);
@@ -92,36 +97,24 @@ export default function PlanPage() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
-  async function mutate(path: string, body: unknown) {
+  async function handleMutate(path: string, body: unknown) {
     if (!plan) return;
-    setSaveError('');
-    setSaving(true);
     try {
-      const updated = await api.put<PlanFullResponse>(path, body);
+      const updated = await savePlan(path, body);
       setPlan(updated);
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : 'Erro ao salvar');
-    } finally {
-      setSaving(false);
+    } catch {
+      // error exposed via savePlanError from hook
     }
   }
 
   async function handleCategoryDecision(categoryId: string, stockPurchased: number, priceMargin: number) {
     if (!plan || !store) return;
-    setSaveError('');
-    setSaving(true);
     try {
-      const updated = await api.put<PlanFullResponse>(`/plans/${plan.id}/category-decision`, {
-        categoryId,
-        stockPurchased,
-        priceMargin,
-      });
+      const updated = await saveCategoryDecision({ planId: plan.id, categoryId, stockPurchased, priceMargin });
       setPlan(updated);
       await fetchStockAvailability(store.sessionId, plan.configVersion);
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : 'Erro ao salvar');
-    } finally {
-      setSaving(false);
+    } catch {
+      // error exposed via saveCatError from hook
     }
   }
 
@@ -129,7 +122,7 @@ export default function PlanPage() {
     if (!plan) return;
     setConfirmState('loading');
     try {
-      const updated = await api.post<PlanFullResponse>(`/plans/${plan.id}/confirm`, {});
+      const updated = await confirmPlan(plan.id);
       setPlan(updated);
       setConfirmState('success');
       toast.success('PO confirmado com sucesso!');
@@ -194,7 +187,7 @@ export default function PlanPage() {
             editable={editable}
             saving={saving}
             onCategoryDecision={handleCategoryDecision}
-            onMutate={mutate}
+            onMutate={handleMutate}
           />
 
           <Card className="shadow-sm">
@@ -214,7 +207,7 @@ export default function PlanPage() {
                 editable={editable}
                 saving={saving}
                 onSave={(cashier, service) =>
-                  mutate(`/plans/${plan.id}/workforce`, { cashierOperators: cashier, serviceOperators: service })
+                  handleMutate(`/plans/${plan.id}/workforce`, { cashierOperators: cashier, serviceOperators: service })
                 }
               />
             </CardContent>
@@ -225,7 +218,7 @@ export default function PlanPage() {
             planId={plan.id}
             editable={editable}
             saving={saving}
-            onMutate={mutate}
+            onMutate={handleMutate}
           />
 
           <PlanConfirmButton
