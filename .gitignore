@@ -52,4 +52,3 @@ backend/prisma/migrations/migration_lock.toml
 backend/Untitled
 RELATÓRIO.md
 *.tmp
-'@ | Out-File -FilePath .gitignore -Encoding utf8 -Force
