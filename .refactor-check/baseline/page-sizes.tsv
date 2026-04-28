@@ -1,11 +1,11 @@
 frontend/src/app/(auth)/login/page.tsx	170
 frontend/src/app/(auth)/register/page.tsx	169
 frontend/src/app/dashboard/page.tsx	218
-frontend/src/app/dashboard/session/[id]/page.tsx	224
-frontend/src/app/dashboard/session/[id]/quiz/page.tsx	165
-frontend/src/app/dashboard/session/[id]/transfers/page.tsx	326
+frontend/src/app/dashboard/session/[id]/page.tsx	222
+frontend/src/app/dashboard/session/[id]/quiz/page.tsx	150
+frontend/src/app/dashboard/session/[id]/transfers/page.tsx	119
 frontend/src/app/join/page.tsx	147
 frontend/src/app/page.tsx	14
 frontend/src/app/session/[id]/results/page.tsx	169
-frontend/src/app/store/[storeId]/plan/page.tsx	242
+frontend/src/app/store/[storeId]/plan/page.tsx	235
 frontend/src/app/store/[storeId]/quiz/page.tsx	126

@@ -41,6 +41,8 @@ StoreRole
 StoreStatus
 StoreSummary
 SubmitResponse
+TransferSessionSummary
+TransferSummaryEntry
 UsePlanResult
 UserRole
 UserStoreEntry
