@@ -9,7 +9,6 @@
  */
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { api, ApiError } from '@/lib/api';
 import { formatBrl } from '@/lib/format-brl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,8 @@ import { StoreCard } from '@/features/session/components/StoreCard';
 import { CreateStoreForm } from '@/features/session/components/CreateStoreForm';
 import { useSession } from '@/features/session/hooks/use-session';
 import { PHASE_LABEL, getActiveStepIndex, facilitatorQuizRound } from '@/features/session/lib/session-phases';
+import { useAdvanceSession } from '@/features/session/hooks/use-advance-session';
+import { useExecuteRound } from '@/features/session/hooks/use-execute-round';
 import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
 
 export default function SessionManagementPage() {
@@ -32,11 +33,12 @@ export default function SessionManagementPage() {
   const sessionId = params.id;
 
   const { session, statusData, loading, error, refetch } = useSession(sessionId);
+  const { mutate: advanceSession, isLoading: advancing, error: advanceError } = useAdvanceSession(sessionId);
+  const { mutate: executeRound, isLoading: executing, error: executeError } = useExecuteRound(sessionId);
   const [showCreateStore, setShowCreateStore] = useState(false);
-  const [advancing, setAdvancing] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  const [actionError, setActionError] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const actionError = advanceError ?? executeError ?? '';
 
   const quizRound = session ? facilitatorQuizRound(session.status) : null;
   const { hasQuestions } = useQuizRoundProgress(sessionId, quizRound, session?.status ?? 'SETUP');
@@ -48,25 +50,21 @@ export default function SessionManagementPage() {
   }, [sessionId]);
 
   async function handleAdvance() {
-    setActionError('');
-    setAdvancing(true);
     try {
-      await api.patch(`/sessions/${sessionId}/advance`, {});
+      await advanceSession();
       await refetch();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Erro ao avançar fase');
-    } finally { setAdvancing(false); }
+    } catch {
+      // error exposed via advanceError from hook
+    }
   }
 
   async function handleExecute() {
-    setActionError('');
-    setExecuting(true);
     try {
-      await api.post(`/sessions/${sessionId}/execute`, {});
+      await executeRound();
       await refetch();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Erro ao executar rodada');
-    } finally { setExecuting(false); }
+    } catch {
+      // error exposed via executeError from hook
+    }
   }
 
   async function copyCode(code: string) {

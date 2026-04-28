@@ -1,7 +1,7 @@
 /auth/login
 /auth/register
-/plans/${plan.id}/category-decision
-/plans/${plan.id}/confirm
+/plans/${params.planId}/category-decision
+/plans/${planId}/confirm
 /plans/${storeId}/config/${cv}
 /results/${sessionId}
 /results/${sessionId}/ranking

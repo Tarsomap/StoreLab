@@ -8,8 +8,8 @@
  */
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { api, ApiError } from '@/lib/api';
 import { useQuestions } from '@/features/quiz/hooks';
+import { useSaveQuestions } from '@/features/quiz/hooks/use-save-questions';
 import { validateQuestions } from '@/features/quiz/lib';
 import { QUESTIONS_COUNT } from '@/features/quiz/types';
 import type { QuestionDraft } from '@/features/quiz/types';
@@ -22,10 +22,10 @@ export default function QuizManagementPage() {
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
   const [round, setRound] = useState<1 | 2 | 3>(1);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const { mutate: saveQuestions, isLoading: saving, error: saveError } = useSaveQuestions();
 
   // savedCount per round — updated after each successful load or save
   const [savedCount, setSavedCount] = useState<Record<1 | 2 | 3, number>>({ 1: 0, 2: 0, 3: 0 });
@@ -40,7 +40,6 @@ export default function QuizManagementPage() {
   useEffect(() => {
     setQuestions(loadedQuestions);
     setSavedCount((prev) => ({ ...prev, [round]: roundSavedCount }));
-    setSaveError('');
     setSaveSuccess(false);
     setValidationErrors([]);
   }, [loadedQuestions, round, roundSavedCount]);
@@ -82,27 +81,13 @@ export default function QuizManagementPage() {
     setValidationErrors(errors);
     if (errors.length > 0) return;
 
-    setSaving(true);
-    setSaveError('');
     setSaveSuccess(false);
     try {
-      await api.post(`/sessions/${sessionId}/quiz/questions`, {
-        round,
-        questions: questions.map((q, idx) => ({
-          prompt: q.prompt.trim(),
-          order: idx + 1,
-          options: q.options.map((o) => ({
-            label: o.label.trim(),
-            isCorrect: o.isCorrect,
-          })),
-        })),
-      });
+      await saveQuestions({ sessionId, round, questions });
       setSaveSuccess(true);
       setSavedCount((prev) => ({ ...prev, [round]: QUESTIONS_COUNT }));
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : 'Erro ao salvar perguntas');
-    } finally {
-      setSaving(false);
+    } catch {
+      // error exposed via saveError from hook
     }
   }
 
