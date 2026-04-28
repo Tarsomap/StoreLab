@@ -27,7 +27,7 @@ Sistema multiplayer em tempo real onde equipes competem gerenciando lojas virtua
 | Frontend | Next.js 14.x |
 | Estilização | Tailwind CSS + shadcn/ui |
 | Autenticação | JWT + Refresh Token |
-| Deploy | Railway / Render |
+| Deploy | Vercel |
 
 ---
 
