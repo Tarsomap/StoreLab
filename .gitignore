@@ -1,0 +1,55 @@
+@'
+# === Code Review Graph ===
+.code-review-graph/
+
+# === Dependencies ===
+node_modules/
+.pnp
+.pnp.js
+
+# === Build & Cache ===
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# === Logs ===
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# === IDEs & Editors ===
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === AI Tooling (configs locais) ===
+.claude/settings.json
+.claude/settings.local.json
+.claude/skills/
+.cursor/
+.mcp.json
+.opencode.json
+
+# === Refactor Check (mantém scripts e baseline, ignora reports) ===
+.refactor-check/reports/
+
+# === Prisma (lock files locais) ===
+backend/prisma/migrations/migration_lock.toml
+
+# === Arquivos temporários ===
+backend/Untitled
+RELATÓRIO.md
+*.tmp
+'@ | Out-File -FilePath .gitignore -Encoding utf8 -Force
