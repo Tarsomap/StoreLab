@@ -1,42 +1,52 @@
-'use client';
+﻿"use client";
 
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { useState } from "react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Activity } from 'lucide-react';
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Activity } from "lucide-react";
+import { useActivityLogs } from "../hooks/use-activity-logs";
+import { useSessionStores } from "@/features/session/hooks/use-session-stores";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+const ACTION_LABELS: Record<string, string> = {
+  LOGIN_SUCCESS: "Login realizado",
+  LOGIN_FAILED: "Falha no login",
+  LOGOUT: "Logout",
+  TWO_FA_ENABLED: "2FA ativado",
+  TWO_FA_DISABLED: "2FA desativado",
+  TWO_FA_VERIFIED: "2FA verificado",
+};
 
-interface AuditLogEntry {
-  id: string;
-  userId: string | null;
-  action: string;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  user: { id: string; name: string; email: string } | null;
-}
+const ACTION_COLORS: Record<string, string> = {
+  LOGIN_SUCCESS: "bg-accent/10 text-accent border border-accent/20",
+  LOGIN_FAILED: "bg-destructive/10 text-destructive border border-destructive/20",
+  LOGOUT: "bg-muted text-muted-foreground border border-border",
+  TWO_FA_ENABLED: "bg-primary/10 text-primary border border-primary/20",
+  TWO_FA_DISABLED: "bg-destructive/10 text-destructive border border-destructive/20",
+  TWO_FA_VERIFIED: "bg-primary/10 text-primary border border-primary/20",
+};
 
-interface StoreBasic {
-  storeId: string;
-  storeName: string;
-}
-
-interface SessionStatusResponse {
-  stores: StoreBasic[];
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(iso));
 }
 
 interface SessionOption {
@@ -48,79 +58,15 @@ interface ActivityLogsSectionProps {
   sessions: SessionOption[];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const ACTION_LABELS: Record<string, string> = {
-  LOGIN_SUCCESS: 'Login realizado',
-  LOGIN_FAILED: 'Falha no login',
-  LOGOUT: 'Logout',
-  TWO_FA_ENABLED: '2FA ativado',
-  TWO_FA_DISABLED: '2FA desativado',
-  TWO_FA_VERIFIED: '2FA verificado',
-};
-
-const ACTION_COLORS: Record<string, string> = {
-  LOGIN_SUCCESS: 'bg-accent/10 text-accent border border-accent/20',
-  LOGIN_FAILED: 'bg-destructive/10 text-destructive border border-destructive/20',
-  LOGOUT: 'bg-muted text-muted-foreground border border-border',
-  TWO_FA_ENABLED: 'bg-primary/10 text-primary border border-primary/20',
-  TWO_FA_DISABLED: 'bg-destructive/10 text-destructive border border-destructive/20',
-  TWO_FA_VERIFIED: 'bg-primary/10 text-primary border border-primary/20',
-};
-
-function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(iso));
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function ActivityLogsSection({ sessions }: ActivityLogsSectionProps) {
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
-  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
-  const [stores, setStores] = useState<StoreBasic[]>([]);
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
 
-  // Busca lojas da sessão selecionada
-  useEffect(() => {
-    if (!selectedSessionId) {
-      setStores([]);
-      setSelectedStoreId('');
-      return;
-    }
-    api
-      .get<SessionStatusResponse>(`/sessions/${selectedSessionId}/status`)
-      .then((data) => {
-        setStores(data.stores);
-        setSelectedStoreId('');
-      })
-      .catch(() => setStores([]));
-  }, [selectedSessionId]);
-
-  // Busca logs sempre que os filtros mudarem
-  useEffect(() => {
-    if (!selectedSessionId) {
-      setLogs([]);
-      return;
-    }
-    setLogsLoading(true);
-    const params = new URLSearchParams();
-    params.set('sessionId', selectedSessionId);
-    if (selectedStoreId) params.set('storeId', selectedStoreId);
-
-    api
-      .get<AuditLogEntry[]>(`/audit-logs?${params.toString()}`)
-      .then(setLogs)
-      .catch(() => setLogs([]))
-      .finally(() => setLogsLoading(false));
-  }, [selectedSessionId, selectedStoreId]);
+  const { data: stores } = useSessionStores(selectedSessionId);
+  const { data: logs, isLoading: logsLoading } = useActivityLogs({
+    sessionId: selectedSessionId,
+    storeId: selectedStoreId || undefined,
+  });
 
   return (
     <section className="space-y-4" aria-labelledby="activity-logs-heading">
@@ -135,21 +81,19 @@ export function ActivityLogsSection({ sessions }: ActivityLogsSectionProps) {
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-muted-foreground" aria-hidden />
             <CardTitle className="font-display text-base font-semibold text-foreground">
-              Histórico de autenticação dos jogadores
+              Historico de autenticacao dos jogadores
             </CardTitle>
           </div>
           <CardDescription className="text-sm text-muted-foreground">
-            Filtre por sessão e loja para acompanhar logins, logouts e eventos de 2FA.
+            Filtre por sessao e loja para acompanhar logins, logouts e eventos de 2FA.
           </CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="pt-4 space-y-4">
-
-          {/* Filtros */}
           <div className="flex flex-wrap gap-3">
             <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
               <SelectTrigger className="w-52">
-                <SelectValue placeholder="Selecione uma sessão" />
+                <SelectValue placeholder="Selecione uma sessao" />
               </SelectTrigger>
               <SelectContent>
                 {sessions.map((s) => (
@@ -178,28 +122,24 @@ export function ActivityLogsSection({ sessions }: ActivityLogsSectionProps) {
             </Select>
           </div>
 
-          {/* Estado vazio — sem sessão selecionada */}
           {!selectedSessionId && (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Selecione uma sessão para ver os logs.
+              Selecione uma sessao para ver os logs.
             </div>
           )}
 
-          {/* Carregando */}
           {selectedSessionId && logsLoading && (
             <div className="py-10 text-center text-sm text-muted-foreground animate-pulse">
-              Carregando logs…
+              Carregando logs...
             </div>
           )}
 
-          {/* Sem resultados */}
           {selectedSessionId && !logsLoading && logs.length === 0 && (
             <div className="py-10 text-center text-sm text-muted-foreground">
               Nenhum log encontrado para os filtros selecionados.
             </div>
           )}
 
-          {/* Tabela */}
           {selectedSessionId && !logsLoading && logs.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
@@ -221,13 +161,13 @@ export function ActivityLogsSection({ sessions }: ActivityLogsSectionProps) {
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-xs">
-                            {(log.metadata?.email as string) ?? '—'}
+                            {(log.metadata?.email as string) ?? "-"}
                           </span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
                         <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ACTION_COLORS[log.action] ?? 'bg-muted text-muted-foreground border border-border'}`}
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ACTION_COLORS[log.action] ?? "bg-muted text-muted-foreground border border-border"}`}
                         >
                           {ACTION_LABELS[log.action] ?? log.action}
                         </span>
