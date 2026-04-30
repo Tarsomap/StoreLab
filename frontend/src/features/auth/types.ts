@@ -25,3 +25,33 @@ export interface UserStoreEntry {
   sessionId: string;
   role: StoreRole;
 }
+
+// === MFA (2FA TOTP) ===
+
+export interface Enable2faResponse {
+  qrCode: string;
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface Confirm2faResponse {
+  message: string;
+  success: boolean;
+}
+
+export interface Verify2faResponse {
+  token: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    twoFactorEnabled: boolean;
+  };
+}
+
+export interface MfaRequiredResponse {
+  mfaRequired: true;
+  userId: string;
+}
