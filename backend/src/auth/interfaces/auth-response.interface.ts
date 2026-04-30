@@ -12,6 +12,8 @@ export interface AuthUser {
   email: string;
   /** Facilitador ou jogador. */
   role: UserRole;
+  /** Se o usuário tem 2FA ativado. */
+  twoFactorEnabled: boolean;
 }
 
 /**

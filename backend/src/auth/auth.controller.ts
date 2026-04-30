@@ -1,9 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { Enable2faDto } from './dto/enable-2fa.dto';
+import { Confirm2faDto } from './dto/confirm-2fa.dto';
+import { Verify2faDto } from './dto/verify-2fa.dto';
 import { AuthResponse, RefreshResponse } from './interfaces/auth-response.interface';
+import { Enable2faResponse, Confirm2faResponse, MfaRequiredResponse } from './interfaces/mfa-response.interface';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 /**
  * Endpoints HTTP públicos de autenticação (sem JWT ainda): cadastro, login e renovação de token.
@@ -33,7 +38,7 @@ export class AuthController {
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto): Promise<AuthResponse> {
+  login(@Body() dto: LoginDto): Promise<AuthResponse | MfaRequiredResponse> {
     return this.authService.login(dto);
   }
 
@@ -46,5 +51,61 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   refresh(@Body() dto: RefreshDto): Promise<RefreshResponse> {
     return this.authService.refresh(dto.refreshToken);
+  }
+
+  /**
+   * Inicia o fluxo de ativação de MFA: gera um secret TOTP e QR code.
+   * Requer autenticação JWT (usuário logado).
+   *
+   * @param req - Requisição com usuário extraído do JWT (via JwtAuthGuard).
+   * @returns QR code em base64, secret ASCII e URL otpauth para importação.
+   */
+  @Post('enable-2fa')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  enable2fa(@Request() req: any): Promise<Enable2faResponse> {
+    return this.authService.enable2fa(req.user.sub);
+  }
+
+  /**
+   * Confirma a ativação de MFA: valida código TOTP e salva o secret permanentemente.
+   * Requer autenticação JWT.
+   *
+   * @param req - Requisição com usuário extraído do JWT.
+   * @param dto - Código TOTP (6 dígitos) e secret temporário do enable-2fa.
+   * @returns Confirmação de sucesso.
+   */
+  @Post('confirm-2fa')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  confirm2fa(@Request() req: any, @Body() dto: Confirm2faDto): Promise<Confirm2faResponse> {
+    return this.authService.confirm2fa(req.user.sub, dto);
+  }
+
+  /**
+   * Valida código TOTP durante login quando MFA está ativado.
+   * Endpoint público (sem guard) porque o usuário ainda não tem JWT válido neste ponto.
+   *
+   * @param dto - User ID e código TOTP de 6 dígitos.
+   * @returns JWT e refresh token se código for válido.
+   */
+  @Post('verify-2fa')
+  @HttpCode(HttpStatus.OK)
+  verify2fa(@Body() dto: Verify2faDto): Promise<AuthResponse> {
+    return this.authService.verify2fa(dto);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  logout(@Request() req: any): Promise<void> {
+    return this.authService.logout(req.user.sub);
+  }
+
+  @Post('disable-2fa')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  disable2fa(@Request() req: any): Promise<void> {
+    return this.authService.disable2fa(req.user.sub);
   }
 }

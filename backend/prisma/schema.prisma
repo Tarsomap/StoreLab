@@ -91,18 +91,38 @@ model CapexOption {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id               String   @id @default(uuid())
-  name             String
-  email            String   @unique
-  passwordHash     String
-  role             UserRole
-  refreshTokenHash String?  // armazenado hasheado; null quando não há sessão ativa
-  createdAt        DateTime @default(now())
+  id                  String   @id @default(uuid())
+  name                String
+  email               String   @unique
+  passwordHash        String
+  role                UserRole
+  refreshTokenHash    String?  // armazenado hasheado; null quando não há sessão ativa
+  twoFactorEnabled    Boolean  @default(false) // MFA ativado par este usuário
+  twoFactorSecret     String?  // secret TOTP armazenado criptografado (nullable até ativar)
+  createdAt           DateTime @default(now())
 
   facilitatedSessions Session[]
   storeMembers        StoreMember[]
   quizAnswers         UserQuizAnswer[]
   transfers           PlayerTransfer[]
+  auditLogs           AuditLog[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOG
+// Registra eventos de autenticação por usuário.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // LOGIN_SUCCESS | LOGIN_FAILED | LOGOUT | TWO_FA_ENABLED | TWO_FA_VERIFIED
+  metadata  Json?    // contexto extra: { email?, reason? }
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
