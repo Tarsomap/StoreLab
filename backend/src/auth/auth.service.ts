@@ -2,6 +2,9 @@ import {
   ConflictException,
   Injectable,
   UnauthorizedException,
+  BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
@@ -9,8 +12,13 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { Confirm2faDto } from './dto/confirm-2fa.dto';
+import { Verify2faDto } from './dto/verify-2fa.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthResponse, RefreshResponse } from './interfaces/auth-response.interface';
+import { Enable2faResponse, MfaRequiredResponse, Confirm2faResponse } from './interfaces/mfa-response.interface';
+import { MfaService } from './mfa.service';
+import { AuditLogService, AUDIT_ACTIONS } from '../audit-log/audit-log.service';
 
 /**
  * Regras de negócio da autenticação: criar usuário, conferir senha e emitir/renovar tokens.
@@ -27,6 +35,9 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly mfaService: MfaService,
+    @Inject(forwardRef(() => AuditLogService))
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   /**
@@ -55,7 +66,7 @@ export class AuthService {
       },
     });
 
-    return this.issueTokens(user.id, user.email, user.role, user.name);
+    return this.issueTokens(user.id, user.email, user.role, user.name, user.twoFactorEnabled);
   }
 
   /**
@@ -66,21 +77,36 @@ export class AuthService {
    * @returns JWT, refresh token e dados do usuário.
    * @throws UnauthorizedException se credenciais não baterem.
    */
-  async login(dto: LoginDto): Promise<AuthResponse> {
+  async login(dto: LoginDto): Promise<AuthResponse | MfaRequiredResponse> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
     if (!user) {
+      await this.auditLogService.log(null, AUDIT_ACTIONS.LOGIN_FAILED, { email: dto.email, reason: 'Usuário não encontrado' });
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
     // Compara a senha digitada com o hash salvo, sem nunca descriptografar o hash (bcrypt só permite comparar).
     const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatch) {
+      await this.auditLogService.log(user.id, AUDIT_ACTIONS.LOGIN_FAILED, { email: dto.email, reason: 'Senha incorreta' });
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
+    if (user.twoFactorEnabled) {
+      return { mfaRequired: true, userId: user.id };
+    }
+
+    await this.auditLogService.log(user.id, AUDIT_ACTIONS.LOGIN_SUCCESS);
     return this.issueTokens(user.id, user.email, user.role, user.name);
+  }
+
+  async logout(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: null },
+    });
+    await this.auditLogService.log(userId, AUDIT_ACTIONS.LOGOUT);
   }
 
   /**
@@ -137,6 +163,7 @@ export class AuthService {
     email: string,
     role: UserRole,
     name: string,
+    twoFactorEnabled: boolean = false,
   ): Promise<AuthResponse> {
     const payload: JwtPayload = { sub: id, email, role };
 
@@ -158,7 +185,103 @@ export class AuthService {
     return {
       token,
       refreshToken,
-      user: { id, name, email, role },
+      user: { id, name, email, role, twoFactorEnabled },
     };
+  }
+
+  /**
+   * Inicia o fluxo de ativação de MFA: gera secret e QR code.
+   * O secret é retornado mas NÃO é ainda salvo no banco — o usuário precisa confirmar em confirm-2fa.
+   *
+   * @param userId - ID do usuário autenticado (extraído do JWT via decorator @CurrentUser).
+   * @returns QR code em base64, secret ASCII e URL otpauth:// para importação manual.
+   */
+  async enable2fa(userId: string): Promise<Enable2faResponse> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
+    // Gera secret novo.
+    const { secret, otpauthUrl } = this.mfaService.generateSecret(user.email);
+
+    // Gera QR code em base64.
+    const qrCode = await this.mfaService.generateQrCodeDataUrl(otpauthUrl);
+
+    return {
+      qrCode,
+      secret,
+      otpauthUrl,
+    };
+  }
+
+  /**
+   * Confirma a ativação de MFA: valida o código TOTP e salva o secret no banco.
+   *
+   * @param userId - ID do usuário autenticado.
+   * @param dto - Código TOTP (6 dígitos) e secret temporário do enable-2fa.
+   * @throws BadRequestException se código não for válido.
+   * @returns Confirmação de sucesso.
+   */
+  async confirm2fa(userId: string, dto: Confirm2faDto): Promise<Confirm2faResponse> {
+    // Valida código contra o secret antes de salvar.
+    const isValid = this.mfaService.verifyTotp(dto.code, dto.secret);
+    if (!isValid) {
+      throw new BadRequestException('Código TOTP inválido');
+    }
+
+    // Salva o secret permanentemente e marca 2FA como ativado.
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        twoFactorSecret: dto.secret,
+        twoFactorEnabled: true,
+      },
+    });
+
+    await this.auditLogService.log(userId, AUDIT_ACTIONS.TWO_FA_ENABLED);
+
+    return {
+      message: 'Autenticação em duas etapas ativada com sucesso',
+      success: true,
+    };
+  }
+
+  async disable2fa(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: false, twoFactorSecret: null },
+    });
+    await this.auditLogService.log(userId, AUDIT_ACTIONS.TWO_FA_DISABLED);
+  }
+
+  /**
+   * Verifica código TOTP durante login quando MFA está ativado.
+   * Se válido, emite os tokens de acesso normais.
+   *
+   * @param dto - User ID e código TOTP de 6 dígitos.
+   * @returns Tokens JWT e refresh token se código for válido.
+   * @throws UnauthorizedException se código for inválido ou usuário não encontrado.
+   */
+  async verify2fa(dto: Verify2faDto): Promise<AuthResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
+
+    if (!user || !user.twoFactorSecret || !user.twoFactorEnabled) {
+      throw new UnauthorizedException('MFA não está configurado ou usuário não existe');
+    }
+
+    // Valida código TOTP contra o secret salvo.
+    const isValid = this.mfaService.verifyTotp(dto.code, user.twoFactorSecret);
+    if (!isValid) {
+      throw new UnauthorizedException('Código TOTP inválido');
+    }
+
+    await this.auditLogService.log(user.id, AUDIT_ACTIONS.TWO_FA_VERIFIED);
+
+    // Emite tokens normais após validação de MFA.
+    await this.auditLogService.log(user.id, AUDIT_ACTIONS.LOGIN_SUCCESS);
+    return this.issueTokens(user.id, user.email, user.role, user.name, user.twoFactorEnabled);
   }
 }

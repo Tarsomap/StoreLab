@@ -9,6 +9,7 @@ import { QuizModule } from './quiz/quiz.module';
 import { EngineModule } from './engine/engine.module';
 import { ResultsModule } from './results/results.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { GatewayModule } from './gateway/gateway.module';
     EngineModule,
     ResultsModule,
     GatewayModule,
+    AuditLogModule,
   ],
 })
 export class AppModule {}
