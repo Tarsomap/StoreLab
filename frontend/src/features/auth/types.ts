@@ -39,19 +39,35 @@ export interface Confirm2faResponse {
   success: boolean;
 }
 
-export interface Verify2faResponse {
-  token: string;
-  refreshToken: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    twoFactorEnabled: boolean;
-  };
-}
+export type Verify2faResponse = AuthResponse;
 
 export interface MfaRequiredResponse {
   mfaRequired: true;
   userId: string;
 }
+
+// === Auth core ===
+export type UserRole = 'FACILITATOR' | 'PLAYER';
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  twoFactorEnabled: boolean;
+}
+
+export interface AuthResponse {
+  token: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+/**
+ * Discriminated union do contrato de POST /auth/login.
+ * Quando o usuário tem 2FA ativado, o backend responde MfaRequiredResponse
+ * (sem tokens) — caso contrário, AuthResponse normal.
+ *
+ * Use narrowing: `if ('mfaRequired' in result) { ... }`.
+ */
+export type LoginResponse = AuthResponse | MfaRequiredResponse;

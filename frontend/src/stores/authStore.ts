@@ -13,25 +13,20 @@ import {
   setOnLogout,
   setOnTokensRefreshed,
 } from '@/lib/api';
-import { Enable2faResponse, Confirm2faResponse, Verify2faResponse } from '@/features/auth/types';
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+import {
+  AuthResponse,
+  AuthUser,
+  Confirm2faResponse,
+  Enable2faResponse,
+  LoginResponse,
+  UserRole,
+  Verify2faResponse,
+} from '@/features/auth/types';
 
-export type UserRole = 'FACILITATOR' | 'PLAYER';
-
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  twoFactorEnabled: boolean;
-}
-
-interface AuthResponse {
-  token: string;
-  refreshToken: string;
-  user: AuthUser;
-}
+// (Re-export dos tipos para componentes que importam direto do store —
+// mantém compatibilidade sem precisar atualizar 20 imports.)
+export type { AuthUser, UserRole };
 
 // â”€â”€ Cookie helpers (client-only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -56,7 +51,7 @@ interface AuthState {
 
 interface AuthActions {
   /** POST `/auth/login` â€” guarda tokens, usuÃ¡rio e cookie de papel. */
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
   /** POST `/auth/register` â€” mesmo efeito do login apÃ³s criar conta. */
   register: (
     name: string,
@@ -87,13 +82,23 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       user: null,
 
       login: async (email, password) => {
-        const data = await api.post<AuthResponse>('/auth/login', {
+        const data = await api.post<LoginResponse>('/auth/login', {
           email,
           password,
         });
+      
+        // Caminho MFA: backend pediu TOTP. Não há tokens ainda — devolvemos
+        // o objeto cru para a page renderizar o MfaVerifyForm na próxima etapa.
+        if ('mfaRequired' in data) {
+          return data;
+        }
+      
+        // Caminho normal: backend já emitiu tokens. Persistimos sessão
+        // e cookie de papel para o middleware do Next decidir rotas.
         set({ token: data.token, refreshToken: data.refreshToken, user: data.user });
         setApiTokens(data.token, data.refreshToken);
         setCookie('user_role', data.user.role);
+        return data;
       },
 
       register: async (name, email, password, role = 'PLAYER') => {
@@ -148,7 +153,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           userId,
           code,
         });
-        set({ token: data.token, refreshToken: data.refreshToken, user: data.user as AuthUser });
+        set({ token: data.token, refreshToken: data.refreshToken, user: data.user });
         setApiTokens(data.token, data.refreshToken);
         setCookie('user_role', data.user.role);
         return data;
