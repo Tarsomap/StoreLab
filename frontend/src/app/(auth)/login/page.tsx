@@ -1,33 +1,54 @@
 'use client';
 
 /**
- * Fluxo do usuário — Login:
+ * Fluxo do usuário — Login com MFA:
  * 1) Digita e-mail e senha → envia POST `/auth/login` via `useAuthStore.login`.
- * 2) Em sucesso, toast “Bem-vindo” e redireciona: URL `?from=` se existir, senão dashboard (facilitador) ou `/join` (jogador).
- * 3) Em erro, mensagem no formulário e toast — a tela não muda de rota.
+ * 2a) Se MFA desativado: store guarda tokens, redirecionamos.
+ * 2b) Se MFA ativado: store devolve { mfaRequired, userId } sem tokens; renderizamos <MfaVerifyForm>.
+ * 3) Após validar código no MfaVerifyForm: store guarda tokens, redirecionamos.
  */
 import { useState, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
+import { MfaVerifyForm } from '@/features/auth/components/MfaVerifyForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 /**
- * Formulário de entrada: campos controlados, loading no botão e tratamento de erro da API.
- * Não recebe props — lê `useSearchParams` para o redirect opcional após login.
+ * Helper de redirect pós-autenticação. Centraliza a regra para evitar
+ * divergência entre o caminho normal e o caminho MFA.
  */
-function LoginForm() {
+function useAuthRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  return () => {
+    const from = searchParams.get('from');
+    const user = useAuthStore.getState().user;
+    if (from) {
+      router.push(from);
+    } else {
+      router.push(user?.role === 'FACILITATOR' ? '/dashboard' : '/join');
+    }
+  };
+}
+
+/**
+ * Formulário de entrada: campos controlados, loading no botão e tratamento de erro da API.
+ * Alterna entre formulário de login e formulário de MFA quando o backend exigir TOTP.
+ */
+function LoginForm() {
   const { login } = useAuthStore();
+  const redirectAfterAuth = useAuthRedirect();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mfaUserId, setMfaUserId] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,15 +56,16 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      toast.success('Bem-vindo de volta!');
-      const from = searchParams.get('from');
-      const user = useAuthStore.getState().user;
-      if (from) {
-        router.push(from);
-      } else {
-        router.push(user?.role === 'FACILITATOR' ? '/dashboard' : '/join');
+      const result = await login(email, password);
+
+      // Backend exigiu TOTP: trocamos o formulário sem dar toast de boas-vindas ainda.
+      if ('mfaRequired' in result) {
+        setMfaUserId(result.userId);
+        return;
       }
+
+      toast.success('Bem-vindo de volta!');
+      redirectAfterAuth();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao fazer login';
       setError(message);
@@ -51,6 +73,28 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleBackToLogin() {
+    setMfaUserId(null);
+    setEmail('');
+    setPassword('');
+    setError('');
+  }
+
+  // Caminho MFA: o store já cuidará dos tokens internamente quando o código for validado.
+  if (mfaUserId) {
+    return (
+      <div className="flex flex-col items-center">
+        <MfaVerifyForm userId={mfaUserId} onSuccess={redirectAfterAuth} />
+        <button
+          onClick={handleBackToLogin}
+          className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
+        >
+          Voltar ao login
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -106,6 +150,7 @@ function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
             className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
           />
         </div>
@@ -122,6 +167,7 @@ function LoginForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
             className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
           />
         </div>
