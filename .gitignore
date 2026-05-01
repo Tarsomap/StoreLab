@@ -52,3 +52,5 @@ backend/prisma/migrations/migration_lock.toml
 backend/Untitled
 RELATÓRIO.md
 *.tmp
+# Arquivos temporarios de inspecao do rebase MFA
+_*.tsx
