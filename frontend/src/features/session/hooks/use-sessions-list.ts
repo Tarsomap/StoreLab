@@ -11,6 +11,8 @@ interface UseSessionsListResult {
   categoryStocks: Record<string, string>;
   setCategoryStocks: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   addSession: (s: Session) => void;
+  removeSession: (id: string) => void;
+  updateSession: (updated: Session) => void;
 }
 
 export function useSessionsList(): UseSessionsListResult {
@@ -43,5 +45,15 @@ export function useSessionsList(): UseSessionsListResult {
     setSessions((prev) => [s, ...prev]);
   }
 
-  return { sessions, loading, categoryCatalog, categoryStocks, setCategoryStocks, addSession };
+  function removeSession(id: string) {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function updateSession(updated: Session) {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+    );
+  }
+
+  return { sessions, loading, categoryCatalog, categoryStocks, setCategoryStocks, addSession, removeSession, updateSession };
 }

@@ -12,13 +12,20 @@ import {
 import { History } from 'lucide-react';
 import type { Session } from '../types';
 import { formatSessionWinner, formatStoreCount } from '../lib/session-phases';
+import { SessionActionsMenu } from './SessionActionsMenu';
 
 interface SessionHistoryTableProps {
   finishedSessions: Session[];
+  onDeleted: (id: string) => void;
+  onUpdated: (updated: Session) => void;
 }
 
 /** Tabela de sessões finalizadas no dashboard do facilitador. */
-export function SessionHistoryTable({ finishedSessions }: SessionHistoryTableProps) {
+export function SessionHistoryTable({
+  finishedSessions,
+  onDeleted,
+  onUpdated,
+}: SessionHistoryTableProps) {
   const router = useRouter();
 
   if (finishedSessions.length === 0) {
@@ -45,7 +52,7 @@ export function SessionHistoryTable({ finishedSessions }: SessionHistoryTablePro
                 <TableHead className="font-display text-foreground">Data</TableHead>
                 <TableHead className="font-display text-foreground text-right">Nº de lojas</TableHead>
                 <TableHead className="font-display text-foreground">Vencedor</TableHead>
-                <TableHead className="font-display text-foreground text-right w-[140px]">Ações</TableHead>
+                <TableHead className="font-display text-foreground text-right w-[200px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -60,14 +67,24 @@ export function SessionHistoryTable({ finishedSessions }: SessionHistoryTablePro
                   </TableCell>
                   <TableCell className="text-foreground">{formatSessionWinner(s)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="w-full shrink-0 whitespace-nowrap rounded-xl px-4 sm:min-w-[148px] sm:w-auto"
-                      onClick={() => router.push(`/session/${s.id}/results`)}
-                    >
-                      Ver resultados
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="whitespace-nowrap rounded-xl px-4"
+                        onClick={() => router.push(`/session/${s.id}/results`)}
+                      >
+                        Ver resultados
+                      </Button>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <SessionActionsMenu
+                          session={s}
+                          onDeleted={() => onDeleted(s.id)}
+                          onUpdated={onUpdated}
+                          align="end"
+                        />
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
