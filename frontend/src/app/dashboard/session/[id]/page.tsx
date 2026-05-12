@@ -26,6 +26,7 @@ import { PHASE_LABEL, getActiveStepIndex, facilitatorQuizRound } from '@/feature
 import { useAdvanceSession } from '@/features/session/hooks/use-advance-session';
 import { useExecuteRound } from '@/features/session/hooks/use-execute-round';
 import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
+import { SessionActionsMenu } from '@/features/session/components/SessionActionsMenu';
 
 export default function SessionManagementPage() {
   const router = useRouter();
@@ -96,12 +97,20 @@ export default function SessionManagementPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="text-muted-foreground px-0 hover:bg-transparent">
-          ← Dashboard
-        </Button>
-        <span>/</span>
-        <span className="font-medium text-foreground truncate max-w-[200px]">{session.name}</span>
+      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="text-muted-foreground px-0 hover:bg-transparent">
+            ← Dashboard
+          </Button>
+          <span>/</span>
+          <span className="font-medium text-foreground truncate max-w-[200px]">{session.name}</span>
+        </div>
+        <SessionActionsMenu
+          session={session}
+          onDeleted={() => router.push('/dashboard')}
+          onUpdated={() => refetch()}
+          align="end"
+        />
       </div>
 
       <Card>

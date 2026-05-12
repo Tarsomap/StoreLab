@@ -20,17 +20,27 @@ import { CreateSessionForm } from '@/features/session/components/CreateSessionFo
 import { SessionKpiCards } from '@/features/session/components/SessionKpiCards';
 import { HistoricPerformanceSection } from '@/features/session/components/HistoricPerformanceSection';
 import { SessionHistoryTable } from '@/features/session/components/SessionHistoryTable';
+import { SessionActionsMenu } from '@/features/session/components/SessionActionsMenu';
 import { formatBrl } from '@/lib/format-brl';
 import {
   sumTrainedStoresForFinished,
   formatConfirmedStores,
   STATUS_PROGRESS,
 } from '@/features/session/lib/session-phases';
+import type { Session } from '@/features/session/types';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { sessions, loading, categoryCatalog, categoryStocks, setCategoryStocks, addSession } =
-    useSessionsList();
+  const {
+    sessions,
+    loading,
+    categoryCatalog,
+    categoryStocks,
+    setCategoryStocks,
+    addSession,
+    removeSession,
+    updateSession,
+  } = useSessionsList();
   const [showCreate, setShowCreate] = useState(false);
 
   const { activeSessions, finishedSessions, kpi, featuredSession } = useMemo(() => {
@@ -52,6 +62,10 @@ export default function DashboardPage() {
   }, [sessions]);
 
   if (loading) return <DashboardSkeleton />;
+
+  function handleUpdated(updated: Session) {
+    updateSession(updated);
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-6 sm:px-6 lg:px-0">
@@ -121,13 +135,22 @@ export default function DashboardPage() {
                       Sessão em destaque
                     </CardDescription>
                   </div>
-                  <Button
-                    type="button"
-                    className="w-full shrink-0 sm:w-auto rounded-xl"
-                    onClick={() => router.push(`/dashboard/session/${featuredSession.id}`)}
-                  >
-                    Acompanhar sessão →
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      className="w-full shrink-0 sm:w-auto rounded-xl"
+                      onClick={() => router.push(`/dashboard/session/${featuredSession.id}`)}
+                    >
+                      Acompanhar sessão →
+                    </Button>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <SessionActionsMenu
+                        session={featuredSession}
+                        onDeleted={() => removeSession(featuredSession.id)}
+                        onUpdated={handleUpdated}
+                      />
+                    </div>
+                  </div>
                 </div>
               </CardHeader>
               <Separator />
@@ -184,9 +207,18 @@ export default function DashboardPage() {
                     onClick={() => router.push(`/dashboard/session/${s.id}`)}
                   >
                     <CardHeader className="pb-2">
-                      <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
-                        <CardTitle className="font-display font-semibold text-base leading-tight">{s.name}</CardTitle>
-                        <SessionStatusBadge status={s.status} />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col items-start gap-2 min-w-0">
+                          <CardTitle className="font-display font-semibold text-base leading-tight">{s.name}</CardTitle>
+                          <SessionStatusBadge status={s.status} />
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                          <SessionActionsMenu
+                            session={s}
+                            onDeleted={() => removeSession(s.id)}
+                            onUpdated={handleUpdated}
+                          />
+                        </div>
                       </div>
                       <CardDescription className="mt-1 text-sm text-muted-foreground">
                         {new Date(s.createdAt).toLocaleDateString('pt-BR')}
@@ -209,7 +241,11 @@ export default function DashboardPage() {
 
           <section className="space-y-4" aria-labelledby="history-heading">
             <h3 id="history-heading" className="font-display text-xl font-bold text-foreground">Histórico</h3>
-            <SessionHistoryTable finishedSessions={finishedSessions} />
+            <SessionHistoryTable
+              finishedSessions={finishedSessions}
+              onDeleted={removeSession}
+              onUpdated={handleUpdated}
+            />
           </section>
         </div>
       )}

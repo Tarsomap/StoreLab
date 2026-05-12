@@ -74,6 +74,12 @@ export interface CategoryCatalogEntry {
   taxRate: number;
 }
 
+export interface UpdateSessionInput {
+  name?: string;
+  totalDemand?: number;
+  initialCash?: number;
+}
+
 export interface RankingEntry {
   rank: number;
   storeId: string;
