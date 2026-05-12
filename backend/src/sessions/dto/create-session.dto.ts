@@ -14,7 +14,7 @@ import {
 /**
  * Uma linha de configuração de estoque por categoria na sessão (quanto o “mercado” oferece naquela partida).
  */
-class CategoryConfigDto {
+export class CategoryConfigDto {
   /** Qual categoria do catálogo (UUID). */
   @IsUUID()
   categoryId: string;

@@ -9,6 +9,7 @@ import { PrismaService } from "../common/prisma.service";
 import { GameGateway } from "../gateway/game.gateway";
 import { ResultsService } from "../results/results.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
+import { UpdateSessionDto } from "./dto/update-session.dto";
 import {
   SessionCategoryCatalogEntry,
   SessionStatusResponse,
@@ -334,6 +335,108 @@ export class SessionsService {
         remaining: totalAvailable - totalPurchased,
       };
     });
+  }
+
+  async remove(id: string, userId: string): Promise<{ deleted: true }> {
+    const session = await this.prisma.session.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+    if (session.facilitatorId !== userId) throw new ForbiddenException();
+    if (
+      session.status !== SessionStatus.SETUP &&
+      session.status !== SessionStatus.FINISHED
+    ) {
+      throw new BadRequestException(
+        "Só é possível excluir sessões em SETUP ou FINISHED. Encerre a partida antes de deletar.",
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const planIds = (
+        await tx.operationalPlan.findMany({
+          where: { store: { sessionId: id } },
+          select: { id: true },
+        })
+      ).map((p) => p.id);
+
+      if (planIds.length) {
+        await tx.poCategoryDecision.deleteMany({
+          where: { planId: { in: planIds } },
+        });
+        await tx.poCapexDecision.deleteMany({
+          where: { planId: { in: planIds } },
+        });
+      }
+
+      await tx.operationalPlan.deleteMany({
+        where: { store: { sessionId: id } },
+      });
+
+      await tx.userQuizAnswer.deleteMany({ where: { sessionId: id } });
+      await tx.quizOption.deleteMany({
+        where: { question: { sessionId: id } },
+      });
+
+      await tx.storeMember.deleteMany({ where: { store: { sessionId: id } } });
+      await tx.quizAnswer.deleteMany({ where: { store: { sessionId: id } } });
+      await tx.roundResult.deleteMany({ where: { sessionId: id } });
+      await tx.slaEvent.deleteMany({ where: { sessionId: id } });
+      await tx.playerTransfer.deleteMany({ where: { sessionId: id } });
+
+      await tx.quizQuestion.deleteMany({ where: { sessionId: id } });
+      await tx.store.deleteMany({ where: { sessionId: id } });
+      await tx.sessionCategoryConfig.deleteMany({ where: { sessionId: id } });
+
+      await tx.session.delete({ where: { id } });
+    });
+
+    return { deleted: true };
+  }
+
+  async update(
+    id: string,
+    dto: UpdateSessionDto,
+    userId: string,
+  ): Promise<SessionSummary> {
+    const session = await this.prisma.session.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+    if (session.facilitatorId !== userId) throw new ForbiddenException();
+
+    const hasNonNameFields =
+      dto.totalDemand !== undefined ||
+      dto.initialCash !== undefined ||
+      dto.categoryConfigs !== undefined;
+
+    if (hasNonNameFields && session.status !== SessionStatus.SETUP) {
+      throw new BadRequestException(
+        "Fora de SETUP, apenas o nome da sessão pode ser editado.",
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.categoryConfigs !== undefined) {
+        await tx.sessionCategoryConfig.deleteMany({ where: { sessionId: id } });
+        if (dto.categoryConfigs.length > 0) {
+          await tx.sessionCategoryConfig.createMany({
+            data: dto.categoryConfigs.map((c) => ({
+              sessionId: id,
+              categoryId: c.categoryId,
+              stockAvailable: c.stockAvailable,
+            })),
+          });
+        }
+      }
+
+      return tx.session.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name }),
+          ...(dto.totalDemand !== undefined && { totalDemand: dto.totalDemand }),
+          ...(dto.initialCash !== undefined && { initialCash: dto.initialCash }),
+        },
+      });
+    });
+
+    return this.toSummary(updated);
   }
 
   /**
