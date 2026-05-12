@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { PrismaService } from '../common/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { JoinStoreDto } from './dto/join-store.dto';
 import { TransferDto } from './dto/transfer.dto';
+import { UpdateStoreDto } from './dto/update-store.dto';
 import {
   StoreMembersResponse,
   StoreSummary,
@@ -328,6 +330,80 @@ export class StoresService {
       canAdvanceToRound2: stores.length > 0 && stores.every((store) => store.requirementMet),
       stores,
     };
+  }
+
+  async update(
+    id: string,
+    dto: UpdateStoreDto,
+    userId: string,
+  ): Promise<StoreSummary> {
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+      include: { session: true },
+    });
+    if (!store) throw new NotFoundException('Loja não encontrada');
+    if (store.session.facilitatorId !== userId) {
+      throw new ForbiddenException(
+        'Apenas o facilitador dono da sessão pode editar esta loja',
+      );
+    }
+
+    const updated = await this.prisma.store.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+      },
+    });
+
+    return this.toSummary(updated);
+  }
+
+  async remove(id: string, userId: string): Promise<{ deleted: true }> {
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+      include: { session: true },
+    });
+    if (!store) throw new NotFoundException('Loja não encontrada');
+    if (store.session.facilitatorId !== userId) {
+      throw new ForbiddenException(
+        'Apenas o facilitador dono da sessão pode excluir esta loja',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Folhas profundas: decisões dos planos
+      const planIds = (
+        await tx.operationalPlan.findMany({
+          where: { storeId: id },
+          select: { id: true },
+        })
+      ).map((p) => p.id);
+
+      if (planIds.length) {
+        await tx.poCategoryDecision.deleteMany({ where: { planId: { in: planIds } } });
+        await tx.poCapexDecision.deleteMany({ where: { planId: { in: planIds } } });
+      }
+
+      await tx.operationalPlan.deleteMany({ where: { storeId: id } });
+
+      await tx.userQuizAnswer.deleteMany({ where: { storeId: id } });
+      await tx.quizAnswer.deleteMany({ where: { storeId: id } });
+
+      await tx.storeMember.deleteMany({ where: { storeId: id } });
+      await tx.roundResult.deleteMany({ where: { storeId: id } });
+      await tx.slaEvent.deleteMany({ where: { storeId: id } });
+
+      // PlayerTransfer tem duas FK para Store (fromStoreId e toStoreId)
+      await tx.playerTransfer.deleteMany({
+        where: {
+          OR: [{ fromStoreId: id }, { toStoreId: id }],
+        },
+      });
+
+      await tx.store.delete({ where: { id } });
+    });
+
+    return { deleted: true };
   }
 
   /**

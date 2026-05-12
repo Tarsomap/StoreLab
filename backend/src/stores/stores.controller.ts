@@ -1,17 +1,23 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { UserRole } from '@prisma/client';
 import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { JoinStoreDto } from './dto/join-store.dto';
+import { UpdateStoreDto } from './dto/update-store.dto';
 
 /**
  * API das lojas sob `/stores`: criar equipe, entrar por código, ver “minhas” lojas, detalhe e membros.
@@ -66,5 +72,26 @@ export class StoresController {
   @Get(':id/members')
   getMembers(@Param('id') id: string) {
     return this.storesService.getMembers(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateStoreDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.storesService.update(id, dto, user.sub);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.storesService.remove(id, user.sub);
   }
 }
