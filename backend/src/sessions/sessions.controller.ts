@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -19,6 +20,7 @@ import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { EngineService } from '../engine/engine.service';
 import { SessionsService } from './sessions.service';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { UpdateSessionDto } from './dto/update-session.dto';
 
 /**
  * Liga o estado atual da sessão ao número da rodada que o motor sabe calcular (1, 2 ou 3).
@@ -85,6 +87,27 @@ export class SessionsController {
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.sessionsService.findById(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateSessionDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessionsService.update(id, dto, user.sub);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.sessionsService.remove(id, user.sub);
   }
 
   /**
