@@ -54,3 +54,4 @@ RELATÓRIO.md
 *.tmp
 # Arquivos temporarios de inspecao do rebase MFA
 _*.tsx
+.refactor-check/
