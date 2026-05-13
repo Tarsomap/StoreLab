@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatBrl } from '@/lib/format-brl';
+import { StoreActionsMenu } from '@/features/store/components/StoreActionsMenu';
 import { ROLE_LABELS } from '../lib/session-phases';
 import type { StoreRole, StoreStatus } from '../types';
 
@@ -10,6 +11,8 @@ interface StoreCardProps {
   initialCash: number;
   copiedCode: string | null;
   onCopy: (code: string) => void;
+  onDeleted: () => void;
+  onUpdated: () => void;
 }
 
 const ALL_ROLES: StoreRole[] = [
@@ -24,7 +27,7 @@ const brl = formatBrl;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 /** Cartão da loja: código, status do PO, resumo de caixa/EBITDA e lista de papéis preenchidos ou vazios. */
-export function StoreCard({ store, initialCash: _initialCash, copiedCode, onCopy }: StoreCardProps) {
+export function StoreCard({ store, initialCash: _initialCash, copiedCode, onCopy, onDeleted, onUpdated }: StoreCardProps) {
   const hasPlan = store.cashUsed > 0 || store.planConfirmed;
   const cashDanger = store.availableCash < 0;
 
@@ -41,16 +44,23 @@ export function StoreCard({ store, initialCash: _initialCash, copiedCode, onCopy
           <CardTitle className="font-display font-semibold text-base">
             {store.storeName}
           </CardTitle>
-          <Badge
-            className={
-              store.planConfirmed
-                ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/10'
-                : 'bg-warning/10 text-warning border border-warning/20 hover:bg-warning/10'
-            }
-            variant="outline"
-          >
-            {store.planConfirmed ? 'PO confirmado' : 'PO pendente'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={
+                store.planConfirmed
+                  ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/10'
+                  : 'bg-warning/10 text-warning border border-warning/20 hover:bg-warning/10'
+              }
+              variant="outline"
+            >
+              {store.planConfirmed ? 'PO confirmado' : 'PO pendente'}
+            </Badge>
+            <StoreActionsMenu
+              store={{ id: store.storeId, name: store.storeName }}
+              onDeleted={onDeleted}
+              onUpdated={() => onUpdated()}
+            />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
