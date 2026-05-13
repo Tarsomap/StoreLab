@@ -221,7 +221,7 @@ export default function SessionManagementPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {statusData.stores.map((store) => (
-              <StoreCard key={store.storeId} store={store} initialCash={session.initialCash} copiedCode={copiedCode} onCopy={copyCode} />
+              <StoreCard key={store.storeId} store={store} initialCash={session.initialCash} copiedCode={copiedCode} onCopy={copyCode} onDeleted={refetch} onUpdated={refetch} />
             ))}
           </div>
         )}
