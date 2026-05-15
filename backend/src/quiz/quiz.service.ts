@@ -219,6 +219,17 @@ export class QuizService {
       answered: answeredRows.length,
       total: totalMembers,
     });
+    this.gameGateway.emitFacilitatorNotification({
+      type:
+        answeredRows.length >= totalMembers ? 'QUIZ_FINISHED' : 'QUIZ_PROGRESS',
+      sessionId,
+      storeId,
+      userId,
+      round: dto.round,
+      answered: answeredRows.length,
+      total: totalMembers,
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       correctAnswers: correctCount,

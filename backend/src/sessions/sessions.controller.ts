@@ -188,21 +188,16 @@ export class SessionsController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // FINALIZAÇÃO DE RODADA - MANAL DO JOGADOR
+  // FINALIZAÇÃO DE RODADA - MANUAL DO JOGADOR
   // ─────────────────────────────────────────────────────────────────────────────
 
   @Post(":id/timer/finish")
   finishRound(
     @Param("id") id: string,
     @Body("round") round: number,
-    @Body("remainingTime") remainingTime: number,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.sessionsService.setPlayerFinished(
-      id,
-      user.sub,
-      round,
-      remainingTime,
-    );
+    const parsedRound = round === undefined ? undefined : Number(round);
+    return this.sessionsService.setPlayerFinished(id, user.sub, parsedRound);
   }
 }

@@ -47,6 +47,11 @@ const ROUND_STARTED_MAP: Partial<Record<SessionStatus, number>> = {
   [SessionStatus.ROUND_3]: 3,
 };
 
+const ACTIVE_ROUND_BY_STATUS: Partial<Record<SessionStatus, number>> =
+  ROUND_STARTED_MAP;
+
+const PLAYER_ROUND_STATUS_FINISHED = "FINISHED";
+
 /**
  * Regras de negócio das sessões: criar partida, consultar, avançar estado e dados para o facilitador acompanhar lojas e estoque.
  * O estado da sessão é a “bússola” de toda a UI: em cada fase só faz sentido certas telas (PO, quiz, resultados), por isso travamos a ordem.
@@ -72,6 +77,12 @@ export class SessionsService {
     dto: CreateSessionDto,
     facilitatorId: string,
   ): Promise<SessionSummary> {
+    if (dto.timerEnabled && dto.timerDuration === undefined) {
+      throw new BadRequestException(
+        "timerDuration é obrigatório quando timerEnabled está ativo",
+      );
+    }
+
     const session = await this.prisma.session.create({
       data: {
         name: dto.name,
@@ -428,6 +439,14 @@ export class SessionsService {
         }
       }
 
+      const timerEnabled = dto.timerEnabled ?? session.timerEnabled;
+      const timerDuration = dto.timerDuration ?? session.timerDuration;
+      if (timerEnabled && timerDuration === null) {
+        throw new BadRequestException(
+          "timerDuration é obrigatório quando timerEnabled está ativo",
+        );
+      }
+
       return tx.session.update({
         where: { id },
         data: {
@@ -437,6 +456,17 @@ export class SessionsService {
           }),
           ...(dto.initialCash !== undefined && {
             initialCash: dto.initialCash,
+          }),
+          ...(dto.timerEnabled !== undefined && {
+            timerEnabled: dto.timerEnabled,
+            ...(!dto.timerEnabled && {
+              timerStartedAt: null,
+              timerPausedAt: null,
+              elapsedBeforePause: 0,
+            }),
+          }),
+          ...(dto.timerDuration !== undefined && {
+            timerDuration: dto.timerDuration,
           }),
         },
       });
@@ -529,6 +559,17 @@ export class SessionsService {
         "Apenas o facilitador pode controlar o timer",
       );
     }
+    if (!session.timerEnabled || session.timerDuration === null) {
+      throw new BadRequestException("O cronômetro não está configurado");
+    }
+    if (ACTIVE_ROUND_BY_STATUS[session.status] === undefined) {
+      throw new BadRequestException(
+        "O cronômetro só pode iniciar durante uma rodada ativa",
+      );
+    }
+    if (session.timerStartedAt && !session.timerPausedAt) {
+      throw new BadRequestException("O cronômetro já está em execução");
+    }
 
     const updated = await this.prisma.session.update({
       where: { id },
@@ -537,8 +578,6 @@ export class SessionsService {
         timerPausedAt: null,
       },
     });
-
-    // TODO: emit event to clients if needed via gameGateway
 
     return this.toSummary(updated);
   }
@@ -602,13 +641,29 @@ export class SessionsService {
   async setPlayerFinished(
     sessionId: string,
     userId: string,
-    round: number,
-    remainingTime: number,
+    round?: number,
   ) {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
     });
     if (!session) throw new NotFoundException("Sessão não encontrada");
+
+    const activeRound = ACTIVE_ROUND_BY_STATUS[session.status];
+    const targetRound = round ?? activeRound;
+    if (targetRound === undefined) {
+      throw new BadRequestException("A sessão não está em uma rodada ativa");
+    }
+    if (round !== undefined && round !== activeRound) {
+      throw new BadRequestException("A rodada informada não é a rodada ativa");
+    }
+
+    await this.assertPlayerBelongsToSession(sessionId, userId);
+
+    const finishedAt = new Date();
+    const resolvedRemainingTime = this.calculateRemainingTime(
+      session,
+      finishedAt,
+    );
 
     // Create or update the player's round status
     const result = await this.prisma.playerRoundStatus.upsert({
@@ -616,24 +671,57 @@ export class SessionsService {
         sessionId_userId_round: {
           sessionId,
           userId,
-          round,
+          round: targetRound,
         },
       },
       update: {
-        status: "FINISHED",
-        finishedAt: new Date(),
-        remainingTime,
+        status: PLAYER_ROUND_STATUS_FINISHED,
+        finishedAt,
+        remainingTime: resolvedRemainingTime,
       },
       create: {
         sessionId,
         userId,
-        round,
-        status: "FINISHED",
-        finishedAt: new Date(),
-        remainingTime,
+        round: targetRound,
+        status: PLAYER_ROUND_STATUS_FINISHED,
+        finishedAt,
+        remainingTime: resolvedRemainingTime,
       },
     });
 
     return result;
+  }
+
+  private calculateRemainingTime(
+    session: {
+      timerDuration: number | null;
+      timerStartedAt: Date | null;
+      timerPausedAt: Date | null;
+      elapsedBeforePause: number;
+    },
+    now: Date,
+  ): number | null {
+    if (session.timerDuration === null) return null;
+    const runningElapsed =
+      session.timerStartedAt && !session.timerPausedAt
+        ? Math.floor((now.getTime() - session.timerStartedAt.getTime()) / 1000)
+        : 0;
+    return Math.max(
+      0,
+      session.timerDuration - session.elapsedBeforePause - runningElapsed,
+    );
+  }
+
+  private async assertPlayerBelongsToSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<void> {
+    const membership = await this.prisma.storeMember.findFirst({
+      where: { userId, store: { sessionId } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ForbiddenException("Jogador não pertence a esta sessão");
+    }
   }
 }

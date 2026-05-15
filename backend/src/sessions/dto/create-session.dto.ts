@@ -1,6 +1,7 @@
 import { Type } from "class-transformer";
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -68,9 +69,11 @@ export class CreateSessionDto {
   categoryConfigs?: CategoryConfigDto[];
 
   @IsOptional()
+  @IsBoolean()
   timerEnabled?: boolean;
 
   @IsOptional()
   @IsInt()
+  @Min(1)
   timerDuration?: number;
 }
