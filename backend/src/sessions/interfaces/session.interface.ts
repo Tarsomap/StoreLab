@@ -12,6 +12,13 @@ export interface SessionSummary {
   totalDemand: number;
   initialCash: number;
   disponibilidade: number[];
+
+  timerEnabled: boolean;
+  timerDuration: number | null;
+  timerStartedAt: Date | null;
+  timerPausedAt: Date | null;
+  elapsedBeforePause: number;
+
   createdAt: Date;
   updatedAt: Date;
 }

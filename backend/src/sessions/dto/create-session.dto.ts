@@ -66,4 +66,11 @@ export class CreateSessionDto {
   @Type(() => CategoryConfigDto)
   @IsOptional()
   categoryConfigs?: CategoryConfigDto[];
+
+  @IsOptional()
+  timerEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  timerDuration?: number;
 }

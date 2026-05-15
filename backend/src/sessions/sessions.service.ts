@@ -80,6 +80,8 @@ export class SessionsService {
         // Padrão alinhado ao jogo quando o facilitador não manda valor — partidas ficam comparáveis.
         initialCash: dto.initialCash ?? 700_000,
         disponibilidade: dto.disponibilidade ?? [],
+        timerEnabled: dto.timerEnabled ?? false,
+        timerDuration: dto.timerDuration ?? null,
         categoryConfigs: dto.categoryConfigs?.length
           ? {
               create: dto.categoryConfigs.map((c) => ({
@@ -430,8 +432,12 @@ export class SessionsService {
         where: { id },
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
-          ...(dto.totalDemand !== undefined && { totalDemand: dto.totalDemand }),
-          ...(dto.initialCash !== undefined && { initialCash: dto.initialCash }),
+          ...(dto.totalDemand !== undefined && {
+            totalDemand: dto.totalDemand,
+          }),
+          ...(dto.initialCash !== undefined && {
+            initialCash: dto.initialCash,
+          }),
         },
       });
     });
@@ -450,6 +456,11 @@ export class SessionsService {
     totalDemand: number;
     initialCash: number;
     disponibilidade: number[];
+    timerEnabled: boolean;
+    timerDuration: number | null;
+    timerStartedAt: Date | null;
+    timerPausedAt: Date | null;
+    elapsedBeforePause: number;
     createdAt: Date;
     updatedAt: Date;
   }): SessionSummary {
@@ -461,6 +472,11 @@ export class SessionsService {
       totalDemand: session.totalDemand,
       initialCash: session.initialCash,
       disponibilidade: session.disponibilidade,
+      timerEnabled: session.timerEnabled,
+      timerDuration: session.timerDuration,
+      timerStartedAt: session.timerStartedAt,
+      timerPausedAt: session.timerPausedAt,
+      elapsedBeforePause: session.elapsedBeforePause,
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     };
@@ -499,5 +515,125 @@ export class SessionsService {
         `Transferências obrigatórias pendentes (1-2 por loja): ${pendingStores.join(", ")}`,
       );
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TIMER CONTROL (Facilitator)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async startTimer(id: string, facilitatorId: string): Promise<SessionSummary> {
+    const session = await this.prisma.session.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+    if (session.facilitatorId !== facilitatorId) {
+      throw new ForbiddenException(
+        "Apenas o facilitador pode controlar o timer",
+      );
+    }
+
+    const updated = await this.prisma.session.update({
+      where: { id },
+      data: {
+        timerStartedAt: new Date(),
+        timerPausedAt: null,
+      },
+    });
+
+    // TODO: emit event to clients if needed via gameGateway
+
+    return this.toSummary(updated);
+  }
+
+  async pauseTimer(id: string, facilitatorId: string): Promise<SessionSummary> {
+    const session = await this.prisma.session.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+    if (session.facilitatorId !== facilitatorId) {
+      throw new ForbiddenException(
+        "Apenas o facilitador pode controlar o timer",
+      );
+    }
+
+    if (!session.timerStartedAt || session.timerPausedAt) {
+      throw new BadRequestException("O cronômetro não está rodando ativamente");
+    }
+
+    const now = new Date();
+    // seconds elapsed since last start/resume
+    const additionalElapsed = Math.floor(
+      (now.getTime() - session.timerStartedAt.getTime()) / 1000,
+    );
+
+    const updated = await this.prisma.session.update({
+      where: { id },
+      data: {
+        timerPausedAt: now,
+        elapsedBeforePause: session.elapsedBeforePause + additionalElapsed,
+      },
+    });
+
+    return this.toSummary(updated);
+  }
+
+  async stopTimer(id: string, facilitatorId: string): Promise<SessionSummary> {
+    const session = await this.prisma.session.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+    if (session.facilitatorId !== facilitatorId) {
+      throw new ForbiddenException(
+        "Apenas o facilitador pode controlar o timer",
+      );
+    }
+
+    // Stopping means resetting everything related to the current phase's timer
+    const updated = await this.prisma.session.update({
+      where: { id },
+      data: {
+        timerStartedAt: null,
+        timerPausedAt: null,
+        elapsedBeforePause: 0,
+      },
+    });
+
+    return this.toSummary(updated);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PLAYER EARLY FINISH
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async setPlayerFinished(
+    sessionId: string,
+    userId: string,
+    round: number,
+    remainingTime: number,
+  ) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException("Sessão não encontrada");
+
+    // Create or update the player's round status
+    const result = await this.prisma.playerRoundStatus.upsert({
+      where: {
+        sessionId_userId_round: {
+          sessionId,
+          userId,
+          round,
+        },
+      },
+      update: {
+        status: "FINISHED",
+        finishedAt: new Date(),
+        remainingTime,
+      },
+      create: {
+        sessionId,
+        userId,
+        round,
+        status: "FINISHED",
+        finishedAt: new Date(),
+        remainingTime,
+      },
+    });
+
+    return result;
   }
 }
