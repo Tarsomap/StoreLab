@@ -36,7 +36,7 @@ Thumbs.db
 
 # === AI Tooling (configs locais) ===
 .claude/settings.json
-.claude/settings.local.json
+**/.claude/settings.local.json
 .claude/skills/
 .cursor/
 .mcp.json
