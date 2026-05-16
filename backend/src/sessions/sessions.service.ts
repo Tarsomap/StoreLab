@@ -588,6 +588,16 @@ export class SessionsService {
       },
     });
 
+    this.gameGateway.emitTimerUpdate({
+      action: 'STARTED',
+      sessionId: id,
+      timerDuration: updated.timerDuration,
+      timerStartedAt: updated.timerStartedAt?.toISOString() ?? null,
+      timerPausedAt: updated.timerPausedAt?.toISOString() ?? null,
+      elapsedBeforePause: updated.elapsedBeforePause,
+      timestamp: new Date().toISOString(),
+    });
+
     return this.toSummary(updated);
   }
 
@@ -618,6 +628,16 @@ export class SessionsService {
       },
     });
 
+    this.gameGateway.emitTimerUpdate({
+      action: 'PAUSED',
+      sessionId: id,
+      timerDuration: updated.timerDuration,
+      timerStartedAt: updated.timerStartedAt?.toISOString() ?? null,
+      timerPausedAt: updated.timerPausedAt?.toISOString() ?? null,
+      elapsedBeforePause: updated.elapsedBeforePause,
+      timestamp: new Date().toISOString(),
+    });
+
     return this.toSummary(updated);
   }
 
@@ -638,6 +658,16 @@ export class SessionsService {
         timerPausedAt: null,
         elapsedBeforePause: 0,
       },
+    });
+
+    this.gameGateway.emitTimerUpdate({
+      action: 'STOPPED',
+      sessionId: id,
+      timerDuration: updated.timerDuration,
+      timerStartedAt: updated.timerStartedAt?.toISOString() ?? null,
+      timerPausedAt: updated.timerPausedAt?.toISOString() ?? null,
+      elapsedBeforePause: updated.elapsedBeforePause,
+      timestamp: new Date().toISOString(),
     });
 
     return this.toSummary(updated);

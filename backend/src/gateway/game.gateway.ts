@@ -32,6 +32,16 @@ interface FacilitatorNotificationPayload {
   timestamp: string;
 }
 
+interface TimerUpdatePayload {
+  action: 'STARTED' | 'PAUSED' | 'STOPPED';
+  sessionId: string;
+  timerDuration: number | null;
+  timerStartedAt: string | null;
+  timerPausedAt: string | null;
+  elapsedBeforePause: number;
+  timestamp: string;
+}
+
 /**
  * Porta de entrada Socket.io do StoreLab: mantém uma “linha aberta” entre o servidor e o navegador do jogador.
  *
@@ -170,6 +180,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       'facilitator:notification',
       payload,
     );
+  }
+
+  emitTimerUpdate(payload: TimerUpdatePayload): void {
+    this.emitToRoom(`session:${payload.sessionId}`, 'session:timer_updated', payload);
+    this.emitToRoom(`facilitator:${payload.sessionId}`, 'session:timer_updated', payload);
   }
 
   /**
