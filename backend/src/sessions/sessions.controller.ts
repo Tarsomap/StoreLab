@@ -10,17 +10,17 @@ import {
   Post,
   Query,
   UseGuards,
-} from '@nestjs/common';
-import { SessionStatus, UserRole } from '@prisma/client';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { EngineService } from '../engine/engine.service';
-import { SessionsService } from './sessions.service';
-import { CreateSessionDto } from './dto/create-session.dto';
-import { UpdateSessionDto } from './dto/update-session.dto';
+} from "@nestjs/common";
+import { SessionStatus, UserRole } from "@prisma/client";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import { JwtPayload } from "../auth/interfaces/jwt-payload.interface";
+import { EngineService } from "../engine/engine.service";
+import { SessionsService } from "./sessions.service";
+import { CreateSessionDto } from "./dto/create-session.dto";
+import { UpdateSessionDto } from "./dto/update-session.dto";
 
 /**
  * Liga o estado atual da sessão ao número da rodada que o motor sabe calcular (1, 2 ou 3).
@@ -37,7 +37,7 @@ const ROUND_BY_STATUS: Partial<Record<SessionStatus, number>> = {
  * Rotas HTTP das partidas: sempre exigem login; ações de “dono” exigem papel facilitador.
  * Jogadores autenticados podem consultar sessão/status/estoque para jogar, mas não criam partida nem avançam fase sozinhos.
  */
-@Controller('sessions')
+@Controller("sessions")
 @UseGuards(JwtAuthGuard)
 export class SessionsController {
   /**
@@ -54,10 +54,7 @@ export class SessionsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
-  create(
-    @Body() dto: CreateSessionDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  create(@Body() dto: CreateSessionDto, @CurrentUser() user: JwtPayload) {
     return this.sessionsService.create(dto, user.sub);
   }
 
@@ -74,7 +71,7 @@ export class SessionsController {
   /**
    * Catálogo de categorias para parametrização de estoque por sessão na UI do facilitador.
    */
-  @Get('catalog/categories')
+  @Get("catalog/categories")
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
   getCategoryCatalog() {
@@ -84,29 +81,26 @@ export class SessionsController {
   /**
    * Detalhe simples de uma sessão por id — qualquer usuário logado pode ver (ex.: jogador entrou pelo código e precisa do contexto).
    */
-  @Get(':id')
-  findById(@Param('id') id: string) {
+  @Get(":id")
+  findById(@Param("id") id: string) {
     return this.sessionsService.findById(id);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
   update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateSessionDto,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.sessionsService.update(id, dto, user.sub);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  remove(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
     return this.sessionsService.remove(id, user.sub);
   }
 
@@ -114,21 +108,18 @@ export class SessionsController {
    * Avança um passo na máquina de estados (facilitador dono da sessão).
    * Ver comentários no SessionsService sobre por que a ordem é fixa e por que só o dono avança.
    */
-  @Patch(':id/advance')
+  @Patch(":id/advance")
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
-  advance(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  advance(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
     return this.sessionsService.advanceStatus(id, user.sub);
   }
 
   /**
    * Snapshot completo para painel: estado + lojas, membros, PO confirmado, caixa e último EBITDA.
    */
-  @Get(':id/status')
-  getStatus(@Param('id') id: string) {
+  @Get(":id/status")
+  getStatus(@Param("id") id: string) {
     return this.sessionsService.getStatus(id);
   }
 
@@ -136,10 +127,10 @@ export class SessionsController {
    * Estoque compartilhado por categoria para uma versão de plano (query configVersion obrigatória).
    * ParseIntPipe garante número inteiro — string inválida vira 400 antes de bagunçar o groupBy no banco.
    */
-  @Get(':id/stock-availability')
+  @Get(":id/stock-availability")
   getStockAvailability(
-    @Param('id') id: string,
-    @Query('configVersion', ParseIntPipe) configVersion: number,
+    @Param("id") id: string,
+    @Query("configVersion", ParseIntPipe) configVersion: number,
   ) {
     return this.sessionsService.getStockAvailability(id, configVersion);
   }
@@ -151,24 +142,62 @@ export class SessionsController {
    * Só executamos se o status for ROUND_1, ROUND_2 ou ROUND_3; em outras fases o erro explica que ainda não é hora de calcular,
    * para o facilitador alinhar “primeiro avance até a rodada ativa, depois execute”.
    */
-  @Post(':id/execute')
+  @Post(":id/execute")
   @UseGuards(RolesGuard)
   @Roles(UserRole.FACILITATOR)
-  async execute(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  async execute(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
     const session = await this.sessionsService.findById(id);
     if (session.facilitatorId !== user.sub) {
-      throw new BadRequestException('Apenas o facilitador pode executar a rodada');
+      throw new BadRequestException(
+        "Apenas o facilitador pode executar a rodada",
+      );
     }
     const round = ROUND_BY_STATUS[session.status];
     if (!round) {
       throw new BadRequestException(
-        'A sessão não está em um estado de rodada executável',
+        "A sessão não está em um estado de rodada executável",
       );
     }
     await this.engineService.runRound(id, round);
     return { message: `Rodada ${round} executada com sucesso` };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CONTROLE DO CRONÔMETRO
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  @Patch(":id/timer/start")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  startTimer(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    return this.sessionsService.startTimer(id, user.sub);
+  }
+
+  @Patch(":id/timer/pause")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  pauseTimer(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    return this.sessionsService.pauseTimer(id, user.sub);
+  }
+
+  @Patch(":id/timer/stop")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  stopTimer(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    return this.sessionsService.stopTimer(id, user.sub);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FINALIZAÇÃO DE RODADA - MANUAL DO JOGADOR
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  @Post(":id/timer/finish")
+  finishRound(
+    @Param("id") id: string,
+    @Body("round") round: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const parsedRound = round === undefined ? undefined : Number(round);
+    return this.sessionsService.setPlayerFinished(id, user.sub, parsedRound);
   }
 }

@@ -21,6 +21,17 @@ interface JwtPayload {
   role: string;
 }
 
+interface FacilitatorNotificationPayload {
+  type: 'PLAN_CONFIRMED' | 'QUIZ_PROGRESS' | 'QUIZ_FINISHED';
+  sessionId: string;
+  storeId: string;
+  userId?: string;
+  round?: number;
+  answered?: number;
+  total?: number;
+  timestamp: string;
+}
+
 /**
  * Porta de entrada Socket.io do StoreLab: mantém uma “linha aberta” entre o servidor e o navegador do jogador.
  *
@@ -143,6 +154,22 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   emitStoreConfirmed(sessionId: string, storeId: string): void {
     this.emitToRoom(`facilitator:${sessionId}`, 'store:confirmed', { storeId });
+    this.emitFacilitatorNotification({
+      type: 'PLAN_CONFIRMED',
+      sessionId,
+      storeId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  emitFacilitatorNotification(
+    payload: FacilitatorNotificationPayload,
+  ): void {
+    this.emitToRoom(
+      `facilitator:${payload.sessionId}`,
+      'facilitator:notification',
+      payload,
+    );
   }
 
   /**

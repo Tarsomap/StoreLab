@@ -9,6 +9,11 @@ import { Verify2faDto } from './dto/verify-2fa.dto';
 import { AuthResponse, RefreshResponse } from './interfaces/auth-response.interface';
 import { Enable2faResponse, Confirm2faResponse, MfaRequiredResponse } from './interfaces/mfa-response.interface';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtPayload } from './interfaces/jwt-payload.interface';
+
+interface AuthenticatedRequest {
+  user: JwtPayload;
+}
 
 /**
  * Endpoints HTTP públicos de autenticação (sem JWT ainda): cadastro, login e renovação de token.
@@ -63,7 +68,7 @@ export class AuthController {
   @Post('enable-2fa')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  enable2fa(@Request() req: any): Promise<Enable2faResponse> {
+  enable2fa(@Request() req: AuthenticatedRequest): Promise<Enable2faResponse> {
     return this.authService.enable2fa(req.user.sub);
   }
 
@@ -78,7 +83,10 @@ export class AuthController {
   @Post('confirm-2fa')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  confirm2fa(@Request() req: any, @Body() dto: Confirm2faDto): Promise<Confirm2faResponse> {
+  confirm2fa(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: Confirm2faDto,
+  ): Promise<Confirm2faResponse> {
     return this.authService.confirm2fa(req.user.sub, dto);
   }
 
@@ -98,14 +106,14 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  logout(@Request() req: any): Promise<void> {
+  logout(@Request() req: AuthenticatedRequest): Promise<void> {
     return this.authService.logout(req.user.sub);
   }
 
   @Post('disable-2fa')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  disable2fa(@Request() req: any): Promise<void> {
+  disable2fa(@Request() req: AuthenticatedRequest): Promise<void> {
     return this.authService.disable2fa(req.user.sub);
   }
 }
