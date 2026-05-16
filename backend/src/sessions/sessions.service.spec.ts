@@ -55,6 +55,12 @@ type PrismaMock = {
   $transaction: jest.Mock;
 };
 
+type GameGatewayMock = {
+  emitTimerUpdate: jest.Mock;
+  emitRoundStarted: jest.Mock;
+  emitSessionFinished: jest.Mock;
+};
+
 const baseSession = {
   id: "session-1",
   name: "Sessao",
@@ -74,6 +80,7 @@ const baseSession = {
 
 describe("SessionsService timer", () => {
   let prisma: PrismaMock;
+  let gateway: GameGatewayMock;
   let service: SessionsService;
 
   beforeEach(() => {
@@ -115,9 +122,15 @@ describe("SessionsService timer", () => {
       ),
     };
 
+    gateway = {
+      emitTimerUpdate: jest.fn(),
+      emitRoundStarted: jest.fn(),
+      emitSessionFinished: jest.fn(),
+    };
+
     service = new SessionsService(
       prisma as unknown as PrismaService,
-      {} as unknown as GameGateway,
+      gateway as unknown as GameGateway,
       {} as unknown as ResultsService,
     );
   });
@@ -273,5 +286,59 @@ describe("SessionsService timer", () => {
       where: { sessionId: "session-1" },
     });
     expect(prsOrder).toBeLessThan(sessionDeleteOrder);
+  });
+
+  it("emits timer update on start with action STARTED", async () => {
+    const startedAt = new Date("2026-05-16T10:00:00.000Z");
+    prisma.session.findUnique.mockResolvedValue({ ...baseSession });
+    prisma.session.update.mockResolvedValue({
+      ...baseSession,
+      timerStartedAt: startedAt,
+      timerPausedAt: null,
+    });
+
+    await service.startTimer("session-1", "facilitator-1");
+
+    expect(gateway.emitTimerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "STARTED", sessionId: "session-1" }),
+    );
+  });
+
+  it("emits timer update on pause with action PAUSED", async () => {
+    const startedAt = new Date("2026-05-16T10:00:00.000Z");
+    const pausedAt = new Date("2026-05-16T10:05:00.000Z");
+    prisma.session.findUnique.mockResolvedValue({
+      ...baseSession,
+      timerStartedAt: startedAt,
+      timerPausedAt: null,
+    });
+    prisma.session.update.mockResolvedValue({
+      ...baseSession,
+      timerStartedAt: startedAt,
+      timerPausedAt: pausedAt,
+      elapsedBeforePause: 300,
+    });
+
+    await service.pauseTimer("session-1", "facilitator-1");
+
+    expect(gateway.emitTimerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "PAUSED", sessionId: "session-1" }),
+    );
+  });
+
+  it("emits timer update on stop with action STOPPED", async () => {
+    prisma.session.findUnique.mockResolvedValue({ ...baseSession });
+    prisma.session.update.mockResolvedValue({
+      ...baseSession,
+      timerStartedAt: null,
+      timerPausedAt: null,
+      elapsedBeforePause: 0,
+    });
+
+    await service.stopTimer("session-1", "facilitator-1");
+
+    expect(gateway.emitTimerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "STOPPED", sessionId: "session-1" }),
+    );
   });
 });
