@@ -165,9 +165,17 @@ export class SessionsService {
       await this.assertMandatoryTransfers(id);
     }
 
+    const leavingActiveRound = ROUND_STARTED_MAP[session.status] !== undefined;
     const updated = await this.prisma.session.update({
       where: { id },
-      data: { status: nextStatus },
+      data: {
+        status: nextStatus,
+        ...(leavingActiveRound && {
+          timerStartedAt: null,
+          timerPausedAt: null,
+          elapsedBeforePause: 0,
+        }),
+      },
     });
 
     // Aviso em tempo real: jogadores sabem que uma rodada “começou” para sincronizar telas (PO, quiz, etc.).
@@ -394,6 +402,7 @@ export class SessionsService {
       await tx.roundResult.deleteMany({ where: { sessionId: id } });
       await tx.slaEvent.deleteMany({ where: { sessionId: id } });
       await tx.playerTransfer.deleteMany({ where: { sessionId: id } });
+      await tx.playerRoundStatus.deleteMany({ where: { sessionId: id } });
 
       await tx.quizQuestion.deleteMany({ where: { sessionId: id } });
       await tx.store.deleteMany({ where: { sessionId: id } });

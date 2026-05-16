@@ -9,14 +9,17 @@ type SessionMock = {
   findUnique: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
+  delete: jest.Mock;
 };
 
 type StoreMemberMock = {
   findFirst: jest.Mock;
+  deleteMany: jest.Mock;
 };
 
 type PlayerRoundStatusMock = {
   upsert: jest.Mock;
+  deleteMany: jest.Mock;
 };
 
 type SessionCategoryConfigMock = {
@@ -24,11 +27,31 @@ type SessionCategoryConfigMock = {
   createMany: jest.Mock;
 };
 
+type DeleteManyMock = {
+  deleteMany: jest.Mock;
+};
+
+type OperationalPlanMock = {
+  findMany: jest.Mock;
+  deleteMany: jest.Mock;
+};
+
 type PrismaMock = {
   session: SessionMock;
   storeMember: StoreMemberMock;
   playerRoundStatus: PlayerRoundStatusMock;
   sessionCategoryConfig: SessionCategoryConfigMock;
+  operationalPlan: OperationalPlanMock;
+  poCategoryDecision: DeleteManyMock;
+  poCapexDecision: DeleteManyMock;
+  userQuizAnswer: DeleteManyMock;
+  quizOption: DeleteManyMock;
+  quizAnswer: DeleteManyMock;
+  roundResult: DeleteManyMock;
+  slaEvent: DeleteManyMock;
+  playerTransfer: DeleteManyMock;
+  quizQuestion: DeleteManyMock;
+  store: DeleteManyMock;
   $transaction: jest.Mock;
 };
 
@@ -59,17 +82,34 @@ describe("SessionsService timer", () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn().mockResolvedValue({}),
       },
       storeMember: {
         findFirst: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       playerRoundStatus: {
         upsert: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       sessionCategoryConfig: {
-        deleteMany: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         createMany: jest.fn(),
       },
+      operationalPlan: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      poCategoryDecision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      poCapexDecision:    { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      userQuizAnswer:     { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      quizOption:         { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      quizAnswer:         { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      roundResult:        { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      slaEvent:           { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      playerTransfer:     { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      quizQuestion:       { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      store:              { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn((callback: (tx: PrismaMock) => unknown) =>
         callback(prisma),
       ),
@@ -186,5 +226,52 @@ describe("SessionsService timer", () => {
     await expect(
       service.setPlayerFinished("session-1", "player-1"),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("resets timer fields atomically when advancing from an active round", async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      ...baseSession,
+      status: SessionStatus.ROUND_1,
+      timerStartedAt: new Date("2026-05-15T11:55:00.000Z"),
+      elapsedBeforePause: 180,
+    });
+    prisma.session.update.mockResolvedValue({
+      ...baseSession,
+      status: SessionStatus.RECONFIGURATION,
+      timerStartedAt: null,
+      timerPausedAt: null,
+      elapsedBeforePause: 0,
+    });
+
+    await service.advanceStatus("session-1", "facilitator-1");
+
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: "session-1" },
+      data: {
+        status: SessionStatus.RECONFIGURATION,
+        timerStartedAt: null,
+        timerPausedAt: null,
+        elapsedBeforePause: 0,
+      },
+    });
+  });
+
+  it("deletes PlayerRoundStatus before Session in cascade remove", async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      ...baseSession,
+      status: SessionStatus.SETUP,
+    });
+
+    await service.remove("session-1", "facilitator-1");
+
+    const prsOrder =
+      prisma.playerRoundStatus.deleteMany.mock.invocationCallOrder[0];
+    const sessionDeleteOrder =
+      prisma.session.delete.mock.invocationCallOrder[0];
+
+    expect(prisma.playerRoundStatus.deleteMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1" },
+    });
+    expect(prsOrder).toBeLessThan(sessionDeleteOrder);
   });
 });
