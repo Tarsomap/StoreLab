@@ -14,6 +14,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Confirm2faDto } from './dto/confirm-2fa.dto';
 import { Verify2faDto } from './dto/verify-2fa.dto';
+import { Disable2faRecoveryDto } from './dto/disable-2fa-recovery.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthResponse, RefreshResponse } from './interfaces/auth-response.interface';
 import { Enable2faResponse, MfaRequiredResponse, Confirm2faResponse } from './interfaces/mfa-response.interface';
@@ -253,6 +254,47 @@ export class AuthService {
       data: { twoFactorEnabled: false, twoFactorSecret: null },
     });
     await this.auditLogService.log(userId, AUDIT_ACTIONS.TWO_FA_DISABLED);
+  }
+
+  /**
+   * Recuperação de acesso quando o usuário perdeu o app autenticador.
+   * Valida e-mail + senha (sem exigir TOTP), desativa o 2FA e emite tokens
+   * para o usuário entrar direto sem um segundo passo de login.
+   *
+   * @param dto - E-mail e senha da conta.
+   * @returns Tokens JWT e dados do usuário com twoFactorEnabled: false.
+   * @throws UnauthorizedException se credenciais inválidas.
+   * @throws BadRequestException se o 2FA não estiver ativo.
+   */
+  async disableMfaRecovery(dto: Disable2faRecoveryDto): Promise<AuthResponse> {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+
+    if (!user) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordMatch) {
+      await this.auditLogService.log(user.id, AUDIT_ACTIONS.LOGIN_FAILED, {
+        email: dto.email,
+        reason: 'Senha incorreta (recuperação 2FA)',
+      });
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('O 2FA não está ativo nesta conta');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { twoFactorEnabled: false, twoFactorSecret: null },
+    });
+
+    await this.auditLogService.log(user.id, AUDIT_ACTIONS.TWO_FA_DISABLED, { via: 'recovery' });
+    await this.auditLogService.log(user.id, AUDIT_ACTIONS.LOGIN_SUCCESS);
+
+    return this.issueTokens(user.id, user.email, user.role, user.name, false);
   }
 
   /**

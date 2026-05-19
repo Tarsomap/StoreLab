@@ -1,41 +1,27 @@
 'use client';
 
-/**
- * Formulário para verificar código TOTP durante login.
- * Exibido quando o servidor retorna { mfaRequired: true, userId } após validar e-mail/senha.
- */
 import { useState, FormEvent } from 'react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
-import { MfaRecoveryForm } from './MfaRecoveryForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 
-interface MfaVerifyFormProps {
-  userId: string;
+interface MfaRecoveryFormProps {
+  /** E-mail pré-preenchido vindo da tela de login, se disponível. */
   email?: string;
   onSuccess?: () => void;
+  onBack?: () => void;
 }
 
-export function MfaVerifyForm({ userId, email, onSuccess }: MfaVerifyFormProps) {
-  const { verify2fa } = useAuthStore();
+export function MfaRecoveryForm({ email: initialEmail = '', onSuccess, onBack }: MfaRecoveryFormProps) {
+  const { disableMfaRecovery } = useAuthStore();
 
-  const [code, setCode] = useState('');
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showRecovery, setShowRecovery] = useState(false);
-
-  if (showRecovery) {
-    return (
-      <MfaRecoveryForm
-        email={email}
-        onSuccess={onSuccess}
-        onBack={() => setShowRecovery(false)}
-      />
-    );
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -43,11 +29,11 @@ export function MfaVerifyForm({ userId, email, onSuccess }: MfaVerifyFormProps) 
     setLoading(true);
 
     try {
-      await verify2fa(userId, code);
-      toast.success('Código validado! Bem-vindo de volta!');
+      await disableMfaRecovery(email, password);
+      toast.success('2FA desativado. Bem-vindo de volta!');
       onSuccess?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Código inválido ou expirado';
+      const message = err instanceof Error ? err.message : 'Credenciais inválidas';
       setError(message);
       toast.error(message);
     } finally {
@@ -57,7 +43,6 @@ export function MfaVerifyForm({ userId, email, onSuccess }: MfaVerifyFormProps) 
 
   return (
     <div className="w-full max-w-sm auth-stagger">
-      {/* Header */}
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 mb-6">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
@@ -74,11 +59,14 @@ export function MfaVerifyForm({ userId, email, onSuccess }: MfaVerifyFormProps) 
           </span>
         </div>
 
-        <h2 className="font-display font-bold text-2xl text-foreground leading-tight">
-          Verificar autenticação
-        </h2>
+        <div className="flex items-center gap-2 mb-1">
+          <ShieldAlert className="h-5 w-5 text-warning" />
+          <h2 className="font-display font-bold text-2xl text-foreground leading-tight">
+            Recuperar acesso
+          </h2>
+        </div>
         <p className="text-muted-foreground text-sm mt-1.5 font-body">
-          Digite o código do seu app de autenticação
+          Confirme suas credenciais para desativar o 2FA e entrar normalmente.
         </p>
       </div>
 
@@ -97,42 +85,57 @@ export function MfaVerifyForm({ userId, email, onSuccess }: MfaVerifyFormProps) 
         )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="mfa-code" className="text-sm text-muted-foreground">
-            Código de 6 dígitos
+          <Label htmlFor="recovery-email" className="text-sm text-muted-foreground">
+            E-mail
           </Label>
           <Input
-            id="mfa-code"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="000000"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
+            id="recovery-email"
+            type="email"
+            placeholder="seu@email.com"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
-            className="text-center font-mono tracking-widest text-lg"
-            autoFocus
+            className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
           />
-          <p className="text-xs text-muted-foreground">
-            Abra seu app de autenticação (Google Authenticator, Authy, etc.) e digite o código de 6 dígitos
-          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="recovery-password" className="text-sm text-muted-foreground">
+            Senha
+          </Label>
+          <Input
+            id="recovery-password"
+            type="password"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+            className="h-11 rounded-xl focus-visible:ring-accent focus-visible:border-accent"
+          />
         </div>
 
         <Button
           type="submit"
-          disabled={loading || code.length !== 6}
-          className="w-full"
+          disabled={loading || !email || !password}
+          className="w-full h-11 font-semibold rounded-xl text-sm"
         >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Verificar
+          Desativar 2FA e entrar
         </Button>
       </form>
 
-      <button
-        onClick={() => setShowRecovery(true)}
-        className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground underline"
-      >
-        Não tenho acesso ao meu autenticador
-      </button>
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground underline"
+        >
+          Voltar
+        </button>
+      )}
     </div>
   );
 }

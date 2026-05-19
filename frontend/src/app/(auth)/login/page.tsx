@@ -86,7 +86,7 @@ function LoginForm() {
   if (mfaUserId) {
     return (
       <div className="flex flex-col items-center">
-        <MfaVerifyForm userId={mfaUserId} onSuccess={redirectAfterAuth} />
+        <MfaVerifyForm userId={mfaUserId} email={email} onSuccess={redirectAfterAuth} />
         <button
           onClick={handleBackToLogin}
           className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
