@@ -40,6 +40,11 @@ export interface SessionDetail {
   status: SessionStatus;
   totalDemand: number;
   initialCash: number;
+  timerEnabled: boolean;
+  timerDuration: number | null;
+  timerStartedAt: string | null;
+  timerPausedAt: string | null;
+  elapsedBeforePause: number;
 }
 
 export interface SessionStatusResponse {
@@ -64,6 +69,11 @@ export interface Session {
   winningStoreName?: string;
   firstPlaceStoreName?: string;
   winner?: { storeName?: string; name?: string };
+  timerEnabled?: boolean;
+  timerDuration?: number | null;
+  timerStartedAt?: string | null;
+  timerPausedAt?: string | null;
+  elapsedBeforePause?: number;
 }
 
 export interface CategoryCatalogEntry {
@@ -78,6 +88,25 @@ export interface UpdateSessionInput {
   name?: string;
   totalDemand?: number;
   initialCash?: number;
+  timerEnabled?: boolean;
+  timerDuration?: number | null;
+}
+
+export interface TimerState {
+  timerDuration: number;
+  timerStartedAt: string | null;
+  timerPausedAt: string | null;
+  elapsedBeforePause: number;
+}
+
+export interface TimerUpdatePayload {
+  action: 'STARTED' | 'PAUSED' | 'STOPPED';
+  sessionId: string;
+  timerDuration: number | null;
+  timerStartedAt: string | null;
+  timerPausedAt: string | null;
+  elapsedBeforePause: number;
+  timestamp: string;
 }
 
 export interface RankingEntry {

@@ -27,6 +27,7 @@ import { useAdvanceSession } from '@/features/session/hooks/use-advance-session'
 import { useExecuteRound } from '@/features/session/hooks/use-execute-round';
 import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
 import { SessionActionsMenu } from '@/features/session/components/SessionActionsMenu';
+import { SessionTimerCard } from '@/features/session/components/SessionTimerCard';
 
 export default function SessionManagementPage() {
   const router = useRouter();
@@ -173,6 +174,10 @@ export default function SessionManagementPage() {
           </CardContent>
         </Card>
       </div>
+
+      {session.timerEnabled && (
+        <SessionTimerCard session={session} onTimerChange={refetch} />
+      )}
 
       {quizProgressRound !== null && storeCount > 0 && (
         <>

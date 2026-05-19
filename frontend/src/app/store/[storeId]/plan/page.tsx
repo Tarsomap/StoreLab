@@ -18,6 +18,10 @@ import { Separator } from '@/components/ui/separator';
 import { Users } from 'lucide-react';
 import { usePlan } from '@/features/plan/hooks/use-plan';
 import { useRealtimePlan } from '@/features/plan/hooks/use-realtime-plan';
+import { useRealtimeTimer } from '@/features/session/hooks/use-realtime-timer';
+import { useTimerExpiry } from '@/features/session/hooks/use-timer-expiry';
+import { usePlayerRoundFinish } from '@/features/session/hooks/use-player-round-finish';
+import { TimerDisplay } from '@/features/session/components/TimerDisplay';
 import { useStockAvailability } from '@/features/plan/hooks/use-stock-availability';
 import { useSavePlan } from '@/features/plan/hooks/use-save-plan';
 import { useSaveCategoryDecision } from '@/features/plan/hooks/use-save-category-decision';
@@ -40,6 +44,9 @@ export default function PlanPage() {
   const router = useRouter();
 
   const { plan, store, myRole, quizScore, isLoading, error, setPlan } = usePlan(storeId);
+  const timerState = useRealtimeTimer(store?.sessionId);
+  const timerExpired = useTimerExpiry(timerState);
+  const { finish: finishRound } = usePlayerRoundFinish();
   const { stockAvailMap, fetchStockAvailability } = useStockAvailability();
   const { mutate: savePlan, isLoading: savingPlan, error: savePlanError } = useSavePlan();
   const { mutate: saveCategoryDecision, isLoading: savingCat, error: saveCatError } = useSaveCategoryDecision();
@@ -126,6 +133,9 @@ export default function PlanPage() {
       setPlan(updated);
       setConfirmState('success');
       toast.success('PO confirmado com sucesso!');
+      if (store?.sessionId && timerState?.timerStartedAt && !timerState.timerPausedAt) {
+        finishRound(store.sessionId).catch(() => {});
+      }
     } catch (err) {
       setConfirmState('error');
       toast.error(err instanceof Error ? err.message : 'Erro ao confirmar PO');
@@ -157,6 +167,29 @@ export default function PlanPage() {
         saving={saving}
         confirmed={plan.confirmed}
       />
+
+      {timerState && (
+        <div
+          className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-sm transition-colors ${
+            timerExpired
+              ? 'border-destructive/30 bg-destructive/5'
+              : 'border-border bg-card'
+          }`}
+        >
+          <span
+            className={`text-sm font-medium ${timerExpired ? 'text-destructive' : 'text-muted-foreground'}`}
+          >
+            {timerExpired ? 'Tempo esgotado!' : 'Tempo restante na rodada'}
+          </span>
+          <TimerDisplay
+            timerDuration={timerState.timerDuration}
+            timerStartedAt={timerState.timerStartedAt}
+            timerPausedAt={timerState.timerPausedAt}
+            elapsedBeforePause={timerState.elapsedBeforePause}
+            size="sm"
+          />
+        </div>
+      )}
 
       <PlanMetricCards plan={plan} dre={dre} ebitdaFlash={ebitdaFlash} cashFlash={cashFlash} />
 
