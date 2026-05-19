@@ -121,7 +121,7 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-10">
           {featuredSession && (
-            <Card className="shadow-sm border rounded-xl">
+            <Card className="shadow-sm border rounded-xl transition-colors duration-200 hover:shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-1">
