@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { Timer } from 'lucide-react';
 import type { Session, CategoryCatalogEntry } from '../types';
 
 interface CreateSessionFormProps {
@@ -27,6 +28,8 @@ export function CreateSessionForm({
   const [newName, setNewName] = useState('');
   const [newDemand, setNewDemand] = useState('1000');
   const [newCash, setNewCash] = useState('700000');
+  const [timerEnabled, setTimerEnabled] = useState(false);
+  const [timerMinutes, setTimerMinutes] = useState('15');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -44,6 +47,9 @@ export function CreateSessionForm({
           categoryId: category.id,
           stockAvailable: Number(categoryStocks[category.id] ?? category.stockAvailable),
         })),
+        ...(timerEnabled && timerMinutes
+          ? { timerEnabled: true, timerDuration: Number(timerMinutes) * 60 }
+          : {}),
       });
       toast.success('Sessão criada');
       onCreated(session);
@@ -129,6 +135,37 @@ export function CreateSessionForm({
               </div>
             </div>
           )}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                id="timer-enabled"
+                type="checkbox"
+                checked={timerEnabled}
+                onChange={(e) => setTimerEnabled(e.target.checked)}
+                className="h-4 w-4 cursor-pointer rounded border"
+              />
+              <Label htmlFor="timer-enabled" className="cursor-pointer flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Timer className="h-3.5 w-3.5" />
+                Ativar timer por rodada
+              </Label>
+            </div>
+            {timerEnabled && (
+              <div className="ml-6 space-y-2">
+                <Label htmlFor="timer-minutes" className="text-sm text-muted-foreground">
+                  Duração por rodada (minutos)
+                </Label>
+                <Input
+                  id="timer-minutes"
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={timerMinutes}
+                  onChange={(e) => setTimerMinutes(e.target.value)}
+                  className="max-w-[120px]"
+                />
+              </div>
+            )}
+          </div>
         </CardContent>
         <div className="px-6 pb-6 flex gap-3">
           <Button type="submit" disabled={creating} className="sm:w-auto">
