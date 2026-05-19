@@ -28,7 +28,6 @@ import {
   STATUS_PROGRESS,
 } from '@/features/session/lib/session-phases';
 import type { Session } from '@/features/session/types';
-import { MfaSecurityCard } from '@/features/auth/components/MfaSecurityCard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -251,12 +250,6 @@ export default function DashboardPage() {
 
         </div>
       )}
-      <section className="space-y-4" aria-labelledby="security-heading">
-        <h3 id="security-heading" className="font-display text-xl font-bold text-foreground">
-          Segurança da Conta
-        </h3>
-        <MfaSecurityCard />
-      </section>
     </div>
   );
 }
