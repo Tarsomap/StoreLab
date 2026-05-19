@@ -12,6 +12,7 @@ interface UseJoinSessionResult {
   error: string;
   join: (accessCode: string, role: StoreRole) => Promise<void>;
   reset: () => void;
+  clearError: () => void;
 }
 
 export function useJoinSession(): UseJoinSessionResult {
@@ -47,7 +48,12 @@ export function useJoinSession(): UseJoinSessionResult {
 
   function reset() {
     setJoined(null);
+    setError('');
   }
 
-  return { myStores, loadingMine, joined, loading, error, join, reset };
+  function clearError() {
+    setError('');
+  }
+
+  return { myStores, loadingMine, joined, loading, error, join, reset, clearError };
 }
