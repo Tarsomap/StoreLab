@@ -6,6 +6,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { Enable2faDto } from './dto/enable-2fa.dto';
 import { Confirm2faDto } from './dto/confirm-2fa.dto';
 import { Verify2faDto } from './dto/verify-2fa.dto';
+import { Disable2faRecoveryDto } from './dto/disable-2fa-recovery.dto';
 import { AuthResponse, RefreshResponse } from './interfaces/auth-response.interface';
 import { Enable2faResponse, Confirm2faResponse, MfaRequiredResponse } from './interfaces/mfa-response.interface';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -115,5 +116,18 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   disable2fa(@Request() req: AuthenticatedRequest): Promise<void> {
     return this.authService.disable2fa(req.user.sub);
+  }
+
+  /**
+   * Recuperação de acesso quando o usuário perdeu o app autenticador.
+   * Endpoint público: valida e-mail + senha, desativa o 2FA e emite tokens direto.
+   *
+   * @param dto - E-mail e senha da conta.
+   * @returns JWT, refresh token e dados do usuário com 2FA desativado.
+   */
+  @Post('disable-2fa/recovery')
+  @HttpCode(HttpStatus.OK)
+  disableMfaRecovery(@Body() dto: Disable2faRecoveryDto): Promise<AuthResponse> {
+    return this.authService.disableMfaRecovery(dto);
   }
 }

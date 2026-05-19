@@ -247,6 +247,7 @@ export default function DashboardPage() {
               onUpdated={handleUpdated}
             />
           </section>
+
         </div>
       )}
     </div>

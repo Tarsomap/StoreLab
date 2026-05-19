@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
-import { LayoutDashboard, Store, BookOpen, ArrowLeft, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Store, BookOpen, ArrowLeft, Menu, X, FileText, Settings } from 'lucide-react';
 import { WsStatusDot } from '@/components/layout/ws-status-dot';
 
 type UserRole = 'FACILITATOR' | 'PLAYER';
@@ -190,10 +190,24 @@ export default function AppShell({ children, userRole }: AppShellProps) {
                 <nav className="space-y-1">
                   <Link
                     href="/dashboard"
-                    className={navLinkClass(pathname === '/dashboard' || pathname.startsWith('/dashboard/'))}
+                    className={navLinkClass(pathname === '/dashboard')}
                   >
                     <LayoutDashboard className="h-4 w-4 shrink-0" />
                     Dashboard
+                  </Link>
+                  <Link
+                    href="/dashboard/logs"
+                    className={navLinkClass(pathname === '/dashboard/logs')}
+                  >
+                    <FileText className="h-4 w-4 shrink-0" />
+                    Logs
+                  </Link>
+                  <Link
+                    href="/dashboard/perfil"
+                    className={navLinkClass(pathname === '/dashboard/perfil')}
+                  >
+                    <Settings className="h-4 w-4 shrink-0" />
+                    Minha Conta
                   </Link>
                 </nav>
               )}

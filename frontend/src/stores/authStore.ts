@@ -71,6 +71,8 @@ interface AuthActions {
   verify2fa: (userId: string, code: string) => Promise<Verify2faResponse>;
   /** POST `/auth/disable-2fa` â€” desativa MFA e limpa o secret. */
   disable2fa: () => Promise<void>;
+  /** POST `/auth/disable-2fa/recovery` — desativa MFA via senha (sem TOTP) e emite tokens. */
+  disableMfaRecovery: (email: string, password: string) => Promise<void>;
 }
 
 /** Hook React para ler/atualizar sessÃ£o; estado persiste entre abas do mesmo navegador. */
@@ -146,6 +148,13 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         await api.post('/auth/disable-2fa', {});
         const current = get().user;
         if (current) set({ user: { ...current, twoFactorEnabled: false } });
+      },
+
+      disableMfaRecovery: async (email, password) => {
+        const data = await api.post<AuthResponse>('/auth/disable-2fa/recovery', { email, password });
+        set({ token: data.token, refreshToken: data.refreshToken, user: data.user });
+        setApiTokens(data.token, data.refreshToken);
+        setCookie('user_role', data.user.role);
       },
 
       verify2fa: async (userId, code) => {
