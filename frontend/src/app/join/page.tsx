@@ -19,7 +19,7 @@ import { ROLE_LABELS } from '@/features/auth/types';
 
 export default function JoinPage() {
   const router = useRouter();
-  const { myStores, loadingMine, joined, loading, error, join, reset } = useJoinSession();
+  const { myStores, loadingMine, joined, loading, error, join, reset, clearError } = useJoinSession();
 
   const [chars, setChars] = useState<string[]>(['', '', '', '', '', '']);
   const [role, setRole] = useState<StoreRole>('SUPPLY_MANAGER');
@@ -97,7 +97,13 @@ export default function JoinPage() {
             <Label className="text-sm font-medium text-foreground block text-center">
               Código de acesso
             </Label>
-            <OtpInput chars={chars} onChange={setChars} />
+            <OtpInput
+              chars={chars}
+              onChange={(newChars) => {
+                if (error) clearError();
+                setChars(newChars);
+              }}
+            />
           </div>
 
           <div className="space-y-1.5">
