@@ -50,6 +50,19 @@ export default function AppShell({ children, userRole }: AppShellProps) {
     }
   }, [sessionId]);
 
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [pathname]);
+
   function handleLogout() {
     logout();
     router.push('/login');
@@ -71,11 +84,14 @@ export default function AppShell({ children, userRole }: AppShellProps) {
       <header className="h-16 bg-primary text-primary-foreground flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
           {showSidebar && (
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label={isSidebarOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={isSidebarOpen}
+              aria-controls="app-sidebar"
               className="block p-1 hover:bg-primary-foreground/10 rounded transition-colors"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5 h-5" aria-hidden />
             </button>
           )}
           <span className="font-display font-semibold text-base tracking-tight">
@@ -112,7 +128,9 @@ export default function AppShell({ children, userRole }: AppShellProps) {
 
         {/* Sidebar — FACILITATOR only */}
         {showSidebar && (
-          <aside 
+          <aside
+            id="app-sidebar"
+            aria-label="Navegação principal"
             className={`fixed inset-y-0 left-0 z-50 shrink-0 bg-card py-6 lg:static transition-all duration-300 overflow-hidden flex flex-col ${
               isSidebarOpen ? 'w-[260px] px-4 border-r shadow-2xl lg:shadow-none' : 'w-0 px-0 border-none'
             }`}
