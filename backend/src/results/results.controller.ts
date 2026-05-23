@@ -21,4 +21,12 @@ export class ResultsController {
   ): Promise<RankingEntry[]> {
     return this.resultsService.getSessionRanking(sessionId);
   }
+
+  @Get('store/:storeId/round/:round')
+  async getStoreRoundResult(
+    @Param('storeId') storeId: string,
+    @Param('round') round: string,
+  ) {
+    return this.resultsService.getStoreRoundResult(storeId, Number(round));
+  }
 }

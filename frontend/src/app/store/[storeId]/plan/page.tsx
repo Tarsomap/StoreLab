@@ -30,6 +30,7 @@ import { buildCatRows, buildDre } from '@/features/plan/lib/plan-math';
 import { PlanFullResponse, ConfirmState } from '@/features/plan/types';
 import { PlanHeader } from '@/features/plan/components/PlanHeader';
 import { PlanMetricCards } from '@/features/plan/components/PlanMetricCards';
+import { DemandIndicatorsCard, StoreDemandIndicators } from '@/features/plan/components/DemandIndicatorsCard';
 import { QuizBanner } from '@/features/plan/components/QuizBanner';
 import { PlanDreSummary } from '@/features/plan/components/PlanDreSummary';
 import { PlanCategoryTable } from '@/features/plan/components/PlanCategoryTable';
@@ -37,7 +38,10 @@ import { PlanCapexList } from '@/features/plan/components/PlanCapexList';
 import { PlanConfirmButton } from '@/features/plan/components/PlanConfirmButton';
 import { OperadoresForm } from '@/features/plan/components/OperadoresForm';
 
-/** Tela colaborativa do PO: decisões por papel, DRE e sincronização em tempo real da loja. */
+import { api } from '@/lib/api';
+
+/** Tela colaborativa do PO: decisões por papel, DRE e sincronização em tempo re
+al da loja. */                                                                  
 export default function PlanPage() {
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
@@ -48,9 +52,11 @@ export default function PlanPage() {
   const timerExpired = useTimerExpiry(timerState);
   const { finish: finishRound } = usePlayerRoundFinish();
   const { stockAvailMap, fetchStockAvailability } = useStockAvailability();
-  const { mutate: savePlan, isLoading: savingPlan, error: savePlanError } = useSavePlan();
-  const { mutate: saveCategoryDecision, isLoading: savingCat, error: saveCatError } = useSaveCategoryDecision();
+  const { mutate: savePlan, isLoading: savingPlan, error: savePlanError } = useSavePlan();                                                                        
+  const { mutate: saveCategoryDecision, isLoading: savingCat, error: saveCatError } = useSaveCategoryDecision();                                                  
   const { mutate: confirmPlan } = useConfirmPlan();
+
+  const [demandIndicators, setDemandIndicators] = useState<StoreDemandIndicators | null>(null);
 
   const handleRealtimeUpdate = useCallback((updated: PlanFullResponse) => {
     setPlan(updated);
@@ -85,6 +91,14 @@ export default function PlanPage() {
   useEffect(() => {
     setConfirmState('idle');
   }, [storeId, plan?.id]);
+
+  useEffect(() => {
+    if (storeId && plan?.configVersion) {
+      api.get<StoreDemandIndicators | null>(`/results/store/${storeId}/round/${plan.configVersion}`)
+        .then(data => setDemandIndicators(data))
+        .catch(() => setDemandIndicators(null));
+    }
+  }, [storeId, plan?.configVersion]);
 
   useEffect(() => {
     if (!plan || !store || !dre) return;
@@ -191,7 +205,9 @@ export default function PlanPage() {
         </div>
       )}
 
-      <PlanMetricCards plan={plan} dre={dre} ebitdaFlash={ebitdaFlash} cashFlash={cashFlash} />
+      <PlanMetricCards plan={plan} dre={dre} ebitdaFlash={ebitdaFlash} cashFlash={cashFlash} />                                                                 
+      
+      <DemandIndicatorsCard indicators={demandIndicators} />
 
       {quizScore !== null && !plan.confirmed && (
         <QuizBanner
