@@ -30,18 +30,14 @@ import { buildCatRows, buildDre } from "@/features/plan/lib/plan-math";
 import { PlanFullResponse, ConfirmState } from "@/features/plan/types";
 import { PlanHeader } from "@/features/plan/components/PlanHeader";
 import { PlanMetricCards } from "@/features/plan/components/PlanMetricCards";
-import {
-  DemandIndicatorsCard,
-  StoreDemandIndicators,
-} from "@/features/plan/components/DemandIndicatorsCard";
+import { DemandIndicatorsCard } from "@/features/plan/components/DemandIndicatorsCard";
 import { QuizBanner } from "@/features/plan/components/QuizBanner";
 import { PlanDreSummary } from "@/features/plan/components/PlanDreSummary";
 import { PlanCategoryTable } from "@/features/plan/components/PlanCategoryTable";
 import { PlanCapexList } from "@/features/plan/components/PlanCapexList";
 import { PlanConfirmButton } from "@/features/plan/components/PlanConfirmButton";
 import { OperadoresForm } from "@/features/plan/components/OperadoresForm";
-
-import { api } from "@/lib/api";
+import { useDemandIndicators } from "@/features/plan/hooks/use-demand-indicators";
 
 /** Tela colaborativa do PO: decisões por papel, DRE e sincronização em tempo re
 al da loja. */
@@ -50,8 +46,16 @@ export default function PlanPage() {
   const storeId = params.storeId;
   const router = useRouter();
 
-  const { plan, store, myRole, quizScore, isLoading, error, setPlan } =
-    usePlan(storeId);
+  const {
+    plan,
+    store,
+    myRole,
+    quizScore,
+    sessionRound,
+    isLoading,
+    error,
+    setPlan,
+  } = usePlan(storeId);
   const timerState = useRealtimeTimer(store?.sessionId);
   const timerExpired = useTimerExpiry(timerState);
   const { finish: finishRound } = usePlayerRoundFinish();
@@ -68,8 +72,11 @@ export default function PlanPage() {
   } = useSaveCategoryDecision();
   const { mutate: confirmPlan } = useConfirmPlan();
 
-  const [demandIndicators, setDemandIndicators] =
-    useState<StoreDemandIndicators | null>(null);
+  const effectiveRound = sessionRound ?? plan?.configVersion;
+  const { data: demandIndicators } = useDemandIndicators(
+    storeId,
+    effectiveRound,
+  );
 
   const handleRealtimeUpdate = useCallback(
     (updated: PlanFullResponse) => {
@@ -121,17 +128,6 @@ export default function PlanPage() {
   useEffect(() => {
     setConfirmState("idle");
   }, [storeId, plan?.id]);
-
-  useEffect(() => {
-    if (storeId && plan?.configVersion) {
-      api
-        .get<StoreDemandIndicators | null>(
-          `/results/store/${storeId}/round/${plan.configVersion}`,
-        )
-        .then((data) => setDemandIndicators(data))
-        .catch(() => setDemandIndicators(null));
-    }
-  }, [storeId, plan?.configVersion]);
 
   useEffect(() => {
     if (!plan || !store || !dre) return;
@@ -222,7 +218,7 @@ export default function PlanPage() {
     <div className="max-w-[1400px] mx-auto space-y-5 pb-10">
       <PlanHeader
         storeName={store.name}
-        roundLabel={`Rodada ${plan.configVersion}`}
+        roundLabel={`Rodada ${sessionRound ?? plan.configVersion}`}
         editable={editable}
         saving={saving}
         confirmed={plan.confirmed}
