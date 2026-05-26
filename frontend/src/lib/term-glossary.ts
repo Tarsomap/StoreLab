@@ -1,18 +1,18 @@
 export const GLOSSARY = {
   CAPEX:
-    'Investimento em Capital (Capital Expenditure): equipamentos e melhorias permanentes na loja (freezer, câmeras, redes etc.). Cada item selecionado deduz o custo do caixa disponível, mas pode aumentar a demanda, reduzir custos de manutenção e evitar perdas por SLA. O total de CAPEX implementados é descontado do caixa na rodada atual.',
+    'Investimento em ativos da loja (Capital Expenditure): equipamentos e melhorias permanentes, como freezer, câmeras e redes. Sai direto do caixa quando você implementa. Em troca, reduz custo de manutenção e protege a loja de incidentes que fazem perder venda. Quem não investe fica exposto.',
 
   EBITDA:
-    'Resultado operacional da loja (Earnings Before Interest, Taxes, Depreciation & Amortization). Calculado como: Receita Líquida − Custo de Mercadoria − Quebras − Aging − Folha − Manutenção − Juros − Licenças. É o principal indicador do jogo: a loja com maior %EBITDA acumulado ao final vence.',
+    'Resultado operacional da loja antes de juros e impostos sobre o lucro. Parte da receita líquida e desconta tudo que a operação consome: custo da mercadoria, perdas de estoque (quebras e aging), folha, manutenção, licenças, juros e perdas por SLA. É o principal indicador do jogo e a base do ranking final.',
 
   EBITDA_PCT:
-    'Percentual do EBITDA sobre o Total de Vendas. Indica a eficiência da loja: quanto de cada real vendido vira resultado. É a métrica de desempate no ranking — duas lojas com o mesmo EBITDA em reais podem ter margens bem diferentes.',
+    'O EBITDA em proporção do total de vendas. Mostra a eficiência da loja: de cada real que entra, quanto sobra como resultado. Duas lojas podem vender igual e ter eficiências bem diferentes.',
 
   CSAT:
-    'Índice de satisfação dos clientes (Customer Satisfaction Score). Calculado combinando a nota do quiz da equipe e o número de operadores ativos: CSAT = (operadores / 10) × %quiz. Um CSAT alto aumenta a demanda da sua loja e atrai market share das concorrentes.',
+    'Satisfação do cliente (Customer Satisfaction). Mede o quão bem a loja atende, combinando o número de operadores de caixa com o desempenho da equipe no quiz de gestão. Um CSAT alto puxa mais clientes pra sua loja e tira demanda das concorrentes.',
 
   SLA:
-    'Nível mínimo de serviço (Service Level Agreement). Alguns CAPEX de segurança e infraestrutura protegem a loja contra eventos negativos. Se não implementados, a loja pode sofrer uma "Perda SLA" — receita deduzida automaticamente no resultado da rodada.',
+    'Nível de serviço (Service Level Agreement): o tempo que a loja leva pra se recuperar quando acontece um incidente. Mais operadores de serviço significam recuperação mais rápida e menos dias parada. Poucos operadores, mais tempo parado e mais venda perdida quando algo dá errado.',
 
   SLA_LOSS:
     'Receita perdida por não cumprir o nível mínimo de serviço. Ocorre quando itens de CAPEX críticos (câmeras, freezer, rede) não foram implementados. Essa perda é calculada automaticamente pelo motor e descontada do seu DRE.',
@@ -21,22 +21,22 @@ export const GLOSSARY = {
     'Demonstrativo de Resultados (DRE): resumo financeiro completo da loja para a rodada. Mostra o caminho do faturamento bruto até o EBITDA final — cada linha representa uma decisão (preço, estoque, operadores, CAPEX) que impacta o resultado.',
 
   AGING:
-    'Perda por vencimento de produtos. Itens perecíveis não vendidos acumulam "aging". Na Rodada 3, esse estoque vencido é descontado do resultado. Gerencie o volume de compras para minimizar essas perdas.',
+    'Perda por mercadoria encalhada, que envelhece no estoque sem ser vendida. Cada categoria perde valor num ritmo diferente (perecível estraga rápido, eletro fica obsoleto). Quanto mais sobra parado, maior o desconto no resultado.',
 
   QUEBRAS:
-    'Perdas por dano ou furto de mercadoria. Na Rodada 3, as quebras sobre estoque acumulado não vendido são contabilizadas automaticamente. Afeta especialmente categorias de maior valor.',
+    'Perda de mercadoria por dano ou furto. Cada categoria tem seu próprio risco de quebra, calculado sobre o estoque que sobrou sem vender. Comprar muito além da demanda aumenta essa perda.',
 
   JUROS:
-    'Juros sobre excedente de caixa acima de R$ 700 mil: 12% ao ano. Se o seu caixa acumulado ultrapassar esse limite, a diferença gera custo financeiro. Equilibre investimentos e reserva de caixa para evitar essa dedução.',
+    'Custo de se financiar. Se a loja gasta mais em estoque e CAPEX do que tem em caixa, ela "pega emprestado" e paga juros sobre o que faltou. Quanto mais você estoura o caixa, maior a conta no fim da rodada.',
 
   LICENCAS:
-    'Custo fixo de licenças de software e sistemas da loja. O valor base é R$ 500 por rodada, podendo ser alterado pelos CAPEX de infraestrutura de TI que a equipe decidir implementar.',
+    'Custo recorrente dos sistemas que a loja usa pra operar (sistema operacional, PDV, site, segurança). Cresce conforme a estrutura: mais operadores e mais equipamentos de TI implementados aumentam esse valor.',
 
   MARKET_SHARE:
-    'Participação percentual da sua loja na demanda total do período. É influenciada pelo CSAT (satisfação) e pelo preço praticado. Lojas com CSAT alto e preços competitivos atraem mais clientes das concorrentes.',
+    'A fatia da demanda total do período que vai pra sua loja. Disputada com as concorrentes por três fatores: preço da cesta, disponibilidade de produto e satisfação do cliente. Quem vai melhor nos três atrai mais clientes.',
 
   DISPONIBILIDADE:
-    'Percentual de itens disponíveis na gôndola em relação ao estoque planejado. Uma disponibilidade baixa significa que os clientes chegam e não encontram produtos — reduzindo vendas e CSAT.',
+    'O quanto a sua loja consegue abastecer da demanda possível: o estoque que você comprou em relação ao total disponível no mercado. Disponibilidade baixa é cliente chegando e não achando produto, o que derruba suas vendas e a sua fatia de demanda.',
 } as const;
 
 export type GlossaryTerm = keyof typeof GLOSSARY;
