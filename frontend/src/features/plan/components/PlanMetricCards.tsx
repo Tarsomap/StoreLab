@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Wallet, ShoppingBag, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TermTooltip } from '@/components/term-tooltip';
 import { PlanFullResponse, DreLines } from '../types';
 import { brl, pct } from '../lib/plan-math';
 
@@ -32,7 +33,9 @@ export function PlanMetricCards({
         )}
       >
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">EBITDA</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+            EBITDA <TermTooltip term="EBITDA" side="top" />
+          </p>
           {ebitdaPositive
             ? <TrendingUp className="h-4 w-4 text-accent" />
             : <TrendingDown className="h-4 w-4 text-destructive" />
@@ -50,7 +53,9 @@ export function PlanMetricCards({
       {/* EBITDA % */}
       <div className="rounded-xl border p-4 shadow-sm bg-card border-border">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">EBITDA %</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+            EBITDA % <TermTooltip term="EBITDA_PCT" side="top" />
+          </p>
           <Zap className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className={`font-mono text-2xl font-bold leading-none ${ebitdaPositive ? 'text-accent' : 'text-destructive'}`}>

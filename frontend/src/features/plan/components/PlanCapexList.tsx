@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { TermTooltip } from '@/components/term-tooltip';
 import { CapexDecisionEntry } from '../types';
 import { brl, hasSlaRisk } from '../lib/plan-math';
 
@@ -23,8 +24,9 @@ export function PlanCapexList({
         <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
           <Zap className="h-3.5 w-3.5 text-primary" />
         </div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground font-display flex items-center gap-1.5">
           Investimentos (CAPEX)
+          <TermTooltip term="CAPEX" side="right" />
         </h2>
       </div>
       <Separator />
@@ -65,6 +67,7 @@ export function PlanCapexList({
                       <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning uppercase tracking-wide">
                         <AlertTriangle className="h-2.5 w-2.5" />
                         Risco SLA
+                        <TermTooltip term="SLA" side="top" />
                       </span>
                     )}
                     {cx.implemented && (
