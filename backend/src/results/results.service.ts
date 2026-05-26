@@ -186,4 +186,21 @@ export class ResultsService {
       cashFinal,
     };
   }
+
+  async getStoreRoundResult(storeId: string, round: number) {
+    const result = await this.prisma.roundResult.findUnique({
+      where: {
+        storeId_round: { storeId, round },
+      },
+      select: {
+        basketPrice: true,
+        availability: true,
+        csat: true,
+        rankScore: true,
+        demandShare: true,
+      },
+    });
+
+    return result || null;
+  }
 }
