@@ -114,18 +114,44 @@ export class ResultsService {
       rounds: data.rounds,
     }));
 
-    unsorted.sort((a, b) => b.avgEbitdaPercentage - a.avgEbitdaPercentage);
+    unsorted.sort((a, b) => b.totalEbitda - a.totalEbitda);
 
     let rank = 1;
     return unsorted.map((entry, index) => {
       if (
         index > 0 &&
-        entry.avgEbitdaPercentage < unsorted[index - 1].avgEbitdaPercentage
+        entry.totalEbitda < unsorted[index - 1].totalEbitda
       ) {
         rank = index + 1;
       }
       return { rank, ...entry };
     });
+  }
+
+  async getStoreRoundResult(
+    storeId: string,
+    round: number,
+  ): Promise<RoundResultEntry> {
+    const session = await this.prisma.session.findFirst({
+      where: { stores: { some: { id: storeId } } },
+      select: { initialCash: true },
+    });
+
+    const r = await this.prisma.roundResult.findUnique({
+      where: { storeId_round: { storeId, round } },
+    });
+
+    if (!r) throw new NotFoundException(`Round ${round} not found for store ${storeId}`);
+
+    const quizAnswer = await this.prisma.quizAnswer.findFirst({
+      where: { storeId, round },
+      select: { scorePercentage: true },
+    });
+
+    const initialCash = session?.initialCash ?? 0;
+    const quizScorePercentage = quizAnswer?.scorePercentage ?? 0;
+
+    return this.toRoundEntry(r, initialCash, quizScorePercentage);
   }
 
   private toRoundEntry(
@@ -185,22 +211,5 @@ export class ResultsService {
       cashUsed: r.cashUsed,
       cashFinal,
     };
-  }
-
-  async getStoreRoundResult(storeId: string, round: number) {
-    const result = await this.prisma.roundResult.findUnique({
-      where: {
-        storeId_round: { storeId, round },
-      },
-      select: {
-        basketPrice: true,
-        availability: true,
-        csat: true,
-        rankScore: true,
-        demandShare: true,
-      },
-    });
-
-    return result || null;
   }
 }
