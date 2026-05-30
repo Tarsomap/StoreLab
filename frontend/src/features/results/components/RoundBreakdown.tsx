@@ -2,6 +2,8 @@
 
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { formatBrl } from '@/lib/format-brl';
+import { TermTooltip } from '@/components/term-tooltip';
+import { GlossaryTerm } from '@/lib/term-glossary';
 import type { RoundResultEntry } from '../types';
 import { fmtPct, fmtNum, ebitdaClass } from '../lib';
 
@@ -25,33 +27,35 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
     negative?: boolean;
     subtotal?: boolean;
     isEbitda?: boolean;
+    term?: GlossaryTerm;
   }[] = [
-    { label: 'Receita bruta', value: formatBrl(round.grossRevenue), pctStr: pct(round.grossRevenue) },
+    { label: 'Receita bruta', value: formatBrl(round.grossRevenue) },
     { label: 'Impostos', value: formatBrl(round.taxAmount), pctStr: pct(round.taxAmount), negative: true },
     { label: 'Receita líquida', value: formatBrl(round.netRevenue), pctStr: pct(round.netRevenue), subtotal: true },
     { label: 'Custo de mercadoria', value: formatBrl(round.costOfGoods), pctStr: pct(round.costOfGoods), negative: true },
-    { label: 'Quebras', value: formatBrl(round.breakageAmount), pctStr: pct(round.breakageAmount), negative: true },
-    { label: 'Aging', value: formatBrl(round.agingAmount), pctStr: pct(round.agingAmount), negative: true },
+    { label: 'Quebras', value: formatBrl(round.breakageAmount), pctStr: pct(round.breakageAmount), negative: true, term: 'QUEBRAS' },
+    { label: 'Aging', value: formatBrl(round.agingAmount), pctStr: pct(round.agingAmount), negative: true, term: 'AGING' },
     { label: 'Folha de pagamento', value: formatBrl(round.payrollCost), pctStr: pct(round.payrollCost), negative: true },
     { label: 'Manutenção', value: formatBrl(round.maintenanceCost), pctStr: pct(round.maintenanceCost), negative: true },
-    { label: 'Licenças', value: formatBrl(round.licenseCost), pctStr: pct(round.licenseCost), negative: true },
-    { label: 'Juros', value: formatBrl(round.interestCost), pctStr: pct(round.interestCost), negative: true },
-    { label: 'Perda SLA', value: formatBrl(round.slaRevenueLost), pctStr: pct(round.slaRevenueLost), negative: true },
+    { label: 'Licenças', value: formatBrl(round.licenseCost), pctStr: pct(round.licenseCost), negative: true, term: 'LICENCAS' },
+    { label: 'Juros', value: formatBrl(round.interestCost), pctStr: pct(round.interestCost), negative: true, term: 'JUROS' },
+    { label: 'Perda SLA', value: formatBrl(round.slaRevenueLost), pctStr: pct(round.slaRevenueLost), negative: true, term: 'SLA_LOSS' },
     {
       label: 'EBITDA',
       value: formatBrl(round.ebitda),
-      pctStr: ` (${fmtPct(round.ebitdaPercentage)})`,
+      pctStr: pct(round.ebitda),
       isEbitda: true,
+      term: 'EBITDA',
     },
   ];
 
-  const metrics: { label: string; value: string }[] = [
+  const metrics: { label: string; value: string; term?: GlossaryTerm }[] = [
     { label: 'Quiz (loja)', value: `${round.quizScorePercentage.toFixed(1)}%` },
-    { label: 'CSAT', value: fmtNum(round.csat) },
-    { label: 'Disponibilidade', value: fmtNum(round.availability) },
+    { label: 'CSAT', value: fmtNum(round.csat), term: 'CSAT' },
+    { label: 'Disponibilidade', value: fmtNum(round.availability), term: 'DISPONIBILIDADE' },
     { label: 'Preço médio', value: fmtNum(round.basketPrice) },
     { label: 'Score ranking', value: String(round.rankScore) },
-    { label: 'Market share', value: fmtPct(round.demandShare) },
+    { label: 'Market share', value: fmtPct(round.demandShare), term: 'MARKET_SHARE' },
     { label: 'Caixa usado', value: formatBrl(round.cashUsed) },
   ];
 
@@ -61,9 +65,10 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
     value: string;
     sign: '+' | '-' | '=';
     highlight?: boolean;
+    term?: GlossaryTerm;
   }[] = [
     { label: 'Caixa inicial', value: formatBrl(initialCash), sign: '+' },
-    { label: 'Estoque + CAPEX (gasto)', value: formatBrl(round.cashUsed), sign: '-' },
+    { label: 'Estoque + CAPEX (gasto)', value: formatBrl(round.cashUsed), sign: '-', term: 'CAPEX' },
     { label: 'Receita de vendas', value: formatBrl(round.grossRevenue), sign: '+' },
     { label: 'Custos operacionais', value: formatBrl(totalCosts), sign: '-' },
     { label: 'Caixa Final', value: formatBrl(round.cashFinal), sign: '=', highlight: true },
@@ -96,7 +101,10 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         {metrics.map((m) => (
           <div key={m.label} className="bg-muted/40 rounded-lg p-2.5">
-            <p className="text-xs text-muted-foreground mb-0.5">{m.label}</p>
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
+              {m.label}
+              {m.term && <TermTooltip term={m.term} side="top" />}
+            </p>
             <p className="font-mono text-sm font-semibold text-foreground">{m.value}</p>
           </div>
         ))}
@@ -117,11 +125,12 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
                 } ${row.isEbitda ? 'border-t border-border/60 mt-1 pt-2' : ''}`}
               >
                 <span
-                  className={`text-xs ${
+                  className={`text-xs flex items-center gap-1 ${
                     row.subtotal || row.isEbitda ? 'font-semibold text-foreground' : 'text-muted-foreground'
                   }`}
                 >
                   {row.label}
+                  {row.term && <TermTooltip term={row.term} side="left" />}
                 </span>
                 <span
                   className={`font-mono text-xs font-medium ${
@@ -176,6 +185,7 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
                     {row.sign}
                   </span>
                   {row.label}
+                  {row.term && <TermTooltip term={row.term} side="left" />}
                 </span>
                 <span
                   className={`font-mono text-xs ${
