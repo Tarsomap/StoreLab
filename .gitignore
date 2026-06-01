@@ -55,3 +55,4 @@ RELATÓRIO.md
 # Arquivos temporarios de inspecao do rebase MFA
 _*.tsx
 .refactor-check/
+frontend/.env.local

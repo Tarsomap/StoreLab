@@ -13,28 +13,37 @@ interface RoundBreakdownProps {
 }
 
 export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
+  const pct = (value: number) => {
+    if (!round.grossRevenue) return '';
+    const p = (value / round.grossRevenue) * 100;
+    const sign = p < 0 ? '-' : '';
+    return ` (${sign}${Math.abs(p).toFixed(2)}%)`;
+  };
+
   const plRows: {
     label: string;
     value: string;
+    pctStr?: string;
     negative?: boolean;
     subtotal?: boolean;
     isEbitda?: boolean;
     term?: GlossaryTerm;
   }[] = [
     { label: 'Receita bruta', value: formatBrl(round.grossRevenue) },
-    { label: 'Impostos', value: formatBrl(round.taxAmount), negative: true },
-    { label: 'Receita líquida', value: formatBrl(round.netRevenue), subtotal: true },
-    { label: 'Custo de mercadoria', value: formatBrl(round.costOfGoods), negative: true },
-    { label: 'Quebras', value: formatBrl(round.breakageAmount), negative: true, term: 'QUEBRAS' },
-    { label: 'Aging', value: formatBrl(round.agingAmount), negative: true, term: 'AGING' },
-    { label: 'Folha de pagamento', value: formatBrl(round.payrollCost), negative: true },
-    { label: 'Manutenção', value: formatBrl(round.maintenanceCost), negative: true },
-    { label: 'Licenças', value: formatBrl(round.licenseCost), negative: true, term: 'LICENCAS' },
-    { label: 'Juros', value: formatBrl(round.interestCost), negative: true, term: 'JUROS' },
-    { label: 'Perda SLA', value: formatBrl(round.slaRevenueLost), negative: true, term: 'SLA_LOSS' },
+    { label: 'Impostos', value: formatBrl(round.taxAmount), pctStr: pct(round.taxAmount), negative: true },
+    { label: 'Receita líquida', value: formatBrl(round.netRevenue), pctStr: pct(round.netRevenue), subtotal: true },
+    { label: 'Custo de mercadoria', value: formatBrl(round.costOfGoods), pctStr: pct(round.costOfGoods), negative: true },
+    { label: 'Quebras', value: formatBrl(round.breakageAmount), pctStr: pct(round.breakageAmount), negative: true, term: 'QUEBRAS' },
+    { label: 'Aging', value: formatBrl(round.agingAmount), pctStr: pct(round.agingAmount), negative: true, term: 'AGING' },
+    { label: 'Folha de pagamento', value: formatBrl(round.payrollCost), pctStr: pct(round.payrollCost), negative: true },
+    { label: 'Manutenção', value: formatBrl(round.maintenanceCost), pctStr: pct(round.maintenanceCost), negative: true },
+    { label: 'Licenças', value: formatBrl(round.licenseCost), pctStr: pct(round.licenseCost), negative: true, term: 'LICENCAS' },
+    { label: 'Juros', value: formatBrl(round.interestCost), pctStr: pct(round.interestCost), negative: true, term: 'JUROS' },
+    { label: 'Perda SLA', value: formatBrl(round.slaRevenueLost), pctStr: pct(round.slaRevenueLost), negative: true, term: 'SLA_LOSS' },
     {
       label: 'EBITDA',
-      value: `${formatBrl(round.ebitda)} (${fmtPct(round.ebitdaPercentage)})`,
+      value: formatBrl(round.ebitda),
+      pctStr: pct(round.ebitda),
       isEbitda: true,
       term: 'EBITDA',
     },
@@ -135,6 +144,9 @@ export function RoundBreakdown({ round, initialCash }: RoundBreakdownProps) {
                   }`}
                 >
                   {row.value}
+                  {row.pctStr && (
+                    <span className="text-muted-foreground font-normal">{row.pctStr}</span>
+                  )}
                 </span>
               </div>
             ))}
