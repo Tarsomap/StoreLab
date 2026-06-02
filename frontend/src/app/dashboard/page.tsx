@@ -35,8 +35,11 @@ export default function DashboardPage() {
     sessions,
     loading,
     categoryCatalog,
-    categoryStocks,
-    setCategoryStocks,
+    capexCatalog,
+    categoryConfigs,
+    capexConfigs,
+    setCategoryConfigs,
+    setCapexConfigs,
     addSession,
     removeSession,
     updateSession,
@@ -82,15 +85,57 @@ export default function DashboardPage() {
       {showCreate && (
         <CreateSessionForm
           categoryCatalog={categoryCatalog}
-          categoryStocks={categoryStocks}
-          onStockChange={(id, value) =>
-            setCategoryStocks((prev) => ({ ...prev, [id]: value }))
+          capexCatalog={capexCatalog}
+          categoryConfigs={categoryConfigs}
+          capexConfigs={capexConfigs}
+          onCategoryConfigChange={(id, field, value) =>
+            setCategoryConfigs((prev) => ({
+              ...prev,
+              [id]: {
+                ...prev[id],
+                [field]: value,
+              },
+            }))
+          }
+          onCapexConfigChange={(id, field, value) =>
+            setCapexConfigs((prev) => ({
+              ...prev,
+              [id]: {
+                ...prev[id],
+                [field]: value,
+              },
+            }))
           }
           onCreated={(session) => {
             addSession(session);
             setShowCreate(false);
-            setCategoryStocks(
-              Object.fromEntries(categoryCatalog.map((c) => [c.id, String(c.stockAvailable)])),
+            setCategoryConfigs(
+              Object.fromEntries(
+                categoryCatalog.map((c) => [
+                  c.id,
+                  {
+                    stockAvailable: String(c.stockAvailable),
+                    unitCost: String(c.unitCost),
+                    taxRate: String(c.taxRate * 100),
+                    breakageRate: String(c.breakageRate * 100),
+                    agingRate: String(c.agingRate * 100),
+                  },
+                ]),
+              ),
+            );
+            setCapexConfigs(
+              Object.fromEntries(
+                capexCatalog.map((c) => [
+                  c.id,
+                  {
+                    acquisitionCost: String(c.acquisitionCost),
+                    downtimeFixedDays: String(c.downtimeFixedDays),
+                    monthlyLicenseDelta: String(c.monthlyLicenseDelta),
+                    maintenanceSaving: String(c.maintenanceSaving),
+                    slaRiskPercent: String(c.slaRiskPercent * 100),
+                  },
+                ]),
+              ),
             );
           }}
           onCancel={() => setShowCreate(false)}

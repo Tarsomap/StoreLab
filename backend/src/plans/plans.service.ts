@@ -11,6 +11,8 @@ import {
   PoCapexDecision,
   PoCategoryDecision,
   Session,
+  SessionCapexConfig,
+  SessionCategoryConfig,
   Store,
   StoreRole,
 } from "@prisma/client";
@@ -26,16 +28,20 @@ import {
   PlanFullResponse,
 } from "./interfaces/plan.interface";
 
-const MAINTENANCE_COST = 400;
-const INTEREST_RATE = 0.12;
-
 // ─── Internal Prisma shape used throughout this service ──────────────────────
 type PlanWithRelations = OperationalPlan & {
   store: Store & {
     session: Pick<
       Session,
-      "cashierSalary" | "serviceSalary" | "baseLicenseCost"
-    >;
+      | "cashierSalary"
+      | "serviceSalary"
+      | "baseLicenseCost"
+      | "maintenanceCost"
+      | "interestRate"
+    > & {
+      categoryConfigs: SessionCategoryConfig[];
+      capexConfigs: SessionCapexConfig[];
+    };
   };
   categoryDecisions: (PoCategoryDecision & { category: Category })[];
   capexDecisions: (PoCapexDecision & { capexOption: CapexOption })[];
@@ -91,6 +97,10 @@ export class PlansService {
                   cashierSalary: true,
                   serviceSalary: true,
                   baseLicenseCost: true,
+                  maintenanceCost: true,
+                  interestRate: true,
+                  categoryConfigs: true,
+                  capexConfigs: true,
                 },
               },
             },
@@ -304,6 +314,10 @@ export class PlansService {
                 cashierSalary: true,
                 serviceSalary: true,
                 baseLicenseCost: true,
+                maintenanceCost: true,
+                interestRate: true,
+                categoryConfigs: true,
+                capexConfigs: true,
               },
             },
           },
@@ -325,6 +339,10 @@ export class PlansService {
                 cashierSalary: true,
                 serviceSalary: true,
                 baseLicenseCost: true,
+                maintenanceCost: true,
+                interestRate: true,
+                categoryConfigs: true,
+                capexConfigs: true,
               },
             },
           },
@@ -367,16 +385,39 @@ export class PlansService {
     const config1 = await this.loadPlan(storeId, 1);
     if (!config1) return initialCash;
 
+    const categoryConfigMap = new Map(
+      config1.store.session.categoryConfigs.map((c) => [c.categoryId, c]),
+    );
+    const capexConfigMap = new Map(
+      config1.store.session.capexConfigs.map((c) => [c.capexOptionId, c]),
+    );
     const stockCost1 = config1.categoryDecisions.reduce(
-      (sum, d) => sum + d.stockPurchased * d.category.unitCost,
+      (sum, d) =>
+        sum +
+        d.stockPurchased *
+          (categoryConfigMap.get(d.categoryId)?.unitCost ??
+            d.category.unitCost),
       0,
     );
+
     const implementedCapexCost1 = config1.capexDecisions
       .filter((d) => d.implemented)
-      .reduce((sum, d) => sum + d.capexOption.acquisitionCost, 0);
+      .reduce(
+        (sum, d) =>
+          sum +
+          (capexConfigMap.get(d.capexOptionId)?.acquisitionCost ??
+            d.capexOption.acquisitionCost),
+        0,
+      );
     const unimplementedCapexCost1 = config1.capexDecisions
       .filter((d) => !d.implemented)
-      .reduce((sum, d) => sum + d.capexOption.acquisitionCost, 0);
+      .reduce(
+        (sum, d) =>
+          sum +
+          (capexConfigMap.get(d.capexOptionId)?.acquisitionCost ??
+            d.capexOption.acquisitionCost),
+        0,
+      );
 
     const cashUsedConfig1 = stockCost1 + implementedCapexCost1;
     return initialCash - cashUsedConfig1 + unimplementedCapexCost1;
@@ -418,8 +459,8 @@ export class PlansService {
       where: { id: categoryId },
     });
     if (!category) throw new NotFoundException("Categoria não encontrada");
-    return category.stockAvailable;
-  }
+      return category.stockAvailable;
+    }
 
   private async assertStoreMember(
     storeId: string,
@@ -459,38 +500,72 @@ export class PlansService {
     availableCash: number,
   ): PlanFinancials {
     // Cash used = stock purchases + implemented CAPEXes
+    const categoryConfigMap = new Map(
+      plan.store.session.categoryConfigs.map((c) => [c.categoryId, c]),
+    );
+    const capexConfigMap = new Map(
+      plan.store.session.capexConfigs.map((c) => [c.capexOptionId, c]),
+    );
+
     const stockCost = plan.categoryDecisions.reduce(
-      (sum, d) => sum + d.stockPurchased * d.category.unitCost,
+      (sum, d) =>
+        sum +
+        d.stockPurchased *
+          (categoryConfigMap.get(d.categoryId)?.unitCost ??
+            d.category.unitCost),
       0,
     );
     const implementedCapexCost = plan.capexDecisions
       .filter((d) => d.implemented)
-      .reduce((sum, d) => sum + d.capexOption.acquisitionCost, 0);
+      .reduce(
+        (sum, d) =>
+          sum +
+          (capexConfigMap.get(d.capexOptionId)?.acquisitionCost ??
+            d.capexOption.acquisitionCost),
+        0,
+      );
     const cashUsed = stockCost + implementedCapexCost;
 
     // Interest on excess (above availableCash)
-    const interestCost = Math.max(0, cashUsed - availableCash) * INTEREST_RATE;
+    const {
+      cashierSalary,
+      serviceSalary,
+      baseLicenseCost,
+      maintenanceCost: maintenanceCostBase,
+      interestRate,
+    } = plan.store.session;
 
-    const { cashierSalary, serviceSalary, baseLicenseCost } =
-      plan.store.session;
+    const interestCost = Math.max(0, cashUsed - availableCash) * interestRate;
 
     // Payroll
     const payrollCost =
       plan.cashierOperators * cashierSalary +
       plan.serviceOperators * serviceSalary;
 
-    // Maintenance: R$400 unless FREEZER is implemented
-    const freezerImplemented = plan.capexDecisions.some(
-      (d) => d.implemented && d.capexOption.type === "FREEZER",
-    );
-    const maintenanceCost = freezerImplemented ? 0 : MAINTENANCE_COST;
+    // Maintenance: session base minus savings from implemented CAPEXes.
+    const maintenanceSaving = plan.capexDecisions
+      .filter((d) => d.implemented)
+      .reduce(
+        (sum, d) =>
+          sum +
+          (capexConfigMap.get(d.capexOptionId)?.maintenanceSaving ??
+            d.capexOption.maintenanceSaving),
+        0,
+      );
+    const maintenanceCost = Math.max(0, maintenanceCostBase - maintenanceSaving);
 
     // License: base configured in the session + deltas of implemented CAPEXes
     const licenseCost =
       baseLicenseCost +
       plan.capexDecisions
         .filter((d) => d.implemented)
-        .reduce((sum, d) => sum + d.capexOption.monthlyLicenseDelta, 0);
+        .reduce(
+          (sum, d) =>
+            sum +
+            (capexConfigMap.get(d.capexOptionId)?.monthlyLicenseDelta ??
+              d.capexOption.monthlyLicenseDelta),
+          0,
+        );
 
     // Projected revenue — simplified: assume 100% of stock is sold
     let projectedGrossRevenue = 0;
@@ -498,11 +573,14 @@ export class PlansService {
     let projectedCOGS = 0;
 
     for (const d of plan.categoryDecisions) {
-      const salePrice = d.category.unitCost * (1 + d.priceMargin);
+      const categoryConfig = categoryConfigMap.get(d.categoryId);
+      const unitCost = categoryConfig?.unitCost ?? d.category.unitCost;
+      const taxRate = categoryConfig?.taxRate ?? d.category.taxRate;
+      const salePrice = unitCost * (1 + d.priceMargin);
       const revenue = d.stockPurchased * salePrice;
       projectedGrossRevenue += revenue;
-      projectedTax += revenue * d.category.taxRate;
-      projectedCOGS += d.stockPurchased * d.category.unitCost;
+      projectedTax += revenue * taxRate;
+      projectedCOGS += d.stockPurchased * unitCost;
     }
 
     const projectedNetRevenue = projectedGrossRevenue - projectedTax;
@@ -523,6 +601,8 @@ export class PlansService {
       cashierSalary,
       serviceSalary,
       baseLicenseCost,
+      maintenanceCostBase,
+      interestRate,
       payrollCost,
       maintenanceCost,
       licenseCost,
@@ -536,28 +616,43 @@ export class PlansService {
     plan: PlanWithRelations,
     availableCash: number,
   ): PlanFullResponse {
+    const categoryConfigMap = new Map(
+      plan.store.session.categoryConfigs.map((c) => [c.categoryId, c]),
+    );
+    const capexConfigMap = new Map(
+      plan.store.session.capexConfigs.map((c) => [c.capexOptionId, c]),
+    );
+
     const categoryDecisions: CategoryDecisionEntry[] =
-      plan.categoryDecisions.map((d) => ({
-        id: d.id,
-        categoryId: d.categoryId,
-        categoryName: d.category.name,
-        unitCost: d.category.unitCost,
-        taxRate: d.category.taxRate,
-        breakageRate: d.category.breakageRate,
-        agingRate: d.category.agingRate,
-        stockPurchased: d.stockPurchased,
-        priceMargin: d.priceMargin,
-        lineCost: d.stockPurchased * d.category.unitCost,
-      }));
+      plan.categoryDecisions.map((d) => {
+        const config = categoryConfigMap.get(d.categoryId);
+        const unitCost = config?.unitCost ?? d.category.unitCost;
+        return {
+          id: d.id,
+          categoryId: d.categoryId,
+          categoryName: d.category.name,
+          unitCost,
+          taxRate: config?.taxRate ?? d.category.taxRate,
+          breakageRate: config?.breakageRate ?? d.category.breakageRate,
+          agingRate: config?.agingRate ?? d.category.agingRate,
+          stockPurchased: d.stockPurchased,
+          priceMargin: d.priceMargin,
+          lineCost: d.stockPurchased * unitCost,
+        };
+      });
 
     const capexDecisions: CapexDecisionEntry[] = plan.capexDecisions.map(
-      (d) => ({
-        id: d.id,
-        capexOptionId: d.capexOptionId,
-        capexName: d.capexOption.name,
-        acquisitionCost: d.capexOption.acquisitionCost,
-        implemented: d.implemented,
-      }),
+      (d) => {
+        const config = capexConfigMap.get(d.capexOptionId);
+        return {
+          id: d.id,
+          capexOptionId: d.capexOptionId,
+          capexName: d.capexOption.name,
+          acquisitionCost:
+            config?.acquisitionCost ?? d.capexOption.acquisitionCost,
+          implemented: d.implemented,
+        };
+      },
     );
 
     return {

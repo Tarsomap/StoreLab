@@ -641,7 +641,7 @@ async function main() {
     // SessionCategoryConfig (usa padrão do seed)
     for (const catData of CATEGORY_DATA) {
       const cat = categoryMap.get(catData.name)!;
-      await prisma.sessionCategoryConfig.create({ data: { sessionId: session.id, categoryId: cat.id, stockAvailable: catData.stockAvailable } });
+      await prisma.sessionCategoryConfig.create({ data: { sessionId: session.id, categoryId: cat.id, stockAvailable: catData.stockAvailable, unitCost: catData.unitCost, taxRate: catData.taxRate, breakageRate: catData.breakageRate, agingRate: catData.agingRate } });
     }
 
     const stores: { store: { id: string; name: string }; strategyIndex: number }[] = [];
@@ -675,7 +675,7 @@ async function main() {
 
     for (const catData of CATEGORY_DATA) {
       const cat = categoryMap.get(catData.name)!;
-      await prisma.sessionCategoryConfig.create({ data: { sessionId: session1.id, categoryId: cat.id, stockAvailable: catData.stockAvailable } });
+      await prisma.sessionCategoryConfig.create({ data: { sessionId: session1.id, categoryId: cat.id, stockAvailable: catData.stockAvailable, unitCost: catData.unitCost, taxRate: catData.taxRate, breakageRate: catData.breakageRate, agingRate: catData.agingRate } });
     }
 
     const s1Stores: StoreRoundState[] = [];
@@ -797,7 +797,7 @@ async function main() {
 
     for (const catData of CATEGORY_DATA) {
       const cat = categoryMap.get(catData.name)!;
-      await prisma.sessionCategoryConfig.create({ data: { sessionId: session2.id, categoryId: cat.id, stockAvailable: catData.stockAvailable } });
+      await prisma.sessionCategoryConfig.create({ data: { sessionId: session2.id, categoryId: cat.id, stockAvailable: catData.stockAvailable, unitCost: catData.unitCost, taxRate: catData.taxRate, breakageRate: catData.breakageRate, agingRate: catData.agingRate } });
     }
 
     const s2Questions1 = await createQuizQuestions(session2.id, 1);
@@ -842,7 +842,7 @@ async function main() {
 
     for (const catData of CATEGORY_DATA) {
       const cat = categoryMap.get(catData.name)!;
-      await prisma.sessionCategoryConfig.create({ data: { sessionId: session3.id, categoryId: cat.id, stockAvailable: catData.stockAvailable } });
+      await prisma.sessionCategoryConfig.create({ data: { sessionId: session3.id, categoryId: cat.id, stockAvailable: catData.stockAvailable, unitCost: catData.unitCost, taxRate: catData.taxRate, breakageRate: catData.breakageRate, agingRate: catData.agingRate } });
     }
 
     await createQuizQuestions(session3.id, 1);

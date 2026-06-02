@@ -38,7 +38,7 @@ export const SERVICE_SALARY = 1_200;
 
 /**
  * Custo fixo mensal de manutenção da loja, em reais.
- * Zera quando há CAPEX FREEZER implementado (economia modelada no serviço financeiro).
+ * Pode ser reduzido por CAPEX implementados (FREEZER tem economia padrão de 400 no seed).
  */
 export const MAINTENANCE_COST = 400;
 

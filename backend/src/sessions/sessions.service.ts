@@ -11,6 +11,7 @@ import { ResultsService } from "../results/results.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import {
+  SessionCapexCatalogEntry,
   SessionCategoryCatalogEntry,
   SessionStatusResponse,
   SessionSummary,
@@ -47,7 +48,7 @@ export class SessionsService {
 
   /**
    * Cria uma sessão com os custos operacionais configurados pelo facilitador.
-   * cashierSalary, serviceSalary e baseLicenseCost são obrigatórios no DTO —
+   * Custos operacionais são obrigatórios no DTO —
    * o engine os lê diretamente da sessão, eliminando valores hardcoded.
    */
   async create(
@@ -71,6 +72,8 @@ export class SessionsService {
         cashierSalary: dto.cashierSalary,
         serviceSalary: dto.serviceSalary,
         baseLicenseCost: dto.baseLicenseCost,
+        maintenanceCost: dto.maintenanceCost,
+        interestRate: dto.interestRate,
         // ────────────────────────────────────────────────────────────────
         timerEnabled: dto.timerEnabled ?? false,
         timerDuration: dto.timerDuration ?? null,
@@ -79,6 +82,22 @@ export class SessionsService {
               create: dto.categoryConfigs.map((c) => ({
                 categoryId: c.categoryId,
                 stockAvailable: c.stockAvailable,
+                unitCost: c.unitCost,
+                taxRate: c.taxRate,
+                breakageRate: c.breakageRate,
+                agingRate: c.agingRate,
+              })),
+            }
+          : undefined,
+        capexConfigs: dto.capexConfigs?.length
+          ? {
+              create: dto.capexConfigs.map((c) => ({
+                capexOptionId: c.capexOptionId,
+                acquisitionCost: c.acquisitionCost,
+                downtimeFixedDays: c.downtimeFixedDays,
+                monthlyLicenseDelta: c.monthlyLicenseDelta,
+                maintenanceSaving: c.maintenanceSaving,
+                slaRiskPercent: c.slaRiskPercent,
               })),
             }
           : undefined,
@@ -161,6 +180,8 @@ export class SessionsService {
         stockAvailable: true,
         unitCost: true,
         taxRate: true,
+        breakageRate: true,
+        agingRate: true,
       },
     });
 
@@ -170,6 +191,35 @@ export class SessionsService {
       stockAvailable: category.stockAvailable,
       unitCost: category.unitCost,
       taxRate: category.taxRate,
+      breakageRate: category.breakageRate,
+      agingRate: category.agingRate,
+    }));
+  }
+
+  async getCapexCatalog(): Promise<SessionCapexCatalogEntry[]> {
+    const options = await this.prisma.capexOption.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        acquisitionCost: true,
+        downtimeFixedDays: true,
+        monthlyLicenseDelta: true,
+        maintenanceSaving: true,
+        slaRiskPercent: true,
+      },
+    });
+
+    return options.map((option) => ({
+      id: option.id,
+      name: option.name,
+      type: option.type,
+      acquisitionCost: option.acquisitionCost,
+      downtimeFixedDays: option.downtimeFixedDays,
+      monthlyLicenseDelta: option.monthlyLicenseDelta,
+      maintenanceSaving: option.maintenanceSaving,
+      slaRiskPercent: option.slaRiskPercent,
     }));
   }
 
@@ -177,6 +227,8 @@ export class SessionsService {
     const session = await this.prisma.session.findUnique({
       where: { id },
       include: {
+        categoryConfigs: true,
+        capexConfigs: true,
         stores: {
           include: {
             members: {
@@ -213,13 +265,26 @@ export class SessionsService {
       status: session.status,
       stores: session.stores.map((store) => {
         const latestPlan = store.plans[0] ?? null;
+        const categoryConfigMap = new Map(
+          session.categoryConfigs.map((c) => [c.categoryId, c]),
+        );
+        const capexConfigMap = new Map(
+          session.capexConfigs.map((c) => [c.capexOptionId, c]),
+        );
         const cashUsed = latestPlan
           ? latestPlan.categoryDecisions.reduce(
-              (sum, d) => sum + d.stockPurchased * d.category.unitCost,
+              (sum, d) =>
+                sum +
+                d.stockPurchased *
+                  (categoryConfigMap.get(d.categoryId)?.unitCost ??
+                    d.category.unitCost),
               0,
             ) +
             latestPlan.capexDecisions.reduce(
-              (sum, d) => sum + d.capexOption.acquisitionCost,
+              (sum, d) =>
+                sum +
+                (capexConfigMap.get(d.capexOptionId)?.acquisitionCost ??
+                  d.capexOption.acquisitionCost),
               0,
             )
           : 0;
@@ -346,6 +411,7 @@ export class SessionsService {
       await tx.quizQuestion.deleteMany({ where: { sessionId: id } });
       await tx.store.deleteMany({ where: { sessionId: id } });
       await tx.sessionCategoryConfig.deleteMany({ where: { sessionId: id } });
+      await tx.sessionCapexConfig.deleteMany({ where: { sessionId: id } });
 
       await tx.session.delete({ where: { id } });
     });
@@ -366,9 +432,12 @@ export class SessionsService {
       dto.totalDemand !== undefined ||
       dto.initialCash !== undefined ||
       dto.categoryConfigs !== undefined ||
+      dto.capexConfigs !== undefined ||
       dto.cashierSalary !== undefined ||
       dto.serviceSalary !== undefined ||
-      dto.baseLicenseCost !== undefined;
+      dto.baseLicenseCost !== undefined ||
+      dto.maintenanceCost !== undefined ||
+      dto.interestRate !== undefined;
 
     if (hasNonNameFields && session.status !== SessionStatus.SETUP) {
       throw new BadRequestException(
@@ -385,6 +454,27 @@ export class SessionsService {
               sessionId: id,
               categoryId: c.categoryId,
               stockAvailable: c.stockAvailable,
+              unitCost: c.unitCost,
+              taxRate: c.taxRate,
+              breakageRate: c.breakageRate,
+              agingRate: c.agingRate,
+            })),
+          });
+        }
+      }
+
+      if (dto.capexConfigs !== undefined) {
+        await tx.sessionCapexConfig.deleteMany({ where: { sessionId: id } });
+        if (dto.capexConfigs.length > 0) {
+          await tx.sessionCapexConfig.createMany({
+            data: dto.capexConfigs.map((c) => ({
+              sessionId: id,
+              capexOptionId: c.capexOptionId,
+              acquisitionCost: c.acquisitionCost,
+              downtimeFixedDays: c.downtimeFixedDays,
+              monthlyLicenseDelta: c.monthlyLicenseDelta,
+              maintenanceSaving: c.maintenanceSaving,
+              slaRiskPercent: c.slaRiskPercent,
             })),
           });
         }
@@ -418,6 +508,12 @@ export class SessionsService {
           ...(dto.baseLicenseCost !== undefined && {
             baseLicenseCost: dto.baseLicenseCost,
           }),
+          ...(dto.maintenanceCost !== undefined && {
+            maintenanceCost: dto.maintenanceCost,
+          }),
+          ...(dto.interestRate !== undefined && {
+            interestRate: dto.interestRate,
+          }),
           // ──────────────────────────────────────────────────────────────
           ...(dto.timerEnabled !== undefined && {
             timerEnabled: dto.timerEnabled,
@@ -439,7 +535,7 @@ export class SessionsService {
 
   /**
    * Normaliza o registro do Prisma para o contrato da API.
-   * Inclui os três campos de custo operacional.
+   * Inclui os custos operacionais configuráveis.
    */
   private toSummary(session: {
     id: string;
@@ -452,6 +548,8 @@ export class SessionsService {
     cashierSalary: number;
     serviceSalary: number;
     baseLicenseCost: number;
+    maintenanceCost: number;
+    interestRate: number;
     timerEnabled: boolean;
     timerDuration: number | null;
     timerStartedAt: Date | null;
@@ -471,6 +569,8 @@ export class SessionsService {
       cashierSalary: session.cashierSalary,
       serviceSalary: session.serviceSalary,
       baseLicenseCost: session.baseLicenseCost,
+      maintenanceCost: session.maintenanceCost,
+      interestRate: session.interestRate,
       timerEnabled: session.timerEnabled,
       timerDuration: session.timerDuration,
       timerStartedAt: session.timerStartedAt,

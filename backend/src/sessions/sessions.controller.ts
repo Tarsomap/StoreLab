@@ -79,6 +79,16 @@ export class SessionsController {
   }
 
   /**
+   * Catálogo de CAPEX para parametrização financeira/SLA por sessão.
+   */
+  @Get("catalog/capex")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  getCapexCatalog() {
+    return this.sessionsService.getCapexCatalog();
+  }
+
+  /**
    * Detalhe simples de uma sessão por id — qualquer usuário logado pode ver (ex.: jogador entrou pelo código e precisa do contexto).
    */
   @Get(":id")

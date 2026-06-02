@@ -11,7 +11,7 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
-import { CategoryConfigDto } from "./create-session.dto";
+import { CapexConfigDto, CategoryConfigDto } from "./create-session.dto";
 
 /**
  * DTO de atualização — todos os campos são opcionais.
@@ -38,6 +38,12 @@ export class UpdateSessionDto {
   @IsOptional()
   categoryConfigs?: CategoryConfigDto[];
 
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CapexConfigDto)
+  @IsOptional()
+  capexConfigs?: CapexConfigDto[];
+
   // ── Custos operacionais (editáveis apenas em SETUP) ──────────────────────
 
   @IsNumber()
@@ -54,6 +60,16 @@ export class UpdateSessionDto {
   @Min(0)
   @IsOptional()
   baseLicenseCost?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maintenanceCost?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  interestRate?: number;
 
   // ── Timer ────────────────────────────────────────────────────────────────
 

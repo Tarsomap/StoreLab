@@ -19,6 +19,10 @@ export interface SessionSummary {
   serviceSalary: number;
   /** Custo base de licença de software (R$) — somado aos deltas de CAPEX. */
   baseLicenseCost: number;
+  /** Custo mensal de manutenção (R$) — reduzido por CAPEX implementados. */
+  maintenanceCost: number;
+  /** Taxa de juros sobre caixa usado acima do limite, em decimal. */
+  interestRate: number;
 
   timerEnabled: boolean;
   timerDuration: number | null;
@@ -35,6 +39,19 @@ export interface SessionCategoryCatalogEntry {
   stockAvailable: number;
   unitCost: number;
   taxRate: number;
+  breakageRate: number;
+  agingRate: number;
+}
+
+export interface SessionCapexCatalogEntry {
+  id: string;
+  name: string;
+  type: string;
+  acquisitionCost: number;
+  downtimeFixedDays: number;
+  monthlyLicenseDelta: number;
+  maintenanceSaving: number;
+  slaRiskPercent: number;
 }
 
 export interface StockAvailabilityEntry {

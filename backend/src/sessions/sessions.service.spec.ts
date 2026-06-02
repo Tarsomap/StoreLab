@@ -27,6 +27,11 @@ type SessionCategoryConfigMock = {
   createMany: jest.Mock;
 };
 
+type SessionCapexConfigMock = {
+  deleteMany: jest.Mock;
+  createMany: jest.Mock;
+};
+
 type DeleteManyMock = {
   deleteMany: jest.Mock;
 };
@@ -41,6 +46,7 @@ type PrismaMock = {
   storeMember: StoreMemberMock;
   playerRoundStatus: PlayerRoundStatusMock;
   sessionCategoryConfig: SessionCategoryConfigMock;
+  sessionCapexConfig: SessionCapexConfigMock;
   operationalPlan: OperationalPlanMock;
   poCategoryDecision: DeleteManyMock;
   poCapexDecision: DeleteManyMock;
@@ -72,6 +78,8 @@ const baseSession = {
   cashierSalary: 1000,
   serviceSalary: 1200,
   baseLicenseCost: 1200,
+  maintenanceCost: 400,
+  interestRate: 0.12,
   timerEnabled: true,
   timerDuration: 600,
   timerStartedAt: null,
@@ -103,6 +111,10 @@ describe("SessionsService timer", () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       sessionCategoryConfig: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn(),
+      },
+      sessionCapexConfig: {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         createMany: jest.fn(),
       },
@@ -147,6 +159,8 @@ describe("SessionsService timer", () => {
           cashierSalary: 1000,
           serviceSalary: 1200,
           baseLicenseCost: 1200,
+          maintenanceCost: 400,
+          interestRate: 0.12,
           timerEnabled: true,
         },
         "facilitator-1",

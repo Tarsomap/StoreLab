@@ -26,6 +26,8 @@ export interface PlanFinancials {
   cashierSalary: number;
   serviceSalary: number;
   baseLicenseCost: number;
+  maintenanceCostBase: number;
+  interestRate: number;
   payrollCost: number;
   maintenanceCost: number;
   licenseCost: number;

@@ -82,6 +82,7 @@ model CapexOption {
   maintenanceSaving   Float // FREEZER = 400; demais = 0
   slaRiskPercent      Float // probabilidade de incidente por rodada (ex.: 0.15 = 15%)
 
+  sessionConfigs SessionCapexConfig[]
   capexDecisions PoCapexDecision[]
   slaEvents      SlaEvent[]
 }
@@ -144,6 +145,8 @@ model Session {
   cashierSalary   Float @default(1000) // R$/operador de caixa por rodada
   serviceSalary   Float @default(1200) // R$/operador de serviço por rodada
   baseLicenseCost Float @default(1200) // R$ base de licença de software (CAPEX adiciona delta)
+  maintenanceCost Float @default(400)  // R$ manutenção mensal; CAPEX pode reduzir via maintenanceSaving
+  interestRate    Float @default(0.12) // taxa de juros sobre caixa usado acima do limite
 
   // Timer / Cronômetro da rodada atual
   timerEnabled       Boolean   @default(false)
@@ -157,6 +160,7 @@ model Session {
 
   stores              Store[]
   categoryConfigs     SessionCategoryConfig[]
+  capexConfigs        SessionCapexConfig[]
   quizQuestions       QuizQuestion[]
   userQuizAnswers     UserQuizAnswer[]
   slaEvents           SlaEvent[]
@@ -165,7 +169,7 @@ model Session {
   playerRoundStatuses PlayerRoundStatus[]
 }
 
-// Sobrescreve stockAvailable padrão do Category para uma sessão específica.
+// Sobrescreve parâmetros padrão do Category para uma sessão específica.
 model SessionCategoryConfig {
   id             String   @id @default(uuid())
   sessionId      String
@@ -173,8 +177,28 @@ model SessionCategoryConfig {
   categoryId     String
   category       Category @relation(fields: [categoryId], references: [id])
   stockAvailable Int
+  unitCost       Float
+  taxRate        Float
+  breakageRate   Float
+  agingRate      Float
 
   @@unique([sessionId, categoryId])
+}
+
+// Sobrescreve parâmetros padrão do CAPEX para uma sessão específica.
+model SessionCapexConfig {
+  id                  String      @id @default(uuid())
+  sessionId           String
+  session             Session     @relation(fields: [sessionId], references: [id])
+  capexOptionId       String
+  capexOption         CapexOption @relation(fields: [capexOptionId], references: [id])
+  acquisitionCost     Float
+  downtimeFixedDays   Int
+  monthlyLicenseDelta Float
+  maintenanceSaving   Float
+  slaRiskPercent      Float
+
+  @@unique([sessionId, capexOptionId])
 }
 
 model Store {

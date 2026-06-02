@@ -6,10 +6,6 @@ import {
   EbitdaInput,
   EbitdaBreakdown,
 } from './interfaces';
-import {
-  MAINTENANCE_COST,
-  INTEREST_RATE_MONTHLY,
-} from './constants';
 
 /**
  * Converte decisões de estoque e demanda em receita por categoria e monta o EBITDA da rodada.
@@ -61,8 +57,8 @@ export class FinancialService {
    * EBITDA aqui é: receita líquida (após imposto) − CMV − quebra − envelhecimento − folha − manutenção
    * − licenças − juros − perda de receita por SLA. Percentual = EBITDA ÷ receita bruta (0 se não houve receita,
    * para não dividir por zero). Juros incidem só sobre o caixa usado acima do interestThreshold, à taxa mensal,
-   * porque o jogo modela capital acima de um patamar como financiado. FREEZER zera manutenção; licenças somam
-   * o pacote base mais deltas dos CAPEX implementados.
+   * porque o jogo modela capital acima de um patamar como financiado. CAPEX implementados podem reduzir
+   * manutenção via maintenanceSaving; licenças somam o pacote base mais deltas dos CAPEX implementados.
    *
    * @param input - Receitas por categoria, pessoal, CAPEX, caixa, limite de juros, SLA e shrinkage.
    * @returns Objeto completo para gravar no RoundResult e exibir ao jogador.
@@ -75,6 +71,8 @@ export class FinancialService {
       cashierSalary,
       serviceSalary,
       baseLicenseCost,
+      maintenanceCost: maintenanceCostBase,
+      interestRate,
       capexDecisions,
       cashUsed,
       interestThreshold,
@@ -94,11 +92,10 @@ export class FinancialService {
     const payrollCost =
       cashierOperators * cashierSalary + serviceOperators * serviceSalary;
 
-    const hasFreezer = capexDecisions.some(
-      (c) => c.type === 'FREEZER' && c.implemented,
-    );
-    // Com freezer, a manutenção de refrigeração embutida zera o custo fixo de manutenção do cenário base.
-    const maintenanceCost = hasFreezer ? 0 : MAINTENANCE_COST;
+    const maintenanceSaving = capexDecisions
+      .filter((c) => c.implemented)
+      .reduce((sum, c) => sum + c.maintenanceSaving, 0);
+    const maintenanceCost = Math.max(0, maintenanceCostBase - maintenanceSaving);
 
     const licenseCost =
       baseLicenseCost +
@@ -107,7 +104,7 @@ export class FinancialService {
         .reduce((sum, c) => sum + c.monthlyLicenseDelta, 0);
 
     // Sobre o que excede o limite de caixa “grátis”, aplicamos juros; Math.max evita juro negativo.
-    const interestCost = Math.max(0, cashUsed - interestThreshold) * INTEREST_RATE_MONTHLY;
+    const interestCost = Math.max(0, cashUsed - interestThreshold) * interestRate;
 
     const ebitda =
       netRevenue -

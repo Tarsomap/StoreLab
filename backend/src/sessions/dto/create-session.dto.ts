@@ -13,7 +13,7 @@ import {
 } from "class-validator";
 
 /**
- * Uma linha de configuração de estoque por categoria na sessão (quanto o “mercado” oferece naquela partida).
+ * Uma linha de configuração financeira/estoque por categoria na sessão.
  */
 export class CategoryConfigDto {
   /** Qual categoria do catálogo (UUID). */
@@ -24,6 +24,60 @@ export class CategoryConfigDto {
   @IsInt()
   @IsPositive()
   stockAvailable: number;
+
+  /** Custo unitário da categoria nesta sessão. */
+  @IsNumber()
+  @Min(0)
+  unitCost: number;
+
+  /** Imposto sobre venda, em decimal (ex.: 0.12 = 12%). */
+  @IsNumber()
+  @Min(0)
+  taxRate: number;
+
+  /** Taxa de quebra, em decimal. */
+  @IsNumber()
+  @Min(0)
+  breakageRate: number;
+
+  /** Taxa de aging, em decimal. */
+  @IsNumber()
+  @Min(0)
+  agingRate: number;
+}
+
+/**
+ * Configuração de CAPEX por sessão. Mantém o catálogo global como padrão, mas permite cenário específico.
+ */
+export class CapexConfigDto {
+  /** Qual CAPEX do catálogo (UUID). */
+  @IsUUID()
+  capexOptionId: string;
+
+  /** Custo de aquisição do CAPEX nesta sessão. */
+  @IsNumber()
+  @Min(0)
+  acquisitionCost: number;
+
+  /** Dias fixos de parada caso o incidente de SLA ocorra. */
+  @IsInt()
+  @Min(0)
+  downtimeFixedDays: number;
+
+  /** Acréscimo mensal na licença de software quando implementado. */
+  @IsNumber()
+  @Min(0)
+  monthlyLicenseDelta: number;
+
+  /** Economia de manutenção prevista pelo CAPEX. */
+  @IsNumber()
+  @Min(0)
+  maintenanceSaving: number;
+
+  /** Risco de incidente SLA, em decimal (ex.: 0.15 = 15%). */
+  @IsNumber()
+  @Min(0)
+  slaRiskPercent: number;
 }
 
 /**
@@ -69,6 +123,15 @@ export class CreateSessionDto {
   categoryConfigs?: CategoryConfigDto[];
 
   /**
+   * Parâmetros de CAPEX por sessão; sem eles, o jogo mantém os padrões do catálogo.
+   */
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CapexConfigDto)
+  @IsOptional()
+  capexConfigs?: CapexConfigDto[];
+
+  /**
    * Salário por operador de caixa (R$).
    * Usado em: folha = (operadores de caixa × salário caixa) + (operadores de serviço × salário serviço).
    */
@@ -91,6 +154,22 @@ export class CreateSessionDto {
   @IsNumber()
   @Min(0)
   baseLicenseCost: number;
+
+  /**
+   * Custo mensal de manutenção (R$).
+   * CAPEX implementados podem reduzir este custo via maintenanceSaving.
+   */
+  @IsNumber()
+  @Min(0)
+  maintenanceCost: number;
+
+  /**
+   * Taxa de juros sobre caixa usado acima do limite.
+   * Deve ser enviada em decimal: 0.12 = 12%.
+   */
+  @IsNumber()
+  @Min(0)
+  interestRate: number;
 
   @IsOptional()
   @IsBoolean()

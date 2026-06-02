@@ -43,6 +43,8 @@ export interface SessionDetail {
   cashierSalary: number;
   serviceSalary: number;
   baseLicenseCost: number;
+  maintenanceCost: number;
+  interestRate: number;
   timerEnabled: boolean;
   timerDuration: number | null;
   timerStartedAt: string | null;
@@ -66,6 +68,8 @@ export interface Session {
   cashierSalary?: number;
   serviceSalary?: number;
   baseLicenseCost?: number;
+  maintenanceCost?: number;
+  interestRate?: number;
   disponibilidade?: number[];
   createdAt: string;
   storeCount?: number;
@@ -88,6 +92,35 @@ export interface CategoryCatalogEntry {
   stockAvailable: number;
   unitCost: number;
   taxRate: number;
+  breakageRate: number;
+  agingRate: number;
+}
+
+export interface CapexCatalogEntry {
+  id: string;
+  name: string;
+  type: string;
+  acquisitionCost: number;
+  downtimeFixedDays: number;
+  monthlyLicenseDelta: number;
+  maintenanceSaving: number;
+  slaRiskPercent: number;
+}
+
+export interface CategoryConfigFormValues {
+  stockAvailable: string;
+  unitCost: string;
+  taxRate: string;
+  breakageRate: string;
+  agingRate: string;
+}
+
+export interface CapexConfigFormValues {
+  acquisitionCost: string;
+  downtimeFixedDays: string;
+  monthlyLicenseDelta: string;
+  maintenanceSaving: string;
+  slaRiskPercent: string;
 }
 
 export interface UpdateSessionInput {
@@ -97,6 +130,24 @@ export interface UpdateSessionInput {
   cashierSalary?: number;
   serviceSalary?: number;
   baseLicenseCost?: number;
+  maintenanceCost?: number;
+  interestRate?: number;
+  categoryConfigs?: {
+    categoryId: string;
+    stockAvailable: number;
+    unitCost: number;
+    taxRate: number;
+    breakageRate: number;
+    agingRate: number;
+  }[];
+  capexConfigs?: {
+    capexOptionId: string;
+    acquisitionCost: number;
+    downtimeFixedDays: number;
+    monthlyLicenseDelta: number;
+    maintenanceSaving: number;
+    slaRiskPercent: number;
+  }[];
   timerEnabled?: boolean;
   timerDuration?: number | null;
 }

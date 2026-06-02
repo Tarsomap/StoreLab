@@ -59,6 +59,8 @@ describe('FinancialService', () => {
     cashierSalary: CASHIER_SALARY,
     serviceSalary: SERVICE_SALARY,
     baseLicenseCost: BASE_LICENSE_COST,
+    maintenanceCost: MAINTENANCE_COST,
+    interestRate: INTEREST_RATE_MONTHLY,
     capexDecisions: [],
     cashUsed: 500_000,
     interestThreshold: 700_000,
@@ -189,7 +191,14 @@ describe('FinancialService', () => {
     it('maintenanceCost is 0 when FREEZER is implemented', () => {
       const input = makeEbitdaInput({
         categoryRevenues: [makeCategoryRevenue()],
-        capexDecisions: [makeCapex({ type: 'FREEZER', implemented: true, monthlyLicenseDelta: 0 })],
+        capexDecisions: [
+          makeCapex({
+            type: 'FREEZER',
+            implemented: true,
+            monthlyLicenseDelta: 0,
+            maintenanceSaving: MAINTENANCE_COST,
+          }),
+        ],
       });
       const result = service.computeEbitda(input);
       expect(result.maintenanceCost).toBe(0);
@@ -226,6 +235,8 @@ describe('FinancialService', () => {
         cashierSalary: 900,
         serviceSalary: 1500,
         baseLicenseCost: 750,
+        maintenanceCost: 350,
+        interestRate: 0.08,
         capexDecisions: [
           makeCapex({ type: 'SECURITY', implemented: true, monthlyLicenseDelta: 100 }),
         ],
@@ -233,6 +244,7 @@ describe('FinancialService', () => {
       const result = service.computeEbitda(input);
       expect(result.payrollCost).toBe(4 * 900 + 3 * 1500);
       expect(result.licenseCost).toBe(750 + 100);
+      expect(result.maintenanceCost).toBe(350);
     });
 
     it('computes interest cost when cashUsed exceeds threshold', () => {
@@ -329,7 +341,7 @@ describe('FinancialService', () => {
         serviceOperators: 5,
         capexDecisions: [
           makeCapex({ type: 'SECURITY',      implemented: true,  monthlyLicenseDelta: 100 }),
-          makeCapex({ capexOptionId: 'c2', type: 'FREEZER',    implemented: true,  monthlyLicenseDelta: 0 }),
+          makeCapex({ capexOptionId: 'c2', type: 'FREEZER',    implemented: true,  monthlyLicenseDelta: 0, maintenanceSaving: MAINTENANCE_COST }),
           makeCapex({ capexOptionId: 'c3', type: 'NETWORK',    implemented: true,  monthlyLicenseDelta: 0 }),
           makeCapex({ capexOptionId: 'c4', type: 'SITE',       implemented: true,  monthlyLicenseDelta: 150 }),
           makeCapex({ capexOptionId: 'c5', type: 'SELF_CHECKOUT', implemented: false, monthlyLicenseDelta: 320 }),

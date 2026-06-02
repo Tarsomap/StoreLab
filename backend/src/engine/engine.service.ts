@@ -61,6 +61,7 @@ export class EngineService {
           },
         },
         categoryConfigs: { include: { category: true } },
+        capexConfigs: { include: { capexOption: true } },
       },
     });
 
@@ -117,10 +118,11 @@ export class EngineService {
           return {
             categoryId: dec.categoryId,
             categoryName: dec.category.name,
-            unitCost: dec.category.unitCost,
-            taxRate: dec.category.taxRate,
-            breakageRate: dec.category.breakageRate,
-            agingRate: dec.category.agingRate,
+            unitCost: sessionConfig?.unitCost ?? dec.category.unitCost,
+            taxRate: sessionConfig?.taxRate ?? dec.category.taxRate,
+            breakageRate:
+              sessionConfig?.breakageRate ?? dec.category.breakageRate,
+            agingRate: sessionConfig?.agingRate ?? dec.category.agingRate,
             sessionStockAvailable,
             stockPurchased: dec.stockPurchased,
             priceMargin: dec.priceMargin,
@@ -129,16 +131,30 @@ export class EngineService {
       );
 
       const capexDecisions: CapexEngineInput[] = plan.capexDecisions.map(
-        (dec) => ({
-          capexOptionId: dec.capexOptionId,
-          type: dec.capexOption.type,
-          acquisitionCost: dec.capexOption.acquisitionCost,
-          downtimeFixedDays: dec.capexOption.downtimeFixedDays,
-          monthlyLicenseDelta: dec.capexOption.monthlyLicenseDelta,
-          maintenanceSaving: dec.capexOption.maintenanceSaving,
-          slaRiskPercent: dec.capexOption.slaRiskPercent,
-          implemented: dec.implemented,
-        }),
+        (dec) => {
+          const sessionConfig = session.capexConfigs.find(
+            (c) => c.capexOptionId === dec.capexOptionId,
+          );
+          return {
+            capexOptionId: dec.capexOptionId,
+            type: dec.capexOption.type,
+            acquisitionCost:
+              sessionConfig?.acquisitionCost ??
+              dec.capexOption.acquisitionCost,
+            downtimeFixedDays:
+              sessionConfig?.downtimeFixedDays ??
+              dec.capexOption.downtimeFixedDays,
+            monthlyLicenseDelta:
+              sessionConfig?.monthlyLicenseDelta ??
+              dec.capexOption.monthlyLicenseDelta,
+            maintenanceSaving:
+              sessionConfig?.maintenanceSaving ??
+              dec.capexOption.maintenanceSaving,
+            slaRiskPercent:
+              sessionConfig?.slaRiskPercent ?? dec.capexOption.slaRiskPercent,
+            implemented: dec.implemented,
+          };
+        },
       );
 
       // Caixa usado na rodada = compra de estoque + CAPEX efetivamente implementado (saída de caixa).
@@ -229,6 +245,8 @@ export class EngineService {
         cashierSalary: session.cashierSalary,
         serviceSalary: session.serviceSalary,
         baseLicenseCost: session.baseLicenseCost,
+        maintenanceCost: session.maintenanceCost,
+        interestRate: session.interestRate,
         capexDecisions: storeInput.capexDecisions,
         cashUsed: storeInput.cashUsed,
         interestThreshold,
@@ -428,11 +446,24 @@ export class EngineService {
       include: { capexDecisions: { include: { capexOption: true } } },
     });
 
+    const capexConfigs = await this.prisma.sessionCapexConfig.findMany({
+      where: { sessionId },
+    });
+    const capexConfigMap = new Map(
+      capexConfigs.map((c) => [c.capexOptionId, c]),
+    );
+
     // CAPEX previsto mas não comprado na v1 não consumiu caixa — recompõe o limite para juros nas rodadas 2 e 3.
     const unimplementedCapexCost = plan1
       ? plan1.capexDecisions
           .filter((d) => !d.implemented)
-          .reduce((sum, d) => sum + d.capexOption.acquisitionCost, 0)
+          .reduce(
+            (sum, d) =>
+              sum +
+              (capexConfigMap.get(d.capexOptionId)?.acquisitionCost ??
+                d.capexOption.acquisitionCost),
+            0,
+          )
       : 0;
 
     return initialCash - round1Result.cashUsed + unimplementedCapexCost;

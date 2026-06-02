@@ -161,6 +161,10 @@ export interface EbitdaInput {
   serviceSalary: number;
   /** Licença base de software configurada na sessão. */
   baseLicenseCost: number;
+  /** Custo mensal de manutenção configurado na sessão. */
+  maintenanceCost: number;
+  /** Taxa de juros configurada na sessão, em decimal. */
+  interestRate: number;
   /** Decisões de CAPEX da versão de plano vigente. */
   capexDecisions: CapexEngineInput[];
   /** Caixa usado na rodada (compra de estoque + CAPEX), base para juros. */
