@@ -70,7 +70,15 @@ export class QuizService {
     sessionId: string,
     round: number,
   ): Promise<QuizQuestionWithAnswer[]> {
-    const questions = await this.loadQuestions(sessionId, round);
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('Sessão não encontrada');
+
+    const questions = await this.prisma.quizQuestion.findMany({
+      where: { sessionId, round },
+      include: { options: true },
+      orderBy: { order: 'asc' },
+    });
+
     return questions.map((q) => ({
       id: q.id,
       prompt: q.prompt,
