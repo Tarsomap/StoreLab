@@ -47,7 +47,7 @@ export class SessionsService {
 
   /**
    * Cria uma sessão com os custos operacionais configurados pelo facilitador.
-   * cashierSalary, serviceSalary e licenseCostBase são obrigatórios no DTO —
+   * cashierSalary, serviceSalary e baseLicenseCost são obrigatórios no DTO —
    * o engine os lê diretamente da sessão, eliminando valores hardcoded.
    */
   async create(
@@ -70,7 +70,7 @@ export class SessionsService {
         // ── Custos operacionais ──────────────────────────────────────────
         cashierSalary: dto.cashierSalary,
         serviceSalary: dto.serviceSalary,
-        licenseCostBase: dto.licenseCostBase,
+        baseLicenseCost: dto.baseLicenseCost,
         // ────────────────────────────────────────────────────────────────
         timerEnabled: dto.timerEnabled ?? false,
         timerDuration: dto.timerDuration ?? null,
@@ -368,7 +368,7 @@ export class SessionsService {
       dto.categoryConfigs !== undefined ||
       dto.cashierSalary !== undefined ||
       dto.serviceSalary !== undefined ||
-      dto.licenseCostBase !== undefined;
+      dto.baseLicenseCost !== undefined;
 
     if (hasNonNameFields && session.status !== SessionStatus.SETUP) {
       throw new BadRequestException(
@@ -415,8 +415,8 @@ export class SessionsService {
           ...(dto.serviceSalary !== undefined && {
             serviceSalary: dto.serviceSalary,
           }),
-          ...(dto.licenseCostBase !== undefined && {
-            licenseCostBase: dto.licenseCostBase,
+          ...(dto.baseLicenseCost !== undefined && {
+            baseLicenseCost: dto.baseLicenseCost,
           }),
           // ──────────────────────────────────────────────────────────────
           ...(dto.timerEnabled !== undefined && {
@@ -451,7 +451,7 @@ export class SessionsService {
     disponibilidade: number[];
     cashierSalary: number;
     serviceSalary: number;
-    licenseCostBase: number;
+    baseLicenseCost: number;
     timerEnabled: boolean;
     timerDuration: number | null;
     timerStartedAt: Date | null;
@@ -470,7 +470,7 @@ export class SessionsService {
       disponibilidade: session.disponibilidade,
       cashierSalary: session.cashierSalary,
       serviceSalary: session.serviceSalary,
-      licenseCostBase: session.licenseCostBase,
+      baseLicenseCost: session.baseLicenseCost,
       timerEnabled: session.timerEnabled,
       timerDuration: session.timerDuration,
       timerStartedAt: session.timerStartedAt,

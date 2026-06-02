@@ -58,7 +58,7 @@ describe('FinancialService', () => {
     serviceOperators: 2,
     cashierSalary: CASHIER_SALARY,
     serviceSalary: SERVICE_SALARY,
-    licenseCostBase: BASE_LICENSE_COST,
+    baseLicenseCost: BASE_LICENSE_COST,
     capexDecisions: [],
     cashUsed: 500_000,
     interestThreshold: 700_000,
@@ -225,7 +225,7 @@ describe('FinancialService', () => {
         serviceOperators: 3,
         cashierSalary: 900,
         serviceSalary: 1500,
-        licenseCostBase: 750,
+        baseLicenseCost: 750,
         capexDecisions: [
           makeCapex({ type: 'SECURITY', implemented: true, monthlyLicenseDelta: 100 }),
         ],

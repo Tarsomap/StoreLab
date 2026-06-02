@@ -18,7 +18,7 @@ export interface SessionSummary {
   /** Salário por operador de serviço (R$) — base do cálculo de folha. */
   serviceSalary: number;
   /** Custo base de licença de software (R$) — somado aos deltas de CAPEX. */
-  licenseCostBase: number;
+  baseLicenseCost: number;
 
   timerEnabled: boolean;
   timerDuration: number | null;

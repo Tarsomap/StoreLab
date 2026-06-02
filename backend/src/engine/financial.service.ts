@@ -74,7 +74,7 @@ export class FinancialService {
       serviceOperators,
       cashierSalary,
       serviceSalary,
-      licenseCostBase,
+      baseLicenseCost,
       capexDecisions,
       cashUsed,
       interestThreshold,
@@ -101,7 +101,7 @@ export class FinancialService {
     const maintenanceCost = hasFreezer ? 0 : MAINTENANCE_COST;
 
     const licenseCost =
-      licenseCostBase +
+      baseLicenseCost +
       capexDecisions
         .filter((c) => c.implemented)
         .reduce((sum, c) => sum + c.monthlyLicenseDelta, 0);

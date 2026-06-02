@@ -90,7 +90,7 @@ export class CreateSessionDto {
    */
   @IsNumber()
   @Min(0)
-  licenseCostBase: number;
+  baseLicenseCost: number;
 
   @IsOptional()
   @IsBoolean()

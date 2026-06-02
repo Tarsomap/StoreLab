@@ -31,7 +31,7 @@ export function CreateSessionForm({
 
   const [cashierSalary, setCashierSalary] = useState('1000');
   const [serviceSalary, setServiceSalary] = useState('1200');
-  const [licenseCostBase, setLicenseCostBase] = useState('500');
+  const [baseLicenseCost, setBaseLicenseCost] = useState('1200');
 
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState('15');
@@ -42,7 +42,7 @@ export function CreateSessionForm({
   const cashValue = Number(newCash);
   const cashierSalaryValue = Number(cashierSalary);
   const serviceSalaryValue = Number(serviceSalary);
-  const licenseCostBaseValue = Number(licenseCostBase);
+  const baseLicenseCostValue = Number(baseLicenseCost);
   const canCreate =
     newName.trim().length > 0 &&
     Number.isFinite(demandValue) &&
@@ -53,8 +53,8 @@ export function CreateSessionForm({
     cashierSalaryValue > 0 &&
     Number.isFinite(serviceSalaryValue) &&
     serviceSalaryValue > 0 &&
-    Number.isFinite(licenseCostBaseValue) &&
-    licenseCostBaseValue >= 0;
+    Number.isFinite(baseLicenseCostValue) &&
+    baseLicenseCostValue >= 0;
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -72,7 +72,7 @@ export function CreateSessionForm({
         initialCash: cashValue,
         cashierSalary: cashierSalaryValue,
         serviceSalary: serviceSalaryValue,
-        licenseCostBase: licenseCostBaseValue,
+        baseLicenseCost: baseLicenseCostValue,
         categoryConfigs: categoryCatalog.map((category) => ({
           categoryId: category.id,
           stockAvailable: Number(categoryStocks[category.id] ?? category.stockAvailable),
@@ -190,9 +190,9 @@ export function CreateSessionForm({
                   type="number"
                   min={0}
                   required
-                  value={licenseCostBase}
-                  onChange={(e) => setLicenseCostBase(e.target.value)}
-                  placeholder="Ex: 500"
+                  value={baseLicenseCost}
+                  onChange={(e) => setBaseLicenseCost(e.target.value)}
+                  placeholder="Ex: 1200"
                 />
               </div>
             </div>

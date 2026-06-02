@@ -34,7 +34,7 @@ type PlanWithRelations = OperationalPlan & {
   store: Store & {
     session: Pick<
       Session,
-      "cashierSalary" | "serviceSalary" | "licenseCostBase"
+      "cashierSalary" | "serviceSalary" | "baseLicenseCost"
     >;
   };
   categoryDecisions: (PoCategoryDecision & { category: Category })[];
@@ -90,7 +90,7 @@ export class PlansService {
                 select: {
                   cashierSalary: true,
                   serviceSalary: true,
-                  licenseCostBase: true,
+                  baseLicenseCost: true,
                 },
               },
             },
@@ -303,7 +303,7 @@ export class PlansService {
               select: {
                 cashierSalary: true,
                 serviceSalary: true,
-                licenseCostBase: true,
+                baseLicenseCost: true,
               },
             },
           },
@@ -324,7 +324,7 @@ export class PlansService {
               select: {
                 cashierSalary: true,
                 serviceSalary: true,
-                licenseCostBase: true,
+                baseLicenseCost: true,
               },
             },
           },
@@ -471,7 +471,7 @@ export class PlansService {
     // Interest on excess (above availableCash)
     const interestCost = Math.max(0, cashUsed - availableCash) * INTEREST_RATE;
 
-    const { cashierSalary, serviceSalary, licenseCostBase } =
+    const { cashierSalary, serviceSalary, baseLicenseCost } =
       plan.store.session;
 
     // Payroll
@@ -487,7 +487,7 @@ export class PlansService {
 
     // License: base configured in the session + deltas of implemented CAPEXes
     const licenseCost =
-      licenseCostBase +
+      baseLicenseCost +
       plan.capexDecisions
         .filter((d) => d.implemented)
         .reduce((sum, d) => sum + d.capexOption.monthlyLicenseDelta, 0);
@@ -522,7 +522,7 @@ export class PlansService {
       interestCost,
       cashierSalary,
       serviceSalary,
-      licenseCostBase,
+      baseLicenseCost,
       payrollCost,
       maintenanceCost,
       licenseCost,

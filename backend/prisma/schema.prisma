@@ -143,7 +143,7 @@ model Session {
   // Substituem os valores hardcoded do engine — cada sessão pode ter cenários distintos.
   cashierSalary   Float @default(1000) // R$/operador de caixa por rodada
   serviceSalary   Float @default(1200) // R$/operador de serviço por rodada
-  licenseCostBase Float @default(500)  // R$ base de licença de software (CAPEX adiciona delta)
+  baseLicenseCost Float @default(1200) // R$ base de licença de software (CAPEX adiciona delta)
 
   // Timer / Cronômetro da rodada atual
   timerEnabled       Boolean   @default(false)

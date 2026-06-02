@@ -53,7 +53,7 @@ export class UpdateSessionDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
-  licenseCostBase?: number;
+  baseLicenseCost?: number;
 
   // ── Timer ────────────────────────────────────────────────────────────────
 

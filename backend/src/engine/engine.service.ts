@@ -228,7 +228,7 @@ export class EngineService {
         serviceOperators: storeInput.serviceOperators,
         cashierSalary: session.cashierSalary,
         serviceSalary: session.serviceSalary,
-        licenseCostBase: session.licenseCostBase,
+        baseLicenseCost: session.baseLicenseCost,
         capexDecisions: storeInput.capexDecisions,
         cashUsed: storeInput.cashUsed,
         interestThreshold,

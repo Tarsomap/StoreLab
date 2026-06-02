@@ -42,7 +42,7 @@ export interface SessionDetail {
   initialCash: number;
   cashierSalary: number;
   serviceSalary: number;
-  licenseCostBase: number;
+  baseLicenseCost: number;
   timerEnabled: boolean;
   timerDuration: number | null;
   timerStartedAt: string | null;
@@ -65,7 +65,7 @@ export interface Session {
   initialCash: number;
   cashierSalary?: number;
   serviceSalary?: number;
-  licenseCostBase?: number;
+  baseLicenseCost?: number;
   disponibilidade?: number[];
   createdAt: string;
   storeCount?: number;
@@ -96,7 +96,7 @@ export interface UpdateSessionInput {
   initialCash?: number;
   cashierSalary?: number;
   serviceSalary?: number;
-  licenseCostBase?: number;
+  baseLicenseCost?: number;
   timerEnabled?: boolean;
   timerDuration?: number | null;
 }
