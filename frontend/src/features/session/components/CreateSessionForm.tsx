@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Timer } from 'lucide-react';
+import { Banknote, Timer } from 'lucide-react';
 import type { Session, CategoryCatalogEntry } from '../types';
 
 interface CreateSessionFormProps {
@@ -28,21 +28,51 @@ export function CreateSessionForm({
   const [newName, setNewName] = useState('');
   const [newDemand, setNewDemand] = useState('1000');
   const [newCash, setNewCash] = useState('700000');
+
+  const [cashierSalary, setCashierSalary] = useState('1000');
+  const [serviceSalary, setServiceSalary] = useState('1200');
+  const [licenseCostBase, setLicenseCostBase] = useState('500');
+
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState('15');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
+  const demandValue = Number(newDemand);
+  const cashValue = Number(newCash);
+  const cashierSalaryValue = Number(cashierSalary);
+  const serviceSalaryValue = Number(serviceSalary);
+  const licenseCostBaseValue = Number(licenseCostBase);
+  const canCreate =
+    newName.trim().length > 0 &&
+    Number.isFinite(demandValue) &&
+    demandValue > 0 &&
+    Number.isFinite(cashValue) &&
+    cashValue > 0 &&
+    Number.isFinite(cashierSalaryValue) &&
+    cashierSalaryValue > 0 &&
+    Number.isFinite(serviceSalaryValue) &&
+    serviceSalaryValue > 0 &&
+    Number.isFinite(licenseCostBaseValue) &&
+    licenseCostBaseValue >= 0;
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setCreateError('');
+    if (!canCreate) {
+      setCreateError('Preencha todos os campos obrigatórios com valores válidos.');
+      return;
+    }
     setCreating(true);
 
     try {
       const session = await api.post<Session>('/sessions', {
         name: newName.trim(),
-        totalDemand: Number(newDemand),
-        initialCash: Number(newCash),
+        totalDemand: demandValue,
+        initialCash: cashValue,
+        cashierSalary: cashierSalaryValue,
+        serviceSalary: serviceSalaryValue,
+        licenseCostBase: licenseCostBaseValue,
         categoryConfigs: categoryCatalog.map((category) => ({
           categoryId: category.id,
           stockAvailable: Number(categoryStocks[category.id] ?? category.stockAvailable),
@@ -67,12 +97,13 @@ export function CreateSessionForm({
       </CardHeader>
       <Separator className="my-4" />
       <form onSubmit={handleCreate}>
-        <CardContent className="space-y-4 pt-0">
+        <CardContent className="space-y-6 pt-0">
           {createError && (
             <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-3 py-2">
               {createError}
             </p>
           )}
+
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="new-name" className="text-sm text-muted-foreground">
@@ -114,6 +145,58 @@ export function CreateSessionForm({
             </div>
           </div>
 
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">
+                Custos do Plano Operacional
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="cashier-salary" className="text-sm text-muted-foreground">
+                  Salário op. de caixa (R$)
+                </Label>
+                <Input
+                  id="cashier-salary"
+                  type="number"
+                  min={1}
+                  required
+                  value={cashierSalary}
+                  onChange={(e) => setCashierSalary(e.target.value)}
+                  placeholder="Ex: 1000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-salary" className="text-sm text-muted-foreground">
+                  Salário op. de serviço (R$)
+                </Label>
+                <Input
+                  id="service-salary"
+                  type="number"
+                  min={1}
+                  required
+                  value={serviceSalary}
+                  onChange={(e) => setServiceSalary(e.target.value)}
+                  placeholder="Ex: 1200"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="license-cost" className="text-sm text-muted-foreground">
+                  Licença de software base (R$)
+                </Label>
+                <Input
+                  id="license-cost"
+                  type="number"
+                  min={0}
+                  required
+                  value={licenseCostBase}
+                  onChange={(e) => setLicenseCostBase(e.target.value)}
+                  placeholder="Ex: 500"
+                />
+              </div>
+            </div>
+          </div>
           {categoryCatalog.length > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-medium text-foreground">Disponibilidade por categoria</p>
@@ -135,6 +218,8 @@ export function CreateSessionForm({
               </div>
             </div>
           )}
+
+          {/* Timer */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <input
@@ -144,7 +229,10 @@ export function CreateSessionForm({
                 onChange={(e) => setTimerEnabled(e.target.checked)}
                 className="h-4 w-4 cursor-pointer rounded border"
               />
-              <Label htmlFor="timer-enabled" className="cursor-pointer flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Label
+                htmlFor="timer-enabled"
+                className="cursor-pointer flex items-center gap-1.5 text-sm text-muted-foreground"
+              >
                 <Timer className="h-3.5 w-3.5" />
                 Ativar timer por rodada
               </Label>
@@ -167,8 +255,9 @@ export function CreateSessionForm({
             )}
           </div>
         </CardContent>
+
         <div className="px-6 pb-6 flex gap-3">
-          <Button type="submit" disabled={creating} className="sm:w-auto">
+          <Button type="submit" disabled={creating || !canCreate} className="sm:w-auto">
             {creating ? 'Criando...' : 'Criar sessão'}
           </Button>
           <Button type="button" variant="outline" onClick={onCancel}>

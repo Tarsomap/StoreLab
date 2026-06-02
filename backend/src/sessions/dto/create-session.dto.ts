@@ -68,6 +68,30 @@ export class CreateSessionDto {
   @IsOptional()
   categoryConfigs?: CategoryConfigDto[];
 
+  /**
+   * Salário por operador de caixa (R$).
+   * Usado em: folha = (operadores de caixa × salário caixa) + (operadores de serviço × salário serviço).
+   */
+  @IsNumber()
+  @IsPositive()
+  cashierSalary: number;
+
+  /**
+   * Salário por operador de serviço (R$).
+   * Usado em: folha = (operadores de caixa × salário caixa) + (operadores de serviço × salário serviço).
+   */
+  @IsNumber()
+  @IsPositive()
+  serviceSalary: number;
+
+  /**
+   * Custo base de licença de software (R$).
+   * O custo final soma este valor aos deltas dos CAPEX implementados.
+   */
+  @IsNumber()
+  @Min(0)
+  licenseCostBase: number;
+
   @IsOptional()
   @IsBoolean()
   timerEnabled?: boolean;

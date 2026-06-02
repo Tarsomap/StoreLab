@@ -7,25 +7,30 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Min,
   ValidateNested,
 } from "class-validator";
 import { CategoryConfigDto } from "./create-session.dto";
 
+/**
+ * DTO de atualização — todos os campos são opcionais.
+ * Fora de SETUP, apenas `name` é aceito (validado no serviço).
+ */
 export class UpdateSessionDto {
   @IsString()
   @IsOptional()
   name?: string;
 
   @IsNumber()
-  @IsPositive()
-  @IsOptional()
-  totalDemand?: number;
-
-  @IsNumber()
   @Min(0)
   @IsOptional()
   initialCash?: number;
+
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  totalDemand?: number;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -33,12 +38,31 @@ export class UpdateSessionDto {
   @IsOptional()
   categoryConfigs?: CategoryConfigDto[];
 
-  @IsBoolean()
+  // ── Custos operacionais (editáveis apenas em SETUP) ──────────────────────
+
+  @IsNumber()
+  @IsPositive()
   @IsOptional()
+  cashierSalary?: number;
+
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  serviceSalary?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  licenseCostBase?: number;
+
+  // ── Timer ────────────────────────────────────────────────────────────────
+
+  @IsOptional()
+  @IsBoolean()
   timerEnabled?: boolean;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
-  @IsOptional()
   timerDuration?: number;
 }

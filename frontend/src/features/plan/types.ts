@@ -30,6 +30,9 @@ export interface PlanFinancials {
   cashUsed: number;
   availableCash: number;
   interestCost: number;
+  cashierSalary: number;
+  serviceSalary: number;
+  licenseCostBase: number;
   payrollCost: number;
   maintenanceCost: number;
   licenseCost: number;

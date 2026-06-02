@@ -300,6 +300,8 @@ export default function PlanPage() {
               <OperadoresForm
                 cashierOperators={plan.cashierOperators}
                 serviceOperators={plan.serviceOperators}
+                cashierSalary={plan.financials.cashierSalary}
+                serviceSalary={plan.financials.serviceSalary}
                 editable={editable}
                 saving={saving}
                 onSave={(cashier, service) =>

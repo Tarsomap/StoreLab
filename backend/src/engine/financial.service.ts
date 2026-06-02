@@ -7,9 +7,6 @@ import {
   EbitdaBreakdown,
 } from './interfaces';
 import {
-  BASE_LICENSE_COST,
-  CASHIER_SALARY,
-  SERVICE_SALARY,
   MAINTENANCE_COST,
   INTEREST_RATE_MONTHLY,
 } from './constants';
@@ -71,7 +68,19 @@ export class FinancialService {
    * @returns Objeto completo para gravar no RoundResult e exibir ao jogador.
    */
   computeEbitda(input: EbitdaInput): EbitdaBreakdown {
-    const { categoryRevenues, cashierOperators, serviceOperators, capexDecisions, cashUsed, interestThreshold, slaRevenueLost, shrinkage } = input;
+    const {
+      categoryRevenues,
+      cashierOperators,
+      serviceOperators,
+      cashierSalary,
+      serviceSalary,
+      licenseCostBase,
+      capexDecisions,
+      cashUsed,
+      interestThreshold,
+      slaRevenueLost,
+      shrinkage,
+    } = input;
 
     const grossRevenue = categoryRevenues.reduce((sum, c) => sum + c.grossRevenue, 0);
     const taxAmount = categoryRevenues.reduce((sum, c) => sum + c.taxAmount, 0);
@@ -81,8 +90,9 @@ export class FinancialService {
     const breakageAmount = shrinkage.totalBreakage;
     const agingAmount = shrinkage.totalAging;
 
-    // Folha: cada tipo de operador tem salário fixo do jogo; multiplicamos e somamos.
-    const payrollCost = cashierOperators * CASHIER_SALARY + serviceOperators * SERVICE_SALARY;
+    // Folha: cada tipo de operador usa o salário configurado na sessão.
+    const payrollCost =
+      cashierOperators * cashierSalary + serviceOperators * serviceSalary;
 
     const hasFreezer = capexDecisions.some(
       (c) => c.type === 'FREEZER' && c.implemented,
@@ -91,7 +101,7 @@ export class FinancialService {
     const maintenanceCost = hasFreezer ? 0 : MAINTENANCE_COST;
 
     const licenseCost =
-      BASE_LICENSE_COST +
+      licenseCostBase +
       capexDecisions
         .filter((c) => c.implemented)
         .reduce((sum, c) => sum + c.monthlyLicenseDelta, 0);

@@ -56,6 +56,9 @@ describe('FinancialService', () => {
     categoryRevenues: [],
     cashierOperators: 5,
     serviceOperators: 2,
+    cashierSalary: CASHIER_SALARY,
+    serviceSalary: SERVICE_SALARY,
+    licenseCostBase: BASE_LICENSE_COST,
     capexDecisions: [],
     cashUsed: 500_000,
     interestThreshold: 700_000,
@@ -213,6 +216,23 @@ describe('FinancialService', () => {
       const result = service.computeEbitda(input);
       // licenseCost = 1200 (base) + 100 + 150 = 1450 (not-implemented excluded)
       expect(result.licenseCost).toBeCloseTo(1450);
+    });
+
+    it('uses session configured salaries and license base', () => {
+      const input = makeEbitdaInput({
+        categoryRevenues: [makeCategoryRevenue()],
+        cashierOperators: 4,
+        serviceOperators: 3,
+        cashierSalary: 900,
+        serviceSalary: 1500,
+        licenseCostBase: 750,
+        capexDecisions: [
+          makeCapex({ type: 'SECURITY', implemented: true, monthlyLicenseDelta: 100 }),
+        ],
+      });
+      const result = service.computeEbitda(input);
+      expect(result.payrollCost).toBe(4 * 900 + 3 * 1500);
+      expect(result.licenseCost).toBe(750 + 100);
     });
 
     it('computes interest cost when cashUsed exceeds threshold', () => {

@@ -10,6 +10,8 @@ import {
   OperationalPlan,
   PoCapexDecision,
   PoCategoryDecision,
+  Session,
+  Store,
   StoreRole,
 } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
@@ -24,15 +26,17 @@ import {
   PlanFullResponse,
 } from "./interfaces/plan.interface";
 
-// ─── Business constants ───────────────────────────────────────────────────────
-const CASHIER_SALARY = 1_000;
-const SERVICE_SALARY = 1_200;
-const BASE_LICENSE_COST = 500;
 const MAINTENANCE_COST = 400;
 const INTEREST_RATE = 0.12;
 
 // ─── Internal Prisma shape used throughout this service ──────────────────────
 type PlanWithRelations = OperationalPlan & {
+  store: Store & {
+    session: Pick<
+      Session,
+      "cashierSalary" | "serviceSalary" | "licenseCostBase"
+    >;
+  };
   categoryDecisions: (PoCategoryDecision & { category: Category })[];
   capexDecisions: (PoCapexDecision & { capexOption: CapexOption })[];
 };
@@ -80,6 +84,17 @@ export class PlansService {
           },
         },
         include: {
+          store: {
+            include: {
+              session: {
+                select: {
+                  cashierSalary: true,
+                  serviceSalary: true,
+                  licenseCostBase: true,
+                },
+              },
+            },
+          },
           categoryDecisions: { include: { category: true } },
           capexDecisions: { include: { capexOption: true } },
         },
@@ -282,6 +297,17 @@ export class PlansService {
     return this.prisma.operationalPlan.findUnique({
       where: { storeId_configVersion: { storeId, configVersion } },
       include: {
+        store: {
+          include: {
+            session: {
+              select: {
+                cashierSalary: true,
+                serviceSalary: true,
+                licenseCostBase: true,
+              },
+            },
+          },
+        },
         categoryDecisions: { include: { category: true } },
         capexDecisions: { include: { capexOption: true } },
       },
@@ -292,6 +318,17 @@ export class PlansService {
     const plan = await this.prisma.operationalPlan.findUnique({
       where: { id: planId },
       include: {
+        store: {
+          include: {
+            session: {
+              select: {
+                cashierSalary: true,
+                serviceSalary: true,
+                licenseCostBase: true,
+              },
+            },
+          },
+        },
         categoryDecisions: { include: { category: true } },
         capexDecisions: { include: { capexOption: true } },
       },
@@ -434,10 +471,13 @@ export class PlansService {
     // Interest on excess (above availableCash)
     const interestCost = Math.max(0, cashUsed - availableCash) * INTEREST_RATE;
 
+    const { cashierSalary, serviceSalary, licenseCostBase } =
+      plan.store.session;
+
     // Payroll
     const payrollCost =
-      plan.cashierOperators * CASHIER_SALARY +
-      plan.serviceOperators * SERVICE_SALARY;
+      plan.cashierOperators * cashierSalary +
+      plan.serviceOperators * serviceSalary;
 
     // Maintenance: R$400 unless FREEZER is implemented
     const freezerImplemented = plan.capexDecisions.some(
@@ -445,9 +485,9 @@ export class PlansService {
     );
     const maintenanceCost = freezerImplemented ? 0 : MAINTENANCE_COST;
 
-    // License: base R$500 + deltas of implemented CAPEXes
+    // License: base configured in the session + deltas of implemented CAPEXes
     const licenseCost =
-      BASE_LICENSE_COST +
+      licenseCostBase +
       plan.capexDecisions
         .filter((d) => d.implemented)
         .reduce((sum, d) => sum + d.capexOption.monthlyLicenseDelta, 0);
@@ -480,6 +520,9 @@ export class PlansService {
       cashUsed,
       availableCash,
       interestCost,
+      cashierSalary,
+      serviceSalary,
+      licenseCostBase,
       payrollCost,
       maintenanceCost,
       licenseCost,

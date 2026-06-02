@@ -6,17 +6,21 @@ import { brl } from '../lib/plan-math';
 /**
  * Bloco de operadores de caixa e serviço com custo estimado, barra de "CSAT (caixa)" e total da folha.
  * Props: contagens atuais, `editable`/`saving`, `onSave(cashier, service)` quando o usuário termina de editar um campo.
- * Papel no jogo: Operational Manager ajusta headcount; o custo segue constantes do motor (R$ 1.000 / R$ 1.200) e o indicador lembra a meta de 10 caixas para CSAT.
+ * Papel no jogo: Operational Manager ajusta headcount; o custo usa a configuração da sessão e o indicador lembra a meta de 10 caixas para CSAT.
  */
 export function OperadoresForm({
   cashierOperators,
   serviceOperators,
+  cashierSalary,
+  serviceSalary,
   editable,
   saving,
   onSave,
 }: {
   cashierOperators: number;
   serviceOperators: number;
+  cashierSalary: number;
+  serviceSalary: number;
   editable: boolean;
   saving: boolean;
   onSave: (cashier: number, service: number) => void;
@@ -34,8 +38,8 @@ export function OperadoresForm({
     if (!isNaN(c) && !isNaN(s)) onSave(c, s);
   }
 
-  const cashierCost = Number(cashier) * 1_000;
-  const serviceCost = Number(service) * 1_200;
+  const cashierCost = Number(cashier) * cashierSalary;
+  const serviceCost = Number(service) * serviceSalary;
   const totalFolha = cashierCost + serviceCost;
 
   // CSAT hint: 10 caixas = máximo

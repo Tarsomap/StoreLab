@@ -155,6 +155,12 @@ export interface EbitdaInput {
   cashierOperators: number;
   /** Quantidade de operadores de atendimento (folha e SLA). */
   serviceOperators: number;
+  /** Salário por operador de caixa configurado na sessão. */
+  cashierSalary: number;
+  /** Salário por operador de serviço configurado na sessão. */
+  serviceSalary: number;
+  /** Licença base de software configurada na sessão. */
+  licenseCostBase: number;
   /** Decisões de CAPEX da versão de plano vigente. */
   capexDecisions: CapexEngineInput[];
   /** Caixa usado na rodada (compra de estoque + CAPEX), base para juros. */
