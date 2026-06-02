@@ -106,7 +106,7 @@ export function HistoricPerformanceSection({ finishedSessions }: HistoricPerform
       <h3 id="historic-performance-heading" className="font-display text-xl font-bold text-foreground">
         Desempenho Histórico
       </h3>
-      <Card className="rounded-xl border shadow-sm transition-colors duration-200 hover:shadow-md">
+      <Card className="rounded-xl border shadow-sm transition-colors duration-200">
         <CardHeader className="pb-2">
           <CardTitle className="font-display text-base font-semibold text-foreground">
             EBITDA % por rodada

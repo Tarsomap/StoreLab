@@ -46,7 +46,7 @@ export function StoreActionsMenu({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => setDeleteOpen(true)}
-            className="text-destructive focus:text-destructive"
+            className="text-destructive hover:bg-destructive hover:text-destructive-foreground focus:bg-destructive focus:text-destructive-foreground cursor-pointer"
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Excluir

@@ -121,7 +121,7 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-10">
           {featuredSession && (
-            <Card className="shadow-sm border rounded-xl transition-colors duration-200 hover:shadow-md">
+            <Card className="shadow-sm border rounded-xl transition-colors duration-200">
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-1">
@@ -182,7 +182,7 @@ export default function DashboardPage() {
               Sessões Ativas
             </h3>
             {activeSessions.length === 0 ? (
-              <Card className="shadow-sm border transition-colors duration-200 hover:shadow-md">
+              <Card className="shadow-sm border transition-colors duration-200">
                 <CardContent className="py-16 px-6 text-center space-y-4">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                     <LayoutDashboard className="h-7 w-7" aria-hidden />

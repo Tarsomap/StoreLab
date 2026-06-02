@@ -21,7 +21,7 @@ export function StoreBreakdownCard({ store, rank, isExpanded, onToggle }: StoreB
         className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onToggle}
       >
-        <div className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">
+        <div className="flex items-center justify-between px-4 py-4 hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-3">
             <span
               className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0"

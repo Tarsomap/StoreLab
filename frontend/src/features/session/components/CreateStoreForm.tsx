@@ -56,7 +56,7 @@ export function CreateStoreForm({ sessionId, onCreated, onCancel }: CreateStoreF
             <Button type="submit" disabled={creatingStore}>
               {creatingStore ? 'Criando...' : 'Criar'}
             </Button>
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button type="button" variant="outline" className="hover:bg-destructive hover:text-destructive-foreground" onClick={onCancel}>
               Cancelar
             </Button>
           </div>
