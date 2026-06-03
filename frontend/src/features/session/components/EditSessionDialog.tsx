@@ -202,7 +202,7 @@ export function EditSessionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" className="hover:bg-destructive hover:text-destructive-foreground" onClick={() => onOpenChange(false)} disabled={isLoading}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={isLoading || !hasChanges}>

@@ -171,7 +171,7 @@ export function CreateSessionForm({
           <Button type="submit" disabled={creating} className="sm:w-auto">
             {creating ? 'Criando...' : 'Criar sessão'}
           </Button>
-          <Button type="button" variant="outline" className="hover:bg-destructive hover:text-destructive-foreground" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancelar
           </Button>
         </div>
