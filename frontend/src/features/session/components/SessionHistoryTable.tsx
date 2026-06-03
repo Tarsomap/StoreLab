@@ -44,7 +44,52 @@ export function SessionHistoryTable({
   return (
     <Card className="shadow-sm border rounded-xl transition-colors duration-200">
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="divide-y sm:hidden">
+          {finishedSessions.map((s) => (
+            <div key={s.id} className="space-y-4 p-4">
+              <div className="space-y-1">
+                <p className="font-display text-base font-semibold text-foreground">{s.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Lojas
+                  </p>
+                  <p className="mt-1 font-mono text-foreground">{formatStoreCount(s)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Vencedor
+                  </p>
+                  <p className="mt-1 text-foreground">{formatSessionWinner(s)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-1 rounded-xl"
+                  onClick={() => router.push(`/session/${s.id}/results`)}
+                >
+                  Ver resultados
+                </Button>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <SessionActionsMenu
+                    session={s}
+                    onDeleted={() => onDeleted(s.id)}
+                    onUpdated={onUpdated}
+                    align="end"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">

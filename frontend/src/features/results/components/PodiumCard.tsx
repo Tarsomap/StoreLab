@@ -31,7 +31,7 @@ export function PodiumCard({ entry, podiumBaseStrip = false }: PodiumCardProps) 
       >
       {/* Header band */}
       <div
-        className="px-5 py-3.5 flex items-center justify-between"
+        className="px-6 h-12 flex items-center justify-between"
         style={rankHeaderStyle(entry.rank)}
       >
         <div className="flex items-center gap-2">
