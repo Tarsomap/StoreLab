@@ -12,6 +12,7 @@ import { CreateSessionDto } from "./dto/create-session.dto";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import {
   SessionCategoryCatalogEntry,
+  SessionEventCatalogEntry,
   SessionStatusResponse,
   SessionSummary,
   StockAvailabilityEntry,
@@ -83,6 +84,18 @@ export class SessionsService {
       );
     }
 
+    if (dto.eventConfigs) {
+      const rounds = new Set<number>();
+      for (const config of dto.eventConfigs) {
+        if (rounds.has(config.round)) {
+          throw new BadRequestException(
+            "Não é permitido configurar mais de um evento para a mesma rodada.",
+          );
+        }
+        rounds.add(config.round);
+      }
+    }
+
     const session = await this.prisma.session.create({
       data: {
         name: dto.name,
@@ -98,6 +111,14 @@ export class SessionsService {
               create: dto.categoryConfigs.map((c) => ({
                 categoryId: c.categoryId,
                 stockAvailable: c.stockAvailable,
+              })),
+            }
+          : undefined,
+        eventConfigs: dto.eventConfigs?.length
+          ? {
+              create: dto.eventConfigs.map((e) => ({
+                eventTemplateId: e.eventId,
+                round: e.round,
               })),
             }
           : undefined,
@@ -214,6 +235,26 @@ export class SessionsService {
       stockAvailable: category.stockAvailable,
       unitCost: category.unitCost,
       taxRate: category.taxRate,
+    }));
+  }
+
+  /**
+   * Catálogo de eventos predefinidos para o facilitador configurar em rodadas da sessão.
+   */
+  async getEventCatalog(): Promise<SessionEventCatalogEntry[]> {
+    const events = await this.prisma.eventTemplate.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+      },
+    });
+
+    return events.map((event) => ({
+      id: event.id,
+      name: event.name,
+      description: event.description,
     }));
   }
 
@@ -426,12 +467,25 @@ export class SessionsService {
     const hasNonNameFields =
       dto.totalDemand !== undefined ||
       dto.initialCash !== undefined ||
-      dto.categoryConfigs !== undefined;
+      dto.categoryConfigs !== undefined ||
+      dto.eventConfigs !== undefined;
 
     if (hasNonNameFields && session.status !== SessionStatus.SETUP) {
       throw new BadRequestException(
         "Fora de SETUP, apenas o nome da sessão pode ser editado.",
       );
+    }
+
+    if (dto.eventConfigs) {
+      const rounds = new Set<number>();
+      for (const config of dto.eventConfigs) {
+        if (rounds.has(config.round)) {
+          throw new BadRequestException(
+            "Não é permitido configurar mais de um evento para a mesma rodada.",
+          );
+        }
+        rounds.add(config.round);
+      }
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -443,6 +497,19 @@ export class SessionsService {
               sessionId: id,
               categoryId: c.categoryId,
               stockAvailable: c.stockAvailable,
+            })),
+          });
+        }
+      }
+
+      if (dto.eventConfigs !== undefined) {
+        await tx.sessionEventConfig.deleteMany({ where: { sessionId: id } });
+        if (dto.eventConfigs.length > 0) {
+          await tx.sessionEventConfig.createMany({
+            data: dto.eventConfigs.map((e) => ({
+              sessionId: id,
+              eventTemplateId: e.eventId,
+              round: e.round,
             })),
           });
         }

@@ -132,8 +132,64 @@ async function main() {
     console.log(`  ✅ CAPEX: ${capex.name}`);
   }
 
+  // ─────────────────────────────────────────
+  // EVENT TEMPLATES
+  // Catálogo de eventos predefinidos
+  // ─────────────────────────────────────────
+  const eventTemplates = [
+    {
+      name: 'Crise de abastecimento',
+      description: 'Dificuldade imprevista na cadeia de suprimentos afeta o estoque de produtos essenciais.',
+    },
+    {
+      name: 'Aumento inesperado de demanda',
+      description: 'Pico sazonal não previsto ou tendência súbita eleva rapidamente a procura na loja.',
+    },
+    {
+      name: 'Falha operacional interna',
+      description: 'Erro em processos chave da loja, afetando atendimento ou gestão de estoque.',
+    },
+    {
+      name: 'Mudança regulatória',
+      description: 'Nova legislação ou taxa municipal que exige adaptação rápida das operações.',
+    },
+    {
+      name: 'Evento climático',
+      description: 'Condições meteorológicas extremas reduzem significativamente o fluxo de clientes na região.',
+    },
+    {
+      name: 'Promoção agressiva da concorrência',
+      description: 'Concorrente próximo inicia campanha de preços baixos, ameaçando market share.',
+    },
+    {
+      name: 'Aumento no custo de insumos',
+      description: 'Inflação ou reajuste repentino eleva custos operacionais e margem de produtos.',
+    },
+    {
+      name: 'Problema logístico/distribuição',
+      description: 'Atrasos no centro de distribuição comprometem as entregas para a loja.',
+    },
+    {
+      name: 'Queda de energia / indisponibilidade operacional',
+      description: 'Apagão prolongado ou falha grave de sistema paralisa temporariamente as vendas.',
+    },
+    {
+      name: 'Crise de reputação / repercussão negativa',
+      description: 'Reclamação viral ou incidente local afeta temporariamente a imagem da loja.',
+    },
+  ];
+
+  for (const event of eventTemplates) {
+    await prisma.eventTemplate.upsert({
+      where:  { name: event.name },
+      update: event,
+      create: event,
+    });
+    console.log(`  ✅ Evento: ${event.name}`);
+  }
+
   console.log('\n🎉 Seed concluído com sucesso!');
-  console.log('   4 categorias | 6 opções de CAPEX');
+  console.log('   4 categorias | 6 opções de CAPEX | 10 eventos predefinidos');
 }
 
 main()

@@ -158,6 +158,7 @@ model Session {
   playerTransfers     PlayerTransfer[]
   roundResults        RoundResult[]
   playerRoundStatuses PlayerRoundStatus[]
+  eventConfigs        SessionEventConfig[]
 }
 
 // Sobrescreve stockAvailable padrão do Category para uma sessão específica.
@@ -171,6 +172,32 @@ model SessionCategoryConfig {
   stockAvailable Int
 
   @@unique([sessionId, categoryId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENTOS PREDEFINIDOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Catálogo imutável de eventos (populado via seed)
+model EventTemplate {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+
+  sessionConfigs SessionEventConfig[]
+}
+
+// Configuração do facilitador: vincula um evento do catálogo a uma rodada de uma sessão
+model SessionEventConfig {
+  id              String        @id @default(uuid())
+  sessionId       String
+  session         Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventTemplateId String
+  eventTemplate   EventTemplate @relation(fields: [eventTemplateId], references: [id])
+  round           Int
+
+  // Garante no banco de dados a regra "máximo de 1 evento por rodada por sessão"
+  @@unique([sessionId, round])
 }
 
 model Store {

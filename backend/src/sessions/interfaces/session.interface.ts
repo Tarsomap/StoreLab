@@ -90,3 +90,12 @@ export interface SessionCategoryCatalogEntry {
   unitCost: number;
   taxRate: number;
 }
+
+/**
+ * Catálogo de eventos predefinidos disponível para o facilitador configurar nas rodadas.
+ */
+export interface SessionEventCatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+}

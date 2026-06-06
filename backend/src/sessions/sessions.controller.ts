@@ -79,6 +79,16 @@ export class SessionsController {
   }
 
   /**
+   * Catálogo de eventos predefinidos para o facilitador configurar em rodadas da sessão.
+   */
+  @Get("catalog/events")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FACILITATOR)
+  getEventCatalog() {
+    return this.sessionsService.getEventCatalog();
+  }
+
+  /**
    * Detalhe simples de uma sessão por id — qualquer usuário logado pode ver (ex.: jogador entrou pelo código e precisa do contexto).
    */
   @Get(":id")

@@ -10,7 +10,7 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
-import { CategoryConfigDto } from "./create-session.dto";
+import { CategoryConfigDto, EventConfigDto } from "./create-session.dto";
 
 export class UpdateSessionDto {
   @IsString()
@@ -32,6 +32,12 @@ export class UpdateSessionDto {
   @Type(() => CategoryConfigDto)
   @IsOptional()
   categoryConfigs?: CategoryConfigDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EventConfigDto)
+  @IsOptional()
+  eventConfigs?: EventConfigDto[];
 
   @IsBoolean()
   @IsOptional()
