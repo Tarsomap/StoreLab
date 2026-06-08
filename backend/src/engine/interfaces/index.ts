@@ -165,6 +165,8 @@ export interface EbitdaInput {
   interestThreshold: number;
   /** Receita perdida por paradas de SLA (já agregada dos eventos). */
   slaRevenueLost: number;
+  /** Multas + receita perdida por downtime de eventos aleatórios. */
+  randomEventCost: number;
   /** Totais de quebra/envelhecimento (rodada 3 ou vazio). */
   shrinkage: ShrinkageResult;
 }
@@ -195,6 +197,8 @@ export interface EbitdaBreakdown {
   interestCost: number;
   /** Receita perdida por incidentes de SLA. */
   slaRevenueLost: number;
+  /** Multas + downtime de eventos aleatórios. */
+  randomEventCost: number;
   /** Lucro operacional simulado após todas as linhas acima. */
   ebitda: number;
   /** EBITDA dividido pela receita bruta; 0 se não houve receita (evita divisão por zero). */
@@ -237,4 +241,81 @@ export interface SlaResult {
   events: SlaEventResult[];
   /** Soma das receitas perdidas de todos os eventos. */
   totalRevenueLost: number;
+}
+
+// ─── Eventos Aleatórios ───────────────────────────────────────────────────────
+
+/** Tipos de eventos aleatórios do jogo. */
+export type RandomEventType =
+  | 'OPERATIONAL_FAILURE'
+  | 'REGULATORY_CHANGE'
+  | 'COMPETITOR_PROMOTION'
+  | 'REPUTATION_DAMAGE'
+  | 'LOT_CONTAMINATION'
+  | 'INVENTORY_THEFT'
+  | 'PAYMENT_SYSTEM_FAILURE'
+  | 'CYBER_ATTACK'
+  | 'DATA_BREACH'
+  | 'LOGISTICS_PROBLEM'
+  | 'POWER_OUTAGE'
+  | 'CLIMATE_EVENT'
+  | 'INPUT_COST_INCREASE'
+  | 'DEMAND_SURGE';
+
+/** Definição estática de um evento aleatório. */
+export interface RandomEventDefinition {
+  type: RandomEventType;
+  label: string;
+  description: string;
+  /** CAPEXes que, quando implementados, reduzem o risco proporcionalmente. Vazio = sem proteção. */
+  protectingCapex: string[];
+  /** Probabilidade base (0 a 1) quando nenhum CAPEX protetor está implementado. */
+  baseRiskPercent: number;
+  /** 'store' = sorteio independente por loja; 'session' = mesmo resultado para toda a sessão. */
+  scope: 'store' | 'session';
+}
+
+/** Impacto resolvido de um evento (valores zerados quando não ocorreu). */
+export interface ResolvedEventImpact {
+  daysDown: number;
+  revenueLost: number;
+  penaltyAmount: number;
+  csatPenalty: number;
+  overflowCsatPenalty: number;
+  demandPenaltyFactor: number;
+  demandBonusFactor: number;
+  inventoryLossAllPercent: number;
+  inventoryLossPereciveisPercent: number;
+  stockReductionPercent: number;
+  costIncreasePercent: number;
+}
+
+/** Resultado de um evento aleatório para uma loja numa rodada. */
+export interface RandomEventOccurrence {
+  type: RandomEventType;
+  label: string;
+  description: string;
+  occurred: boolean;
+  impact: ResolvedEventImpact;
+}
+
+/** Resultado pre-calculado dos eventos de uma loja (antes de conhecer a receita bruta). */
+export interface RandomEventsPreResult {
+  csatPenalty: number;
+  overflowCsatPenalty: number;
+  demandPenaltyFactor: number;
+  demandBonusFactor: number;
+  inventoryLossAllPercent: number;
+  inventoryLossPereciveisPercent: number;
+  stockReductionPercent: number;
+  costIncreasePercent: number;
+  fixedPenaltyAmount: number;
+  downtimeEventsDays: number;
+  occurrences: RandomEventOccurrence[];
+}
+
+/** Resultado do cálculo de eventos de sessão (clima e custo — mesmos para todas as lojas). */
+export interface SessionWideEvents {
+  climateOccurred: boolean;
+  costIncreaseOccurred: boolean;
 }

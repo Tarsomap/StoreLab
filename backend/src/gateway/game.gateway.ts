@@ -223,6 +223,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
+   * **Quando dispara:** o motor calculou os eventos aleatórios da rodada para uma loja.
+   * **Quem recebe:** sala `store:{storeId}` — o time vê quais eventos os afetaram nesta rodada.
+   * Não vai para a sessão inteira para não revelar informações estratégicas às outras equipes.
+   */
+  emitRandomEvents(storeId: string, payload: { round: number; events: unknown[] }): void {
+    this.emitToRoom(`store:${storeId}`, 'random:events', payload);
+  }
+
+  /**
    * **Quando dispara:** um jogador **envia respostas** do quiz (ou progresso parcial contabilizado no serviço que chama isto).
    * **Quem recebe:** colegas na mesma loja (`store:{storeId}`) — útil para mostrar “fulano já respondeu” no grupo.
    * **Quem não recebe:** outras lojas e quem não entrou na sala da loja (precisa ter feito `join:store`).

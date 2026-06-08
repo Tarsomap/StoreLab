@@ -60,6 +60,7 @@ describe('FinancialService', () => {
     cashUsed: 500_000,
     interestThreshold: 700_000,
     slaRevenueLost: 0,
+    randomEventCost: 0,
     shrinkage: emptyShrinkage,
     ...overrides,
   });
@@ -319,6 +320,23 @@ describe('FinancialService', () => {
       const result = service.computeEbitda(input);
       expect(result.licenseCost).toBe(1450);
       expect(result.maintenanceCost).toBe(0); // FREEZER implementado
+    });
+
+    it('randomEventCost é descontado do EBITDA', () => {
+      const input = makeEbitdaInput({
+        categoryRevenues: [makeCategoryRevenue()],
+        randomEventCost: 15_000,
+      });
+      const withCost = service.computeEbitda(input);
+      const withoutCost = service.computeEbitda({ ...input, randomEventCost: 0 });
+      expect(withCost.randomEventCost).toBe(15_000);
+      expect(withCost.ebitda).toBeCloseTo(withoutCost.ebitda - 15_000);
+    });
+
+    it('randomEventCost zero não afeta EBITDA', () => {
+      const input = makeEbitdaInput({ categoryRevenues: [makeCategoryRevenue()] });
+      const result = service.computeEbitda(input);
+      expect(result.randomEventCost).toBe(0);
     });
 
     it('payrollCost uses correct salary constants', () => {
