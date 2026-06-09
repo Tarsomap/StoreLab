@@ -103,7 +103,7 @@ export class FinancialService {
     // Sobre o que excede o limite de caixa “grátis”, aplicamos juros; Math.max evita juro negativo.
     const interestCost = Math.max(0, cashUsed - interestThreshold) * INTEREST_RATE_MONTHLY;
 
-    const { randomEventCost } = input;
+    const randomEventCost = input.randomEventCost ?? 0;
 
     const ebitda =
       netRevenue -
