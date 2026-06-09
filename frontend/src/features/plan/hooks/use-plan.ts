@@ -10,12 +10,16 @@ import {
   PlayerScoreResponse,
 } from '../types';
 import { configVersionFromStatus } from '../lib/plan-math';
+import { facilitatorQuizRound } from '@/features/session/lib/session-phases';
+import type { SessionStatus } from '@/features/session/types';
 
 export interface UsePlanResult {
   plan: PlanFullResponse | null;
   store: StoreSummary | null;
   myRole: StoreRole | null;
   quizScore: PlayerScoreResponse | null;
+  sessionStatus: string | null;
+  sessionRound: number | null;
   isLoading: boolean;
   error: string;
   setPlan: (plan: PlanFullResponse) => void;
@@ -33,6 +37,8 @@ export function usePlan(storeId: string): UsePlanResult {
   const [store, setStore] = useState<StoreSummary | null>(null);
   const [myRole, setMyRole] = useState<StoreRole | null>(null);
   const [quizScore, setQuizScore] = useState<PlayerScoreResponse | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
+  const [sessionRound, setSessionRound] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -52,14 +58,23 @@ export function usePlan(storeId: string): UsePlanResult {
       if (me) setMyRole(me.role);
 
       const sessionData = await api.get<{ status: string }>(`/sessions/${storeData.sessionId}/status`);
+      setSessionStatus(sessionData.status);
+      
+      const realRound = facilitatorQuizRound(sessionData.status as SessionStatus);
+      setSessionRound(realRound);
+
       const cv = configVersionFromStatus(sessionData.status);
       const planData = await api.get<PlanFullResponse>(`/plans/${storeId}/config/${cv}`);
       setPlan(planData);
 
-      api
-        .get<PlayerScoreResponse>(`/stores/${storeId}/quiz/my-score?round=${cv}`)
-        .then(setQuizScore)
-        .catch(() => {/* non-blocking */});
+      if (realRound !== null && realRound !== undefined) {
+        api
+          .get<PlayerScoreResponse>(`/stores/${storeId}/quiz/my-score?round=${realRound}`)
+          .then(setQuizScore)
+          .catch(() => {/* non-blocking */});
+      } else {
+        setQuizScore(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar plano');
     } finally {
@@ -76,6 +91,8 @@ export function usePlan(storeId: string): UsePlanResult {
     store,
     myRole,
     quizScore,
+    sessionStatus,
+    sessionRound,
     isLoading: isLoading && !plan && !error,
     error,
     setPlan,

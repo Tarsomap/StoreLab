@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   CartesianGrid,
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -69,6 +68,8 @@ export function HistoricPerformanceSection({ finishedSessions }: HistoricPerform
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     () => finishedSessions[0]?.id ?? null,
   );
+  const chartFrameRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
   const [ranking, setRanking] = useState<RankingEntry[] | null>(null);
   const [rankingLoading, setRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState(false);
@@ -101,12 +102,24 @@ export function HistoricPerformanceSection({ finishedSessions }: HistoricPerform
   const chartData = useMemo(() => (ranking ? buildEbitdaChartRows(ranking) : []), [ranking]);
   const showChart = !rankingLoading && !rankingError && ranking !== null && rankingHasRoundData(ranking);
 
+  useEffect(() => {
+    const node = chartFrameRef.current;
+    if (!node) return;
+
+    const updateWidth = () => setChartWidth(Math.floor(node.getBoundingClientRect().width));
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [showChart]);
+
   return (
     <section className="space-y-4" aria-labelledby="historic-performance-heading">
       <h3 id="historic-performance-heading" className="font-display text-xl font-bold text-foreground">
         Desempenho Histórico
       </h3>
-      <Card className="rounded-xl border shadow-sm transition-colors duration-200 hover:shadow-md">
+      <Card className="rounded-xl border shadow-sm transition-colors duration-200">
         <CardHeader className="pb-2">
           <CardTitle className="font-display text-base font-semibold text-foreground">
             EBITDA % por rodada
@@ -147,9 +160,14 @@ export function HistoricPerformanceSection({ finishedSessions }: HistoricPerform
           )}
 
           {showChart && ranking && (
-            <div className="h-72 w-full min-h-[288px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+            <div ref={chartFrameRef} className="min-h-[288px] w-full min-w-0 overflow-hidden">
+              {chartWidth > 0 && (
+                <LineChart
+                  width={chartWidth}
+                  height={288}
+                  data={chartData}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 88%)" />
                   <XAxis
                     dataKey="round"
@@ -184,7 +202,7 @@ export function HistoricPerformanceSection({ finishedSessions }: HistoricPerform
                     />
                   ))}
                 </LineChart>
-              </ResponsiveContainer>
+              )}
             </div>
           )}
         </CardContent>
