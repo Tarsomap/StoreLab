@@ -31,7 +31,7 @@ export function PodiumCard({ entry, podiumBaseStrip = false }: PodiumCardProps) 
       >
       {/* Header band */}
       <div
-        className="px-5 py-3.5 flex items-center justify-between"
+        className="px-6 h-12 flex items-center justify-between"
         style={rankHeaderStyle(entry.rank)}
       >
         <div className="flex items-center gap-2">
@@ -74,61 +74,80 @@ export function PodiumCard({ entry, podiumBaseStrip = false }: PodiumCardProps) 
           {entry.storeName}
         </h3>
 
-        {/* EBITDA médio — hero number */}
+        {/* EBITDA Final — hero number */}
         <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">EBITDA Médio</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">EBITDA Final</p>
           <p
-            className={`font-mono font-bold leading-none ${ebitdaClass(entry.avgEbitdaPercentage)} ${
+            className={`font-mono font-bold leading-none ${entry.totalEbitda >= 0 ? 'text-accent' : 'text-destructive'} ${
               isChampion ? 'text-5xl' : 'text-3xl'
             }`}
           >
-            {fmtPct(entry.avgEbitdaPercentage)}
+            {formatBrl(entry.totalEbitda)}
           </p>
         </div>
 
-        {/* Per-round progress bars */}
+        {/* Per-round progress bars — ordenadas por EBITDA R$ */}
         <div className="space-y-2">
-          {entry.rounds.map((r) => {
-            const pctVal = r.ebitdaPercentage * 100;
-            const barWidth = Math.min((Math.abs(pctVal) / maxPct) * 100, 100);
-            return (
-              <div key={r.round} className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted-foreground w-4 shrink-0">
-                  R{r.round}
-                </span>
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      pctVal >= 0 ? 'bg-accent' : 'bg-destructive'
-                    }`}
-                    style={{ width: `${barWidth}%`, transition: 'width 1s ease-out' }}
-                  />
+          {[...entry.rounds]
+            .sort((a, b) => b.ebitda - a.ebitda)
+            .map((r) => {
+              const pctVal = r.ebitdaPercentage * 100;
+              const barWidth = Math.min((Math.abs(pctVal) / maxPct) * 100, 100);
+              return (
+                <div key={r.round} className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-muted-foreground w-4 shrink-0">
+                    R{r.round}
+                  </span>
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        pctVal >= 0 ? 'bg-accent' : 'bg-destructive'
+                      }`}
+                      style={{ width: `${barWidth}%`, transition: 'width 1s ease-out' }}
+                    />
+                  </div>
+                  <span
+                    className={`font-mono text-xs font-semibold w-12 text-right shrink-0 ${ebitdaClass(
+                      r.ebitdaPercentage,
+                    )}`}
+                  >
+                    {fmtPct(r.ebitdaPercentage)}
+                  </span>
+                  <span
+                    className={`font-mono text-xs w-20 text-right shrink-0 ${ebitdaClass(
+                      r.ebitdaPercentage,
+                    )}`}
+                  >
+                    {formatBrl(r.ebitda)}
+                  </span>
                 </div>
-                <span
-                  className={`font-mono text-xs font-semibold w-12 text-right shrink-0 ${ebitdaClass(
-                    r.ebitdaPercentage,
-                  )}`}
-                >
-                  {fmtPct(r.ebitdaPercentage)}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
-        {/* Cash final */}
-        {lastRound && (
-          <div className="pt-3 border-t border-border/40">
-            <p className="text-xs text-muted-foreground mb-1">Caixa Final</p>
+        {/* EBITDA Médio + Caixa Final */}
+        <div className="pt-3 border-t border-border/40 space-y-3">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">EBITDA Médio</p>
             <p
-              className={`font-mono font-bold text-base ${
-                lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
-              }`}
+              className={`font-mono font-bold text-base ${ebitdaClass(entry.avgEbitdaPercentage)}`}
             >
-              {formatBrl(lastRound.cashFinal)}
+              {fmtPct(entry.avgEbitdaPercentage)}
             </p>
           </div>
-        )}
+          {lastRound && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Caixa Final</p>
+              <p
+                className={`font-mono font-bold text-base ${
+                  lastRound.cashFinal >= 0 ? 'text-primary' : 'text-destructive'
+                }`}
+              >
+                {formatBrl(lastRound.cashFinal)}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {podiumBaseStrip && (

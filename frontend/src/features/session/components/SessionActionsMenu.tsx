@@ -51,7 +51,7 @@ export function SessionActionsMenu({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => canDelete && setDeleteOpen(true)}
-            className="text-destructive focus:text-destructive cursor-pointer"
+            className="text-destructive hover:bg-destructive hover:text-destructive-foreground focus:bg-destructive focus:text-destructive-foreground cursor-pointer"
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Excluir

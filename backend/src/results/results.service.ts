@@ -114,14 +114,12 @@ export class ResultsService {
       rounds: data.rounds,
     }));
 
-    unsorted.sort((a, b) => b.avgEbitdaPercentage - a.avgEbitdaPercentage);
+    // Ordenado por EBITDA final (soma em R$)
+    unsorted.sort((a, b) => b.totalEbitda - a.totalEbitda);
 
     let rank = 1;
     return unsorted.map((entry, index) => {
-      if (
-        index > 0 &&
-        entry.avgEbitdaPercentage < unsorted[index - 1].avgEbitdaPercentage
-      ) {
+      if (index > 0 && entry.totalEbitda < unsorted[index - 1].totalEbitda) {
         rank = index + 1;
       }
       return { rank, ...entry };
@@ -154,8 +152,6 @@ export class ResultsService {
     initialCash: number,
     quizScorePercentage: number,
   ): RoundResultEntry {
-    // cashFinal = initialCash - cashUsed + grossRevenue - totalCosts
-    //           = initialCash - cashUsed + ebitda  (since ebitda = grossRevenue - totalCosts)
     const cashFinal = initialCash - r.cashUsed + r.ebitda;
     const finalScore = quizScorePercentage * r.csat;
 
@@ -163,8 +159,7 @@ export class ResultsService {
       round: r.round,
       quizScorePercentage,
       csat: r.csat,
-      finalScore, //
-
+      finalScore,
       availability: r.availability,
       basketPrice: r.basketPrice,
       rankScore: r.rankScore,
@@ -185,5 +180,22 @@ export class ResultsService {
       cashUsed: r.cashUsed,
       cashFinal,
     };
+  }
+
+  async getStoreRoundResult(storeId: string, round: number) {
+    const result = await this.prisma.roundResult.findUnique({
+      where: {
+        storeId_round: { storeId, round },
+      },
+      select: {
+        basketPrice: true,
+        availability: true,
+        csat: true,
+        rankScore: true,
+        demandShare: true,
+      },
+    });
+
+    return result || null;
   }
 }
