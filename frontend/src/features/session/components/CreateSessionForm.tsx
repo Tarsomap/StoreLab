@@ -28,6 +28,10 @@ export function CreateSessionForm({
   const [newName, setNewName] = useState('');
   const [newDemand, setNewDemand] = useState('1000');
   const [newCash, setNewCash] = useState('700000');
+  const [cashierSalary, setCashierSalary] = useState('1000');
+  const [serviceSalary, setServiceSalary] = useState('1200');
+  const [baseLicenseCost, setBaseLicenseCost] = useState('1200');
+  const [maintenanceCost, setMaintenanceCost] = useState('400');
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState('15');
   const [creating, setCreating] = useState(false);
@@ -43,6 +47,10 @@ export function CreateSessionForm({
         name: newName.trim(),
         totalDemand: Number(newDemand),
         initialCash: Number(newCash),
+        cashierSalary: Number(cashierSalary),
+        serviceSalary: Number(serviceSalary),
+        baseLicenseCost: Number(baseLicenseCost),
+        maintenanceCost: Number(maintenanceCost),
         categoryConfigs: categoryCatalog.map((category) => ({
           categoryId: category.id,
           stockAvailable: Number(categoryStocks[category.id] ?? category.stockAvailable),
@@ -111,6 +119,64 @@ export function CreateSessionForm({
                 value={newCash}
                 onChange={(e) => setNewCash(e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground">Plano Operacional — custos da sessão</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cashier-salary" className="text-sm text-muted-foreground">
+                  Salário Op. de Caixa (R$/mês)
+                </Label>
+                <Input
+                  id="cashier-salary"
+                  type="number"
+                  min={0}
+                  required
+                  value={cashierSalary}
+                  onChange={(e) => setCashierSalary(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-salary" className="text-sm text-muted-foreground">
+                  Salário Op. de Serviço (R$/mês)
+                </Label>
+                <Input
+                  id="service-salary"
+                  type="number"
+                  min={0}
+                  required
+                  value={serviceSalary}
+                  onChange={(e) => setServiceSalary(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="base-license-cost" className="text-sm text-muted-foreground">
+                  Licenças de Software base (R$/mês)
+                </Label>
+                <Input
+                  id="base-license-cost"
+                  type="number"
+                  min={0}
+                  required
+                  value={baseLicenseCost}
+                  onChange={(e) => setBaseLicenseCost(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maintenance-cost" className="text-sm text-muted-foreground">
+                  Manutenção fixa (R$/mês)
+                </Label>
+                <Input
+                  id="maintenance-cost"
+                  type="number"
+                  min={0}
+                  required
+                  value={maintenanceCost}
+                  onChange={(e) => setMaintenanceCost(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 

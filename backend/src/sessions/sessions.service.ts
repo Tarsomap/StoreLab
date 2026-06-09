@@ -93,6 +93,10 @@ export class SessionsService {
         disponibilidade: dto.disponibilidade ?? [],
         timerEnabled: dto.timerEnabled ?? false,
         timerDuration: dto.timerDuration ?? null,
+        cashierSalary: dto.cashierSalary ?? 1_000,
+        serviceSalary: dto.serviceSalary ?? 1_200,
+        baseLicenseCost: dto.baseLicenseCost ?? 1_200,
+        maintenanceCost: dto.maintenanceCost ?? 400,
         categoryConfigs: dto.categoryConfigs?.length
           ? {
               create: dto.categoryConfigs.map((c) => ({
@@ -426,7 +430,11 @@ export class SessionsService {
     const hasNonNameFields =
       dto.totalDemand !== undefined ||
       dto.initialCash !== undefined ||
-      dto.categoryConfigs !== undefined;
+      dto.categoryConfigs !== undefined ||
+      dto.cashierSalary !== undefined ||
+      dto.serviceSalary !== undefined ||
+      dto.baseLicenseCost !== undefined ||
+      dto.maintenanceCost !== undefined;
 
     if (hasNonNameFields && session.status !== SessionStatus.SETUP) {
       throw new BadRequestException(
@@ -466,6 +474,10 @@ export class SessionsService {
           ...(dto.initialCash !== undefined && {
             initialCash: dto.initialCash,
           }),
+          ...(dto.cashierSalary !== undefined && { cashierSalary: dto.cashierSalary }),
+          ...(dto.serviceSalary !== undefined && { serviceSalary: dto.serviceSalary }),
+          ...(dto.baseLicenseCost !== undefined && { baseLicenseCost: dto.baseLicenseCost }),
+          ...(dto.maintenanceCost !== undefined && { maintenanceCost: dto.maintenanceCost }),
           ...(dto.timerEnabled !== undefined && {
             timerEnabled: dto.timerEnabled,
             ...(!dto.timerEnabled && {
@@ -495,6 +507,10 @@ export class SessionsService {
     totalDemand: number;
     initialCash: number;
     disponibilidade: number[];
+    cashierSalary: number;
+    serviceSalary: number;
+    baseLicenseCost: number;
+    maintenanceCost: number;
     timerEnabled: boolean;
     timerDuration: number | null;
     timerStartedAt: Date | null;
@@ -511,6 +527,10 @@ export class SessionsService {
       totalDemand: session.totalDemand,
       initialCash: session.initialCash,
       disponibilidade: session.disponibilidade,
+      cashierSalary: session.cashierSalary,
+      serviceSalary: session.serviceSalary,
+      baseLicenseCost: session.baseLicenseCost,
+      maintenanceCost: session.maintenanceCost,
       timerEnabled: session.timerEnabled,
       timerDuration: session.timerDuration,
       timerStartedAt: session.timerStartedAt,

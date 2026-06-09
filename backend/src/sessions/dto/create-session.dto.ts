@@ -76,4 +76,28 @@ export class CreateSessionDto {
   @IsInt()
   @Min(1)
   timerDuration?: number;
+
+  /** Salário mensal por operador de caixa; se omitido, usa o padrão do jogo (R$1.000). */
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  cashierSalary?: number;
+
+  /** Salário mensal por operador de serviço; se omitido, usa o padrão do jogo (R$1.200). */
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  serviceSalary?: number;
+
+  /** Custo base de licenças de software; se omitido, usa o padrão do jogo (R$1.200). */
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  baseLicenseCost?: number;
+
+  /** Custo fixo de manutenção; se omitido, usa o padrão do jogo (R$400). */
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maintenanceCost?: number;
 }

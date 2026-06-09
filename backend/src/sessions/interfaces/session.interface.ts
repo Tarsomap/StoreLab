@@ -13,6 +13,12 @@ export interface SessionSummary {
   initialCash: number;
   disponibilidade: number[];
 
+  /** Parâmetros de custo do Plano Operacional — configurados pelo Facilitador. */
+  cashierSalary: number;
+  serviceSalary: number;
+  baseLicenseCost: number;
+  maintenanceCost: number;
+
   timerEnabled: boolean;
   timerDuration: number | null;
   timerStartedAt: Date | null;
