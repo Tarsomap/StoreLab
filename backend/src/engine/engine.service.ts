@@ -13,6 +13,7 @@ import {
   StoreIndicators,
   ShrinkageCategoryInput,
   RandomEventsPreResult,
+  RandomEventType,
 } from "./interfaces";
 
 /**
@@ -342,14 +343,14 @@ export class EngineService {
             storeId_round_eventType: {
               storeId: storeInput.storeId,
               round,
-              eventType: occurrence.type as any,
+              eventType: occurrence.type as RandomEventType,
             },
           },
           create: {
             sessionId,
             storeId: storeInput.storeId,
             round,
-            eventType: occurrence.type as any,
+            eventType: occurrence.type as RandomEventType,
             occurred: occurrence.occurred,
             impactData: impactWithRevenueLost,
           },

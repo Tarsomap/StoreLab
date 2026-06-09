@@ -348,7 +348,7 @@ export class RandomEventsService {
       inventoryLossAllPercent: Math.min(1, inventoryLossAllPercent),
       inventoryLossPereciveisPercent: Math.min(1, inventoryLossPereciveisPercent),
       stockReductionPercent: Math.min(1, stockReductionPercent),
-      costIncreasePercent,
+      costIncreasePercent: Math.min(1, costIncreasePercent),
       fixedPenaltyAmount,
       downtimeEventsDays,
       occurrences,
