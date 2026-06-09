@@ -6,11 +6,14 @@ import { DemandService } from "./demand.service";
 import { ShrinkageService } from "./shrinkage.service";
 import { FinancialService } from "./financial.service";
 import { SlaService } from "./sla.service";
+import { RandomEventsService } from "./random-events.service";
 import {
   CategoryEngineInput,
   CapexEngineInput,
   StoreIndicators,
   ShrinkageCategoryInput,
+  RandomEventsPreResult,
+  RandomEventType,
 } from "./interfaces";
 
 /**
@@ -30,6 +33,7 @@ export class EngineService {
     private readonly shrinkageService: ShrinkageService,
     private readonly financialService: FinancialService,
     private readonly slaService: SlaService,
+    private readonly randomEventsService: RandomEventsService,
   ) {}
 
   /**
@@ -162,15 +166,37 @@ export class EngineService {
       });
     }
 
-    const storeIndicators: StoreIndicators[] = storeInputs.map((s) => ({
-      storeId: s.storeId,
-      csat: this.csatService.calculate(
-        s.cashierOperators,
-        s.quizScorePercentage,
-      ),
-      availability: this.demandService.computeAvailability(s.categories),
-      basketPrice: this.demandService.computeBasketPrice(s.categories),
-    }));
+    // ── Fase 1: eventos de sessão (clima e custo de insumos) — iguais para todas as lojas ──
+    const sessionWideEvents = this.randomEventsService.computeSessionWideEvents(sessionId, round);
+
+    // ── Fase 2: pré-modificadores por loja (inventário, CSAT, demanda, multas fixas) ──
+    const storePreResults = new Map<string, RandomEventsPreResult>();
+    for (const storeInput of storeInputs) {
+      const pre = this.randomEventsService.computePreModifiers({
+        sessionId,
+        storeId: storeInput.storeId,
+        round,
+        capexDecisions: storeInput.capexDecisions,
+        cashierOperators: storeInput.cashierOperators,
+        sessionWideEvents,
+      });
+      storePreResults.set(storeInput.storeId, pre);
+    }
+
+    // ── Fase 3: indicadores com CSAT ajustado pelos eventos ──
+    const storeIndicators: StoreIndicators[] = storeInputs.map((s) => {
+      const pre = storePreResults.get(s.storeId)!;
+      // Aplica modificadores de inventário/custo antes de calcular disponibilidade e cesta.
+      const adjustedCategories = this.applyInventoryModifiers(s.categories, pre);
+      const rawCsat = this.csatService.calculate(s.cashierOperators, s.quizScorePercentage);
+      const csat = Math.max(0, Math.min(1, rawCsat - pre.csatPenalty - pre.overflowCsatPenalty));
+      return {
+        storeId: s.storeId,
+        csat,
+        availability: this.demandService.computeAvailability(adjustedCategories),
+        basketPrice: this.demandService.computeBasketPrice(adjustedCategories),
+      };
+    });
 
     const demandResults = this.demandService.computeDemand(storeIndicators);
 
@@ -184,9 +210,20 @@ export class EngineService {
         (i) => i.storeId === storeInput.storeId,
       )!;
 
+      const pre = storePreResults.get(storeInput.storeId)!;
+
+      // Aplica modificadores de inventário e custo nas categorias.
+      const adjustedCategories = this.applyInventoryModifiers(storeInput.categories, pre);
+
+      // Aplica modificadores de demanda: penalidade e bônus sobre o share calculado.
+      const adjustedDemandShare =
+        demandResult.demandShare *
+        (1 - pre.demandPenaltyFactor) *
+        (1 + pre.demandBonusFactor);
+
       const categoryRevenues = this.financialService.computeCategoryRevenues(
-        storeInput.categories,
-        demandResult.demandShare,
+        adjustedCategories,
+        adjustedDemandShare,
       );
 
       const grossRevenueBeforeSla = categoryRevenues.reduce(
@@ -203,6 +240,13 @@ export class EngineService {
         capexDecisions: storeInput.capexDecisions,
         grossRevenue: grossRevenueBeforeSla,
       });
+
+      // Downtime de eventos aleatórios → receita perdida usando mesma fórmula do SLA.
+      const randomDowntimeRevenueLost =
+        pre.downtimeEventsDays > 0
+          ? (grossRevenueBeforeSla / 30) * pre.downtimeEventsDays
+          : 0;
+      const randomEventCost = pre.fixedPenaltyAmount + randomDowntimeRevenueLost;
 
       let shrinkageResult = this.shrinkageService.empty();
       if (round === 3) {
@@ -230,6 +274,7 @@ export class EngineService {
         cashUsed: storeInput.cashUsed,
         interestThreshold,
         slaRevenueLost: slaResult.totalRevenueLost,
+        randomEventCost,
         shrinkage: shrinkageResult,
       });
 
@@ -255,6 +300,7 @@ export class EngineService {
           licenseCost: ebitdaBreakdown.licenseCost,
           interestCost: ebitdaBreakdown.interestCost,
           slaRevenueLost: ebitdaBreakdown.slaRevenueLost,
+          randomEventCost: ebitdaBreakdown.randomEventCost,
           ebitda: ebitdaBreakdown.ebitda,
           ebitdaPercentage: ebitdaBreakdown.ebitdaPercentage,
           cashUsed: storeInput.cashUsed,
@@ -276,11 +322,64 @@ export class EngineService {
           licenseCost: ebitdaBreakdown.licenseCost,
           interestCost: ebitdaBreakdown.interestCost,
           slaRevenueLost: ebitdaBreakdown.slaRevenueLost,
+          randomEventCost: ebitdaBreakdown.randomEventCost,
           ebitda: ebitdaBreakdown.ebitda,
           ebitdaPercentage: ebitdaBreakdown.ebitdaPercentage,
           cashUsed: storeInput.cashUsed,
         },
       });
+
+      // Persiste os eventos aleatórios desta loja/rodada.
+      for (const occurrence of pre.occurrences) {
+        const impactWithRevenueLost = {
+          ...occurrence.impact,
+          revenueLost:
+            occurrence.impact.daysDown > 0
+              ? (grossRevenueBeforeSla / 30) * occurrence.impact.daysDown
+              : 0,
+        };
+        await this.prisma.randomEvent.upsert({
+          where: {
+            storeId_round_eventType: {
+              storeId: storeInput.storeId,
+              round,
+              eventType: occurrence.type as RandomEventType,
+            },
+          },
+          create: {
+            sessionId,
+            storeId: storeInput.storeId,
+            round,
+            eventType: occurrence.type as RandomEventType,
+            occurred: occurrence.occurred,
+            impactData: impactWithRevenueLost,
+          },
+          update: {
+            occurred: occurrence.occurred,
+            impactData: impactWithRevenueLost,
+          },
+        });
+      }
+
+      // Emite apenas os eventos que ocorreram via WebSocket para o time da loja.
+      const occurredEvents = pre.occurrences.filter((o) => o.occurred);
+      if (occurredEvents.length > 0) {
+        this.gameGateway.emitRandomEvents(storeInput.storeId, {
+          round,
+          events: occurredEvents.map((o) => ({
+            type: o.type,
+            label: o.label,
+            description: o.description,
+            impact: {
+              ...o.impact,
+              revenueLost:
+                o.impact.daysDown > 0
+                  ? (grossRevenueBeforeSla / 30) * o.impact.daysDown
+                  : 0,
+            },
+          })),
+        });
+      }
 
       for (const event of slaResult.events) {
         await this.prisma.slaEvent.upsert({
@@ -325,6 +424,39 @@ export class EngineService {
       include: { store: { select: { name: true } } },
     });
     this.gameGateway.emitRoundResults(sessionId, savedResults);
+  }
+
+  /**
+   * Aplica modificadores de inventário e custo de eventos aleatórios às categorias.
+   * Reduz stockPurchased por perdas (furto, contaminação, logística) e aumenta unitCost por inflação de insumos.
+   */
+  private applyInventoryModifiers(
+    categories: CategoryEngineInput[],
+    pre: RandomEventsPreResult,
+  ): CategoryEngineInput[] {
+    return categories.map((cat) => {
+      let stockPurchased = cat.stockPurchased;
+      let unitCost = cat.unitCost;
+
+      // Perda geral de estoque (furto afeta todas as categorias).
+      if (pre.inventoryLossAllPercent > 0) {
+        stockPurchased = Math.floor(stockPurchased * (1 - pre.inventoryLossAllPercent));
+      }
+      // Perda de Perecíveis (contaminação e clima).
+      if (pre.inventoryLossPereciveisPercent > 0 && cat.categoryName === 'PERECIVEIS') {
+        stockPurchased = Math.floor(stockPurchased * (1 - pre.inventoryLossPereciveisPercent));
+      }
+      // Redução por problema logístico (pedido não entregue completo).
+      if (pre.stockReductionPercent > 0) {
+        stockPurchased = Math.floor(stockPurchased * (1 - pre.stockReductionPercent));
+      }
+      // Aumento de CMV por alta no custo de insumos.
+      if (pre.costIncreasePercent > 0) {
+        unitCost = unitCost * (1 + pre.costIncreasePercent);
+      }
+
+      return { ...cat, stockPurchased: Math.max(0, stockPurchased), unitCost };
+    });
   }
 
   /**

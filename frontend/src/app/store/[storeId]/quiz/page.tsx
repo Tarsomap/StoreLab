@@ -14,6 +14,8 @@ import { useSubmitAnswer } from '@/features/quiz/hooks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { QuestionRunner, AnswerFeedback, ScoreCard } from '@/features/quiz/components/player';
+import { useRandomEvents } from '@/features/random-events/hooks/use-random-events';
+import { RandomEventModal } from '@/features/random-events/components/random-event-modal';
 
 /** Questionário da rodada para o time da loja; progresso coletivo via Socket.io. */
 export default function QuizPage() {
@@ -35,6 +37,7 @@ export default function QuizPage() {
   } = usePlayerQuiz(storeId);
 
   const { submit, submitting, result } = useSubmitAnswer(storeId);
+  const { pendingPayload, dismiss } = useRandomEvents(store?.sessionId ?? '', storeId);
 
   async function handleSubmit() {
     const unanswered = questions.filter((q) => !answers[q.id]);
@@ -73,6 +76,13 @@ export default function QuizPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {pendingPayload && (
+        <RandomEventModal
+          round={pendingPayload.round}
+          events={pendingPayload.events}
+          onClose={dismiss}
+        />
+      )}
       {/* Quiz title */}
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-display font-bold">Quiz — Rodada {round}</h1>

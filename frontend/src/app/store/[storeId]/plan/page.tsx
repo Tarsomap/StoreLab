@@ -28,6 +28,8 @@ import { useSaveCategoryDecision } from "@/features/plan/hooks/use-save-category
 import { useConfirmPlan } from "@/features/plan/hooks/use-confirm-plan";
 import { buildCatRows, buildDre } from "@/features/plan/lib/plan-math";
 import { PlanFullResponse, ConfirmState } from "@/features/plan/types";
+import { useRandomEvents } from "@/features/random-events/hooks/use-random-events";
+import { RandomEventModal } from "@/features/random-events/components/random-event-modal";
 import { PlanHeader } from "@/features/plan/components/PlanHeader";
 import { PlanMetricCards } from "@/features/plan/components/PlanMetricCards";
 import { DemandIndicatorsCard } from "@/features/plan/components/DemandIndicatorsCard";
@@ -59,6 +61,7 @@ export default function PlanPage() {
   const timerState = useRealtimeTimer(store?.sessionId);
   const timerExpired = useTimerExpiry(timerState);
   const { finish: finishRound } = usePlayerRoundFinish();
+  const { pendingPayload, dismiss } = useRandomEvents(store?.sessionId ?? '', storeId);
   const { stockAvailMap, fetchStockAvailability } = useStockAvailability();
   const {
     mutate: savePlan,
@@ -216,6 +219,13 @@ export default function PlanPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5 pb-10">
+      {pendingPayload && (
+        <RandomEventModal
+          round={pendingPayload.round}
+          events={pendingPayload.events}
+          onClose={dismiss}
+        />
+      )}
       <PlanHeader
         storeName={store.name}
         roundLabel={`Rodada ${sessionRound ?? plan.configVersion}`}

@@ -54,6 +54,23 @@ enum CapexType {
   AUTOMATION
 }
 
+enum RandomEventType {
+  OPERATIONAL_FAILURE
+  REGULATORY_CHANGE
+  COMPETITOR_PROMOTION
+  REPUTATION_DAMAGE
+  LOT_CONTAMINATION
+  INVENTORY_THEFT
+  PAYMENT_SYSTEM_FAILURE
+  CYBER_ATTACK
+  DATA_BREACH
+  LOGISTICS_PROBLEM
+  POWER_OUTAGE
+  CLIMATE_EVENT
+  INPUT_COST_INCREASE
+  DEMAND_SURGE
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SEED / REFERÊNCIA
 // Populados pelo seed.ts — nunca alterados por usuários em runtime.
@@ -155,6 +172,7 @@ model Session {
   quizQuestions       QuizQuestion[]
   userQuizAnswers     UserQuizAnswer[]
   slaEvents           SlaEvent[]
+  randomEvents        RandomEvent[]
   playerTransfers     PlayerTransfer[]
   roundResults        RoundResult[]
   playerRoundStatuses PlayerRoundStatus[]
@@ -187,6 +205,7 @@ model Store {
   userQuizAnswers UserQuizAnswer[]
   roundResults    RoundResult[]
   slaEvents       SlaEvent[]
+  randomEvents    RandomEvent[]
   transfersFrom   PlayerTransfer[]  @relation("TransferFrom")
   transfersTo     PlayerTransfer[]  @relation("TransferTo")
 }
@@ -350,9 +369,10 @@ model RoundResult {
   maintenanceCost  Float // 400 se FREEZER não implementado; 0 se implementado
   licenseCost      Float // 500 base + Σ monthlyLicenseDelta dos CAPEXs implementados
   interestCost     Float // MAX(0, cashUsed - 700000) × 0.12
-  slaRevenueLost   Float // Σ SlaEvent.revenueLost desta loja/rodada
-  ebitda           Float // netRevenue - (COGS + quebras + aging + payroll + manutenção + licenças + juros + SLA)
-  ebitdaPercentage Float // ebitda / grossRevenue
+  slaRevenueLost     Float // Σ SlaEvent.revenueLost desta loja/rodada
+  randomEventCost    Float @default(0) // multas + downtime de eventos aleatórios
+  ebitda             Float // netRevenue - (COGS + quebras + aging + payroll + manutenção + licenças + juros + SLA + eventos)
+  ebitdaPercentage   Float // ebitda / grossRevenue
 
   // ── Auxiliares ───────────────────────────────────────────────────────────
   cashUsed  Float // total gasto no PO desta configuração
@@ -378,6 +398,22 @@ model SlaEvent {
   createdAt     DateTime    @default(now())
 
   @@unique([storeId, capexOptionId, round])
+}
+
+// Evento aleatório por loja por rodada — inclui eventos de sessão replicados por loja.
+model RandomEvent {
+  id         String          @id @default(uuid())
+  sessionId  String
+  session    Session         @relation(fields: [sessionId], references: [id])
+  storeId    String
+  store      Store           @relation(fields: [storeId], references: [id])
+  round      Int
+  eventType  RandomEventType
+  occurred   Boolean
+  impactData Json
+  createdAt  DateTime        @default(now())
+
+  @@unique([storeId, round, eventType])
 }
 
 // Log histórico de transferências obrigatórias entre lojas (após rodada 1).
