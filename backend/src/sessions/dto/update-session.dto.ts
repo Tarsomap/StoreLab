@@ -12,6 +12,7 @@ import {
 } from "class-validator";
 import { CategoryConfigDto } from "./create-session.dto";
 
+
 export class UpdateSessionDto {
   @IsString()
   @IsOptional()
@@ -41,4 +42,24 @@ export class UpdateSessionDto {
   @Min(1)
   @IsOptional()
   timerDuration?: number;
+
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  cashierSalary?: number;
+
+  @IsNumber()
+  @IsPositive()
+  @IsOptional()
+  serviceSalary?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  baseLicenseCost?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maintenanceCost?: number;
 }

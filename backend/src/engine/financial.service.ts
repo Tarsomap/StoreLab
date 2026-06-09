@@ -81,17 +81,21 @@ export class FinancialService {
     const breakageAmount = shrinkage.totalBreakage;
     const agingAmount = shrinkage.totalAging;
 
-    // Folha: cada tipo de operador tem salário fixo do jogo; multiplicamos e somamos.
-    const payrollCost = cashierOperators * CASHIER_SALARY + serviceOperators * SERVICE_SALARY;
+    // Usa salários configurados na sessão; cai nos padrões do jogo se não informados.
+    const cashierSal = input.cashierSalary ?? CASHIER_SALARY;
+    const serviceSal = input.serviceSalary ?? SERVICE_SALARY;
+    const payrollCost = cashierOperators * cashierSal + serviceOperators * serviceSal;
 
     const hasFreezer = capexDecisions.some(
       (c) => c.type === 'FREEZER' && c.implemented,
     );
     // Com freezer, a manutenção de refrigeração embutida zera o custo fixo de manutenção do cenário base.
-    const maintenanceCost = hasFreezer ? 0 : MAINTENANCE_COST;
+    const maintenanceCostBase = input.maintenanceCost ?? MAINTENANCE_COST;
+    const maintenanceCost = hasFreezer ? 0 : maintenanceCostBase;
 
+    const licenseCostBase = input.baseLicenseCost ?? BASE_LICENSE_COST;
     const licenseCost =
-      BASE_LICENSE_COST +
+      licenseCostBase +
       capexDecisions
         .filter((c) => c.implemented)
         .reduce((sum, c) => sum + c.monthlyLicenseDelta, 0);

@@ -61,6 +61,10 @@ export interface Session {
   totalDemand: number;
   initialCash: number;
   disponibilidade?: number[];
+  cashierSalary?: number;
+  serviceSalary?: number;
+  baseLicenseCost?: number;
+  maintenanceCost?: number;
   createdAt: string;
   storeCount?: number;
   confirmedPos?: number;

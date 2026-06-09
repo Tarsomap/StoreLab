@@ -275,6 +275,10 @@ export class EngineService {
         slaRevenueLost: slaResult.totalRevenueLost,
         randomEventCost,
         shrinkage: shrinkageResult,
+        cashierSalary: session.cashierSalary,
+        serviceSalary: session.serviceSalary,
+        baseLicenseCost: session.baseLicenseCost,
+        maintenanceCost: session.maintenanceCost,
       });
 
       await this.prisma.roundResult.upsert({

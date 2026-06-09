@@ -157,6 +157,12 @@ model Session {
   initialCash     Float         @default(700000) // R$700.000 por loja; configurável pelo facilitador
   disponibilidade Int[]         @default([]) // estoque disponível por categoria, ex: [600, 1500, 200, 1500]
 
+  // Parâmetros de custo do Plano Operacional — definidos pelo Facilitador na criação da sessão
+  cashierSalary   Float @default(1000) // R$/mês por operador de caixa
+  serviceSalary   Float @default(1200) // R$/mês por operador de serviço
+  baseLicenseCost Float @default(1200) // custo base de licenças de software (OS+PDV+Site+Segurança)
+  maintenanceCost Float @default(400)  // custo fixo de manutenção (zerado se FREEZER implementado)
+
   // Timer / Cronômetro da rodada atual
   timerEnabled       Boolean   @default(false)
   timerDuration      Int? // em segundos

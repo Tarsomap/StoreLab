@@ -169,6 +169,14 @@ export interface EbitdaInput {
   randomEventCost: number;
   /** Totais de quebra/envelhecimento (rodada 3 ou vazio). */
   shrinkage: ShrinkageResult;
+  /** Salário/mês por operador de caixa; se omitido usa o padrão do jogo (R$1.000). */
+  cashierSalary?: number;
+  /** Salário/mês por operador de serviço; se omitido usa o padrão do jogo (R$1.200). */
+  serviceSalary?: number;
+  /** Custo base de licenças de software; se omitido usa o padrão do jogo (R$1.200). */
+  baseLicenseCost?: number;
+  /** Custo fixo de manutenção; se omitido usa o padrão do jogo (R$400). */
+  maintenanceCost?: number;
 }
 
 /** Decomposição do EBITDA e percentual sobre receita bruta, para persistência e relatórios. */
