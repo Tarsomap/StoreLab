@@ -182,6 +182,28 @@ export class ResultsService {
     };
   }
 
+  async getSessionRoundEvents(sessionId: string, round: number) {
+    const [slaEvents, randomEvents] = await Promise.all([
+      this.prisma.slaEvent.findMany({
+        where: { sessionId, round },
+        include: {
+          store: { select: { id: true, name: true } },
+          capexOption: { select: { name: true, type: true } },
+        },
+        orderBy: [{ storeId: 'asc' }, { occurred: 'desc' }],
+      }),
+      this.prisma.randomEvent.findMany({
+        where: { sessionId, round },
+        include: {
+          store: { select: { id: true, name: true } },
+        },
+        orderBy: [{ storeId: 'asc' }, { occurred: 'desc' }],
+      }),
+    ]);
+
+    return { round, slaEvents, randomEvents };
+  }
+
   async getStoreRoundResult(storeId: string, round: number) {
     const result = await this.prisma.roundResult.findUnique({
       where: {

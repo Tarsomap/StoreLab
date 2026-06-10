@@ -1,7 +1,3 @@
-// Fonte de verdade técnica: docs/agent/plan.md
-// Regras de negócio:       docs/agent/spec.md v1.1
-// Quiz:                    docs/agent/QUIZ.md
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,9 +7,322 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ENUMS
-// ─────────────────────────────────────────────────────────────────────────────
+model Category {
+  id                String                  @id @default(uuid())
+  name              CategoryName            @unique
+  unitCost          Float
+  taxRate           Float
+  breakageRate      Float
+  agingRate         Float
+  stockAvailable    Int
+  categoryDecisions PoCategoryDecision[]
+  sessionConfigs    SessionCategoryConfig[]
+}
+
+model CapexOption {
+  id                  String            @id @default(uuid())
+  name                String
+  type                CapexType         @unique
+  acquisitionCost     Float
+  downtimeFixedDays   Int
+  monthlyLicenseDelta Float
+  maintenanceSaving   Float
+  slaRiskPercent      Float
+  capexDecisions      PoCapexDecision[]
+  slaEvents           SlaEvent[]
+}
+
+model User {
+  id                  String              @id @default(uuid())
+  name                String
+  email               String              @unique
+  passwordHash        String
+  role                UserRole
+  refreshTokenHash    String?
+  createdAt           DateTime            @default(now())
+  twoFactorEnabled    Boolean             @default(false)
+  twoFactorSecret     String?
+  auditLogs           AuditLog[]
+  playerRoundStatuses PlayerRoundStatus[]
+  transfers           PlayerTransfer[]
+  facilitatedSessions Session[]
+  storeMembers        StoreMember[]
+  quizAnswers         UserQuizAnswer[]
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Session {
+  id                  String                  @id @default(uuid())
+  name                String
+  status              SessionStatus           @default(SETUP)
+  facilitatorId       String
+  totalDemand         Float
+  initialCash         Float                   @default(700000)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  disponibilidade     Int[]                   @default([])
+  elapsedBeforePause  Int                     @default(0)
+  timerDuration       Int?
+  timerEnabled        Boolean                 @default(false)
+  timerPausedAt       DateTime?
+  timerStartedAt      DateTime?
+  baseLicenseCost     Float                   @default(1200)
+  cashierSalary       Float                   @default(1000)
+  maintenanceCost     Float                   @default(400)
+  serviceSalary       Float                   @default(1200)
+  playerRoundStatuses PlayerRoundStatus[]
+  playerTransfers     PlayerTransfer[]
+  quizQuestions       QuizQuestion[]
+  randomEvents        RandomEvent[]
+  roundResults        RoundResult[]
+  facilitator         User                    @relation(fields: [facilitatorId], references: [id])
+  categoryConfigs     SessionCategoryConfig[]
+  slaEvents           SlaEvent[]
+  stores              Store[]
+  userQuizAnswers     UserQuizAnswer[]
+}
+
+model SessionCategoryConfig {
+  id             String   @id @default(uuid())
+  sessionId      String
+  categoryId     String
+  stockAvailable Int
+  category       Category @relation(fields: [categoryId], references: [id])
+  session        Session  @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, categoryId])
+}
+
+model Store {
+  id              String            @id @default(uuid())
+  sessionId       String
+  name            String
+  accessCode      String            @unique
+  createdAt       DateTime          @default(now())
+  plans           OperationalPlan[]
+  transfersFrom   PlayerTransfer[]  @relation("TransferFrom")
+  transfersTo     PlayerTransfer[]  @relation("TransferTo")
+  quizAnswers     QuizAnswer[]
+  randomEvents    RandomEvent[]
+  roundResults    RoundResult[]
+  slaEvents       SlaEvent[]
+  session         Session           @relation(fields: [sessionId], references: [id])
+  members         StoreMember[]
+  userQuizAnswers UserQuizAnswer[]
+}
+
+model StoreMember {
+  id       String    @id @default(uuid())
+  storeId  String
+  userId   String
+  role     StoreRole
+  joinedAt DateTime  @default(now())
+  store    Store     @relation(fields: [storeId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@unique([storeId, role])
+  @@unique([storeId, userId])
+}
+
+model OperationalPlan {
+  id                String               @id @default(uuid())
+  storeId           String
+  configVersion     Int
+  cashierOperators  Int
+  serviceOperators  Int
+  confirmed         Boolean              @default(false)
+  confirmedAt       DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  store             Store                @relation(fields: [storeId], references: [id])
+  capexDecisions    PoCapexDecision[]
+  categoryDecisions PoCategoryDecision[]
+
+  @@unique([storeId, configVersion])
+}
+
+model PoCategoryDecision {
+  id             String          @id @default(uuid())
+  planId         String
+  categoryId     String
+  stockPurchased Int
+  priceMargin    Float
+  category       Category        @relation(fields: [categoryId], references: [id])
+  plan           OperationalPlan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, categoryId])
+}
+
+model PoCapexDecision {
+  id            String          @id @default(uuid())
+  planId        String
+  capexOptionId String
+  implemented   Boolean         @default(false)
+  capexOption   CapexOption     @relation(fields: [capexOptionId], references: [id])
+  plan          OperationalPlan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, capexOptionId])
+}
+
+model QuizQuestion {
+  id          String           @id @default(uuid())
+  sessionId   String
+  round       Int
+  prompt      String
+  order       Int
+  createdAt   DateTime         @default(now())
+  options     QuizOption[]
+  session     Session          @relation(fields: [sessionId], references: [id])
+  userAnswers UserQuizAnswer[]
+
+  @@unique([sessionId, round, order])
+}
+
+model QuizOption {
+  id          String           @id @default(uuid())
+  questionId  String
+  label       String
+  isCorrect   Boolean          @default(false)
+  question    QuizQuestion     @relation(fields: [questionId], references: [id])
+  userAnswers UserQuizAnswer[]
+}
+
+model UserQuizAnswer {
+  id         String       @id @default(uuid())
+  sessionId  String
+  storeId    String
+  userId     String
+  questionId String
+  optionId   String
+  round      Int
+  isCorrect  Boolean
+  answeredAt DateTime     @default(now())
+  option     QuizOption   @relation(fields: [optionId], references: [id])
+  question   QuizQuestion @relation(fields: [questionId], references: [id])
+  session    Session      @relation(fields: [sessionId], references: [id])
+  store      Store        @relation(fields: [storeId], references: [id])
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, questionId, round])
+}
+
+model QuizAnswer {
+  id              String   @id @default(uuid())
+  storeId         String
+  round           Int
+  totalQuestions  Int
+  correctAnswers  Int
+  scorePercentage Float
+  createdAt       DateTime @default(now())
+  store           Store    @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, round])
+}
+
+model RoundResult {
+  id               String   @id @default(uuid())
+  storeId          String
+  sessionId        String
+  round            Int
+  csat             Float
+  availability     Float
+  basketPrice      Float
+  rankScore        Int
+  demandShare      Float
+  grossRevenue     Float
+  taxAmount        Float
+  netRevenue       Float
+  costOfGoods      Float
+  breakageAmount   Float
+  agingAmount      Float
+  payrollCost      Float
+  maintenanceCost  Float
+  licenseCost      Float
+  interestCost     Float
+  slaRevenueLost   Float
+  ebitda           Float
+  ebitdaPercentage Float
+  cashUsed         Float
+  createdAt        DateTime @default(now())
+  randomEventCost  Float    @default(0)
+  session          Session  @relation(fields: [sessionId], references: [id])
+  store            Store    @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, round])
+}
+
+model SlaEvent {
+  id            String      @id @default(uuid())
+  sessionId     String
+  storeId       String
+  capexOptionId String
+  round         Int
+  occurred      Boolean
+  daysDown      Int
+  revenueLost   Float
+  createdAt     DateTime    @default(now())
+  capexOption   CapexOption @relation(fields: [capexOptionId], references: [id])
+  session       Session     @relation(fields: [sessionId], references: [id])
+  store         Store       @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, capexOptionId, round])
+}
+
+model RandomEvent {
+  id         String          @id @default(uuid())
+  sessionId  String
+  storeId    String
+  round      Int
+  eventType  RandomEventType
+  occurred   Boolean
+  impactData Json
+  createdAt  DateTime        @default(now())
+  session    Session         @relation(fields: [sessionId], references: [id])
+  store      Store           @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, round, eventType])
+}
+
+model PlayerTransfer {
+  id            String    @id @default(uuid())
+  sessionId     String
+  userId        String
+  fromStoreId   String
+  toStoreId     String
+  role          StoreRole
+  transferredAt DateTime  @default(now())
+  fromStore     Store     @relation("TransferFrom", fields: [fromStoreId], references: [id])
+  session       Session   @relation(fields: [sessionId], references: [id])
+  toStore       Store     @relation("TransferTo", fields: [toStoreId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+model PlayerRoundStatus {
+  id            String    @id @default(uuid())
+  sessionId     String
+  userId        String
+  round         Int
+  status        String    @default("IN_PROGRESS")
+  finishedAt    DateTime?
+  remainingTime Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  session       Session   @relation(fields: [sessionId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@unique([sessionId, userId, round])
+}
 
 enum UserRole {
   FACILITATOR
@@ -69,391 +378,4 @@ enum RandomEventType {
   CLIMATE_EVENT
   INPUT_COST_INCREASE
   DEMAND_SURGE
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SEED / REFERÊNCIA
-// Populados pelo seed.ts — nunca alterados por usuários em runtime.
-// ─────────────────────────────────────────────────────────────────────────────
-
-model Category {
-  id             String       @id @default(uuid())
-  name           CategoryName @unique
-  unitCost       Float
-  taxRate        Float // ex.: 0.12 = 12%
-  breakageRate   Float // aplicado só no fim da rodada 3
-  agingRate      Float // aplicado só no fim da rodada 3
-  stockAvailable Int // estoque total disponível por sessão (padrão)
-
-  sessionConfigs    SessionCategoryConfig[]
-  categoryDecisions PoCategoryDecision[]
-}
-
-model CapexOption {
-  id                  String    @id @default(uuid())
-  name                String
-  type                CapexType @unique
-  acquisitionCost     Float
-  downtimeFixedDays   Int // dias fixos da fórmula: diasParados = downtimeFixedDays + SLA_TABLE[serviceOps]
-  monthlyLicenseDelta Float // acréscimo à licença base de R$500/mês
-  maintenanceSaving   Float // FREEZER = 400; demais = 0
-  slaRiskPercent      Float // probabilidade de incidente por rodada (ex.: 0.15 = 15%)
-
-  capexDecisions PoCapexDecision[]
-  slaEvents      SlaEvent[]
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTH / USUÁRIO
-// ─────────────────────────────────────────────────────────────────────────────
-
-model User {
-  id               String   @id @default(uuid())
-  name             String
-  email            String   @unique
-  passwordHash     String
-  role             UserRole
-  refreshTokenHash String? // armazenado hasheado; null quando não há sessão ativa
-  twoFactorEnabled Boolean  @default(false) // MFA ativado par este usuário
-  twoFactorSecret  String? // secret TOTP armazenado criptografado (nullable até ativar)
-  createdAt        DateTime @default(now())
-
-  facilitatedSessions Session[]
-  storeMembers        StoreMember[]
-  quizAnswers         UserQuizAnswer[]
-  transfers           PlayerTransfer[]
-  auditLogs           AuditLog[]
-  playerRoundStatuses PlayerRoundStatus[]
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AUDIT LOG
-// Registra eventos de autenticação por usuário.
-// ─────────────────────────────────────────────────────────────────────────────
-
-model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action    String // LOGIN_SUCCESS | LOGIN_FAILED | LOGOUT | TWO_FA_ENABLED | TWO_FA_VERIFIED
-  metadata  Json? // contexto extra: { email?, reason? }
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([createdAt])
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SESSÃO / JOGO
-// ─────────────────────────────────────────────────────────────────────────────
-
-model Session {
-  id              String        @id @default(uuid())
-  name            String
-  status          SessionStatus @default(SETUP)
-  facilitatorId   String
-  facilitator     User          @relation(fields: [facilitatorId], references: [id])
-  totalDemand     Float // demanda total da sessão distribuída entre as lojas
-  initialCash     Float         @default(700000) // R$700.000 por loja; configurável pelo facilitador
-  disponibilidade Int[]         @default([]) // estoque disponível por categoria, ex: [600, 1500, 200, 1500]
-
-  // Parâmetros de custo do Plano Operacional — definidos pelo Facilitador na criação da sessão
-  cashierSalary   Float @default(1000) // R$/mês por operador de caixa
-  serviceSalary   Float @default(1200) // R$/mês por operador de serviço
-  baseLicenseCost Float @default(1200) // custo base de licenças de software (OS+PDV+Site+Segurança)
-  maintenanceCost Float @default(400)  // custo fixo de manutenção (zerado se FREEZER implementado)
-
-  // Timer / Cronômetro da rodada atual
-  timerEnabled       Boolean   @default(false)
-  timerDuration      Int? // em segundos
-  timerStartedAt     DateTime?
-  timerPausedAt      DateTime?
-  elapsedBeforePause Int       @default(0) // segundos acumulados antes do último pause
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  stores              Store[]
-  categoryConfigs     SessionCategoryConfig[]
-  quizQuestions       QuizQuestion[]
-  userQuizAnswers     UserQuizAnswer[]
-  slaEvents           SlaEvent[]
-  randomEvents        RandomEvent[]
-  playerTransfers     PlayerTransfer[]
-  roundResults        RoundResult[]
-  playerRoundStatuses PlayerRoundStatus[]
-}
-
-// Sobrescreve stockAvailable padrão do Category para uma sessão específica.
-// Criado pelo facilitador na configuração da sessão.
-model SessionCategoryConfig {
-  id             String   @id @default(uuid())
-  sessionId      String
-  session        Session  @relation(fields: [sessionId], references: [id])
-  categoryId     String
-  category       Category @relation(fields: [categoryId], references: [id])
-  stockAvailable Int
-
-  @@unique([sessionId, categoryId])
-}
-
-model Store {
-  id         String   @id @default(uuid())
-  sessionId  String
-  session    Session  @relation(fields: [sessionId], references: [id])
-  name       String
-  accessCode String   @unique
-  createdAt  DateTime @default(now())
-
-  members         StoreMember[]
-  plans           OperationalPlan[]
-  quizAnswers     QuizAnswer[]
-  userQuizAnswers UserQuizAnswer[]
-  roundResults    RoundResult[]
-  slaEvents       SlaEvent[]
-  randomEvents    RandomEvent[]
-  transfersFrom   PlayerTransfer[]  @relation("TransferFrom")
-  transfersTo     PlayerTransfer[]  @relation("TransferTo")
-}
-
-// Vínculo atual jogador ↔ loja. Atualizado na transferência de jogadores.
-model StoreMember {
-  id       String    @id @default(uuid())
-  storeId  String
-  store    Store     @relation(fields: [storeId], references: [id])
-  userId   String
-  user     User      @relation(fields: [userId], references: [id])
-  role     StoreRole
-  joinedAt DateTime  @default(now())
-
-  @@unique([storeId, role]) // cada papel existe uma única vez por loja
-  @@unique([storeId, userId]) // jogador só ocupa um papel por loja
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PLANO OPERACIONAL (PO)
-// configVersion 1 → rodada 1 | configVersion 2 → rodadas 2 e 3
-// ─────────────────────────────────────────────────────────────────────────────
-
-model OperationalPlan {
-  id               String    @id @default(uuid())
-  storeId          String
-  store            Store     @relation(fields: [storeId], references: [id])
-  configVersion    Int // 1 ou 2
-  cashierOperators Int // decisão do Gerente Operacional
-  serviceOperators Int // decisão do Gerente de Serviços
-  confirmed        Boolean   @default(false)
-  confirmedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  categoryDecisions PoCategoryDecision[]
-  capexDecisions    PoCapexDecision[]
-
-  @@unique([storeId, configVersion])
-}
-
-// Decisão de estoque (unidades) e margem comercial por categoria.
-model PoCategoryDecision {
-  id             String          @id @default(uuid())
-  planId         String
-  plan           OperationalPlan @relation(fields: [planId], references: [id])
-  categoryId     String
-  category       Category        @relation(fields: [categoryId], references: [id])
-  stockPurchased Int // SEMPRE em unidades, nunca em R$
-  priceMargin    Float // ex.: 0.30 = 30% sobre custo unitário
-
-  @@unique([planId, categoryId])
-}
-
-// Decisão de implementar (ou não) cada CAPEX.
-model PoCapexDecision {
-  id            String          @id @default(uuid())
-  planId        String
-  plan          OperationalPlan @relation(fields: [planId], references: [id])
-  capexOptionId String
-  capexOption   CapexOption     @relation(fields: [capexOptionId], references: [id])
-  implemented   Boolean         @default(false)
-
-  @@unique([planId, capexOptionId])
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// QUIZ
-// Spec completa: docs/agent/QUIZ.md
-// ─────────────────────────────────────────────────────────────────────────────
-
-model QuizQuestion {
-  id        String   @id @default(uuid())
-  sessionId String
-  session   Session  @relation(fields: [sessionId], references: [id])
-  round     Int
-  prompt    String
-  order     Int
-  createdAt DateTime @default(now())
-
-  options     QuizOption[]
-  userAnswers UserQuizAnswer[]
-
-  @@unique([sessionId, round, order])
-}
-
-model QuizOption {
-  id         String       @id @default(uuid())
-  questionId String
-  question   QuizQuestion @relation(fields: [questionId], references: [id])
-  label      String
-  isCorrect  Boolean      @default(false)
-
-  userAnswers UserQuizAnswer[]
-}
-
-// Resposta individual de um jogador (1 por questão por rodada).
-// isCorrect é calculado e persistido no momento da submissão.
-model UserQuizAnswer {
-  id         String       @id @default(uuid())
-  sessionId  String
-  session    Session      @relation(fields: [sessionId], references: [id])
-  storeId    String
-  store      Store        @relation(fields: [storeId], references: [id])
-  userId     String
-  user       User         @relation(fields: [userId], references: [id])
-  questionId String
-  question   QuizQuestion @relation(fields: [questionId], references: [id])
-  optionId   String
-  option     QuizOption   @relation(fields: [optionId], references: [id])
-  round      Int
-  isCorrect  Boolean
-  answeredAt DateTime     @default(now())
-
-  @@unique([userId, questionId, round])
-}
-
-// Score consolidado da loja (média dos membros). Lido pelo CsatService.
-// Gerado após todos os membros responderem; default scorePercentage = 0.
-model QuizAnswer {
-  id              String   @id @default(uuid())
-  storeId         String
-  store           Store    @relation(fields: [storeId], references: [id])
-  round           Int
-  totalQuestions  Int
-  correctAnswers  Int
-  scorePercentage Float // 0–100
-  createdAt       DateTime @default(now())
-
-  @@unique([storeId, round])
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ENGINE / RESULTADOS
-// RoundResult é persistido pelo engine e NUNCA recalculado a partir de histórico.
-// ─────────────────────────────────────────────────────────────────────────────
-
-model RoundResult {
-  id        String  @id @default(uuid())
-  storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
-  sessionId String
-  session   Session @relation(fields: [sessionId], references: [id])
-  round     Int
-
-  // ── Indicadores de demanda ──────────────────────────────────────────────
-  csat         Float // (cashierOperators / 10) * (quizScore / 100)
-  availability Float // média ponderada: storeStockPurchased / totalStockAvailable por categoria
-  basketPrice  Float // preço médio ponderado da cesta
-  rankScore    Int // soma dos ranks (3–12); soma total das 4 lojas sempre = 30
-  demandShare  Float // rankScore / totalRankScore de todas as lojas
-
-  // ── DRE ─────────────────────────────────────────────────────────────────
-  grossRevenue     Float // Σ (qtdVendida × preçoDeVenda) por categoria
-  taxAmount        Float // Σ (receita bruta categoria × taxRate)
-  netRevenue       Float // grossRevenue - taxAmount
-  costOfGoods      Float // Σ (qtdVendida × unitCost)
-  breakageAmount   Float // só rodada 3; sobre estoque total não vendido acumulado
-  agingAmount      Float // só rodada 3; sobre estoque total não vendido acumulado
-  payrollCost      Float // (cashierOps × 1000) + (serviceOps × 1200)
-  maintenanceCost  Float // 400 se FREEZER não implementado; 0 se implementado
-  licenseCost      Float // 500 base + Σ monthlyLicenseDelta dos CAPEXs implementados
-  interestCost     Float // MAX(0, cashUsed - 700000) × 0.12
-  slaRevenueLost     Float // Σ SlaEvent.revenueLost desta loja/rodada
-  randomEventCost    Float @default(0) // multas + downtime de eventos aleatórios
-  ebitda             Float // netRevenue - (COGS + quebras + aging + payroll + manutenção + licenças + juros + SLA + eventos)
-  ebitdaPercentage   Float // ebitda / grossRevenue
-
-  // ── Auxiliares ───────────────────────────────────────────────────────────
-  cashUsed  Float // total gasto no PO desta configuração
-  createdAt DateTime @default(now())
-
-  @@unique([storeId, round])
-}
-
-// Evento de incidente SLA por CAPEX não implementado, por loja, por rodada.
-// occurred pode ser false (sorteado mas não disparou) para auditoria determinística.
-model SlaEvent {
-  id            String      @id @default(uuid())
-  sessionId     String
-  session       Session     @relation(fields: [sessionId], references: [id])
-  storeId       String
-  store         Store       @relation(fields: [storeId], references: [id])
-  capexOptionId String
-  capexOption   CapexOption @relation(fields: [capexOptionId], references: [id])
-  round         Int
-  occurred      Boolean // true = incidente disparou; false = não disparou nesta rodada
-  daysDown      Int // downtimeFixedDays + SLA_TABLE[serviceOperators]; 0 se !occurred
-  revenueLost   Float // (grossRevenue / 30) × daysDown; 0 se !occurred
-  createdAt     DateTime    @default(now())
-
-  @@unique([storeId, capexOptionId, round])
-}
-
-// Evento aleatório por loja por rodada — inclui eventos de sessão replicados por loja.
-model RandomEvent {
-  id         String          @id @default(uuid())
-  sessionId  String
-  session    Session         @relation(fields: [sessionId], references: [id])
-  storeId    String
-  store      Store           @relation(fields: [storeId], references: [id])
-  round      Int
-  eventType  RandomEventType
-  occurred   Boolean
-  impactData Json
-  createdAt  DateTime        @default(now())
-
-  @@unique([storeId, round, eventType])
-}
-
-// Log histórico de transferências obrigatórias entre lojas (após rodada 1).
-// StoreMember é atualizado na transferência; este model é apenas auditoria.
-model PlayerTransfer {
-  id            String    @id @default(uuid())
-  sessionId     String
-  session       Session   @relation(fields: [sessionId], references: [id])
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  fromStoreId   String
-  fromStore     Store     @relation("TransferFrom", fields: [fromStoreId], references: [id])
-  toStoreId     String
-  toStore       Store     @relation("TransferTo", fields: [toStoreId], references: [id])
-  role          StoreRole // papel que o jogador ocupava ao ser transferido
-  transferredAt DateTime  @default(now())
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTROLE DE CONCLUSÃO DA RODADA (TIMER & JOGADOR)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model PlayerRoundStatus {
-  id            String    @id @default(uuid())
-  sessionId     String
-  session       Session   @relation(fields: [sessionId], references: [id])
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  round         Int
-  status        String    @default("IN_PROGRESS") // IN_PROGRESS ou FINISHED
-  finishedAt    DateTime?
-  remainingTime Int? // Segundos restantes no timer no momento do 'finish'
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@unique([sessionId, userId, round])
 }

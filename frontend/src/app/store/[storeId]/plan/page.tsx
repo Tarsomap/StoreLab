@@ -19,6 +19,7 @@ import { Users } from "lucide-react";
 import { usePlan } from "@/features/plan/hooks/use-plan";
 import { useRealtimePlan } from "@/features/plan/hooks/use-realtime-plan";
 import { useRealtimeTimer } from "@/features/session/hooks/use-realtime-timer";
+import { useRoundStarted } from "@/features/session/hooks/use-round-started";
 import { useTimerExpiry } from "@/features/session/hooks/use-timer-expiry";
 import { usePlayerRoundFinish } from "@/features/session/hooks/use-player-round-finish";
 import { TimerDisplay } from "@/features/session/components/TimerDisplay";
@@ -60,6 +61,7 @@ export default function PlanPage() {
   } = usePlan(storeId);
   const timerState = useRealtimeTimer(store?.sessionId);
   const timerExpired = useTimerExpiry(timerState);
+  useRoundStarted(store?.sessionId);
   const { finish: finishRound } = usePlayerRoundFinish();
   const { pendingPayload, dismiss } = useRandomEvents(store?.sessionId ?? '', storeId);
   const { stockAvailMap, fetchStockAvailability } = useStockAvailability();

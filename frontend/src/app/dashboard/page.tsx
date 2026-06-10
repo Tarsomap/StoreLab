@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, LayoutDashboard } from 'lucide-react';
+import { Plus, LayoutDashboard, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -74,9 +74,15 @@ export default function DashboardPage() {
           <h2 className="font-display text-2xl font-bold text-foreground">Minhas Sessões</h2>
           <p className="text-sm text-muted-foreground mt-1">Gerencie as sessões de jogo</p>
         </div>
-        <Button onClick={() => setShowCreate((v) => !v)} className="w-full sm:w-auto">
-          {showCreate ? 'Cancelar' : <><Plus className="h-4 w-4 mr-2" />Nova sessão</>}
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/tutorial')} className="text-muted-foreground hover:text-foreground">
+            <BookOpen className="h-4 w-4 mr-1.5" />
+            Tutorial
+          </Button>
+          <Button onClick={() => setShowCreate((v) => !v)} className="flex-1 sm:flex-none">
+            {showCreate ? 'Cancelar' : <><Plus className="h-4 w-4 mr-2" />Nova sessão</>}
+          </Button>
+        </div>
       </div>
 
       {showCreate && (

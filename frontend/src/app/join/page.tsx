@@ -73,6 +73,13 @@ export default function JoinPage() {
         <p className="text-muted-foreground text-sm font-body">
           Insira o código de 6 caracteres fornecido pelo facilitador
         </p>
+        <button
+          type="button"
+          onClick={() => router.push('/tutorial?role=player')}
+          className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+        >
+          Primeira vez? Veja o tutorial
+        </button>
       </div>
 
       {!loadingMine && (

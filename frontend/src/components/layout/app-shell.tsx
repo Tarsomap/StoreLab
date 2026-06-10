@@ -100,6 +100,17 @@ export default function AppShell({ children, userRole }: AppShellProps) {
         </div>
         <div className="flex items-center gap-3">
           <WsStatusDot />
+          {!showSidebar && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10 hidden sm:flex gap-1.5"
+              onClick={() => router.push('/tutorial')}
+            >
+              <BookOpen className="h-4 w-4" />
+              Tutorial
+            </Button>
+          )}
           <span className="text-sm text-primary-foreground/70 hidden sm:block">
             {user?.name}
           </span>

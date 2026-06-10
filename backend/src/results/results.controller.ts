@@ -29,4 +29,12 @@ export class ResultsController {
   ) {
     return this.resultsService.getStoreRoundResult(storeId, Number(round));
   }
+
+  @Get(":sessionId/events/:round")
+  async getSessionRoundEvents(
+    @Param("sessionId") sessionId: string,
+    @Param("round") round: string,
+  ) {
+    return this.resultsService.getSessionRoundEvents(sessionId, Number(round));
+  }
 }

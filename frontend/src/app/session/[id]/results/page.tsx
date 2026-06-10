@@ -7,10 +7,11 @@
  * 3) Pódio visual por colocação, detalhes por rodada e cores de medalha; facilitador e jogador usam a mesma rota autenticada.
  */
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { Trophy } from 'lucide-react';
+import { Trophy, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ResultsSkeleton } from '@/components/skeletons/results-skeleton';
 import { useResults } from '@/features/results/hooks';
 import {
@@ -29,6 +30,7 @@ import {
 /** Página de ranking final e histórico por loja com atualização em tempo real após cálculos do motor. */
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const sessionId = params.id;
   const { user } = useAuthStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -164,6 +166,29 @@ export default function ResultsPage() {
           ))}
         </div>
       </section>
+
+      {/* ── EVENTOS POR RODADA ────────────────────────────────────────────── */}
+      {ranking.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            Eventos por Rodada
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            {Array.from(new Set(sortedStoreResults.flatMap((s) => s.rounds.map((r) => r.round)))).sort((a, b) => a - b).map((round) => (
+              <Button
+                key={round}
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => router.push(`/session/${sessionId}/rounds/${round}/events`)}
+              >
+                Ver eventos da Rodada {round}
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

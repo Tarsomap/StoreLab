@@ -28,6 +28,8 @@ import { useExecuteRound } from '@/features/session/hooks/use-execute-round';
 import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
 import { SessionActionsMenu } from '@/features/session/components/SessionActionsMenu';
 import { SessionTimerCard } from '@/features/session/components/SessionTimerCard';
+import { StoresReadyBanner } from '@/features/session/components/StoresReadyBanner';
+import { useRealtimeStoreStatus } from '@/features/session/hooks/use-realtime-store-status';
 
 export default function SessionManagementPage() {
   const router = useRouter();
@@ -50,6 +52,8 @@ export default function SessionManagementPage() {
     refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  useRealtimeStoreStatus(sessionId, refetch);
 
   async function handleAdvance() {
     try {
@@ -128,6 +132,8 @@ export default function SessionManagementPage() {
         </CardContent>
       </Card>
 
+      <StoresReadyBanner stores={statusData.stores} status={status} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-0">
@@ -148,6 +154,11 @@ export default function SessionManagementPage() {
               {['ROUND_1', 'RECONFIGURATION', 'ROUND_2', 'ROUND_3', 'FINISHED'].includes(status) && (
                 <Button size="sm" variant="outline" onClick={() => router.push(`/session/${sessionId}/results`)}>
                   Ver Resultados
+                </Button>
+              )}
+              {['ROUND_1', 'RECONFIGURATION', 'ROUND_2', 'ROUND_3', 'FINISHED'].includes(status) && (
+                <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/session/${sessionId}/report`)}>
+                  Relatório Consolidado
                 </Button>
               )}
             </div>
