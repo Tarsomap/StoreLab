@@ -28,6 +28,7 @@ import {
   STATUS_PROGRESS,
 } from '@/features/session/lib/session-phases';
 import type { Session } from '@/features/session/types';
+import { FacilitatorDashboardDialog } from '@/features/tutorial/components/FacilitatorDashboardDialog';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -69,14 +70,18 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-6 sm:px-6 lg:px-0">
+      <FacilitatorDashboardDialog />
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-2xl font-bold text-foreground">Minhas Sessões</h2>
           <p className="text-sm text-muted-foreground mt-1">Gerencie as sessões de jogo</p>
         </div>
-        <Button onClick={() => setShowCreate((v) => !v)} className="w-full sm:w-auto">
-          {showCreate ? 'Cancelar' : <><Plus className="h-4 w-4 mr-2" />Nova sessão</>}
-        </Button>
+        <div id="tutorial-f-create-btn">
+          <Button onClick={() => setShowCreate((v) => !v)} className="w-full sm:w-auto">
+            {showCreate ? 'Cancelar' : <><Plus className="h-4 w-4 mr-2" />Nova sessão</>}
+          </Button>
+        </div>
       </div>
 
       {showCreate && (
@@ -97,7 +102,9 @@ export default function DashboardPage() {
         />
       )}
 
-      <SessionKpiCards kpi={kpi} />
+      <div id="tutorial-f-kpis">
+        <SessionKpiCards kpi={kpi} />
+      </div>
 
       {sessions.length === 0 ? (
         <Card className="shadow-sm border">
@@ -177,7 +184,7 @@ export default function DashboardPage() {
             </Card>
           )}
 
-          <section className="space-y-4" aria-labelledby="active-sessions-heading">
+          <section id="tutorial-f-sessions" className="space-y-4" aria-labelledby="active-sessions-heading">
             <h3 id="active-sessions-heading" className="font-display text-xl font-bold text-foreground">
               Sessões Ativas
             </h3>

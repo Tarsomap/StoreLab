@@ -28,6 +28,9 @@ import { useExecuteRound } from '@/features/session/hooks/use-execute-round';
 import { useQuizRoundProgress } from '@/features/quiz/hooks/use-quiz-round-progress';
 import { SessionActionsMenu } from '@/features/session/components/SessionActionsMenu';
 import { SessionTimerCard } from '@/features/session/components/SessionTimerCard';
+import { FacilitatorSessionModal } from '@/features/tutorial/components/FacilitatorSessionModal';
+import { FacilitatorSessionCoachmarks } from '@/features/tutorial/components/FacilitatorSessionCoachmarks';
+import { useTutorialStore } from '@/features/tutorial/store/tutorial-store';
 
 export default function SessionManagementPage() {
   const router = useRouter();
@@ -39,6 +42,24 @@ export default function SessionManagementPage() {
   const { mutate: executeRound, isLoading: executing, error: executeError } = useExecuteRound(sessionId);
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const { hasSeenTutorialD, isTutorialDOpen, markTutorialDSeen, closeTutorialD } = useTutorialStore();
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [runCoachmarks, setRunCoachmarks] = useState(false);
+
+  useEffect(() => {
+    if (!hasSeenTutorialD && !loading) {
+      setShowTutorialModal(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  useEffect(() => {
+    if (isTutorialDOpen) {
+      setShowTutorialModal(true);
+      closeTutorialD();
+    }
+  }, [isTutorialDOpen, closeTutorialD]);
 
   const actionError = advanceError ?? executeError ?? '';
 
@@ -98,6 +119,16 @@ export default function SessionManagementPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
+      <FacilitatorSessionModal
+        open={showTutorialModal}
+        onFinish={() => { setShowTutorialModal(false); markTutorialDSeen(); setRunCoachmarks(true); }}
+        onSkip={() => { setShowTutorialModal(false); markTutorialDSeen(); }}
+      />
+      <FacilitatorSessionCoachmarks
+        active={runCoachmarks}
+        onDone={() => setRunCoachmarks(false)}
+      />
+
       <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="text-muted-foreground px-0 hover:bg-transparent">
@@ -114,7 +145,7 @@ export default function SessionManagementPage() {
         />
       </div>
 
-      <Card>
+      <Card id="tutorial-f-stepper">
         <CardContent className="pt-5 pb-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
@@ -129,7 +160,7 @@ export default function SessionManagementPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card className="lg:col-span-2">
+        <Card id="tutorial-f-info" className="lg:col-span-2">
           <CardHeader className="pb-0">
             <CardTitle className="text-base font-semibold font-display">Sessão</CardTitle>
           </CardHeader>
@@ -154,7 +185,7 @@ export default function SessionManagementPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-accent">
+        <Card id="tutorial-f-actions" className="border-l-4 border-l-accent">
           <CardHeader className="pb-0">
             <CardTitle className="font-display font-semibold text-sm uppercase tracking-wide">Ações</CardTitle>
           </CardHeader>
@@ -190,7 +221,7 @@ export default function SessionManagementPage() {
         </>
       )}
 
-      <div className="space-y-4">
+      <div id="tutorial-f-stores" className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-base font-semibold text-foreground">Lojas ({storeCount}/4)</h2>
           {canCreateStore && (
