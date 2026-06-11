@@ -40,6 +40,9 @@ import { PlanCapexList } from "@/features/plan/components/PlanCapexList";
 import { PlanConfirmButton } from "@/features/plan/components/PlanConfirmButton";
 import { OperadoresForm } from "@/features/plan/components/OperadoresForm";
 import { useDemandIndicators } from "@/features/plan/hooks/use-demand-indicators";
+import { TutorialBModal } from "@/features/tutorial/components/TutorialBModal";
+import { TutorialBCoachmarks } from "@/features/tutorial/components/TutorialBCoachmarks";
+import { useTutorialStore } from "@/features/tutorial/store/tutorial-store";
 
 /** Tela colaborativa do PO: decisões por papel, DRE e sincronização em tempo re
 al da loja. */
@@ -74,6 +77,16 @@ export default function PlanPage() {
     error: saveCatError,
   } = useSaveCategoryDecision();
   const { mutate: confirmPlan } = useConfirmPlan();
+
+  const {
+    hasSeenTutorialB,
+    isTutorialBOpen,
+    markTutorialBSeen,
+    closeTutorialB,
+  } = useTutorialStore();
+
+  const [showTutorialBModal, setShowTutorialBModal] = useState(false);
+  const [runCoachmarks, setRunCoachmarks] = useState(false);
 
   const effectiveRound = sessionRound ?? plan?.configVersion;
   const { data: demandIndicators } = useDemandIndicators(
@@ -148,6 +161,22 @@ export default function PlanPage() {
     finPrevRef.current = { e, c };
   }, [plan, store, dre]);
 
+  // Auto-trigger Tutorial B on first visit (after data loads)
+  useEffect(() => {
+    if (!hasSeenTutorialB && plan && store) {
+      setShowTutorialBModal(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.id, store?.id]);
+
+  // Re-open Tutorial B via Help button
+  useEffect(() => {
+    if (isTutorialBOpen) {
+      setShowTutorialBModal(true);
+      closeTutorialB();
+    }
+  }, [isTutorialBOpen, closeTutorialB]);
+
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   async function handleMutate(path: string, body: unknown) {
@@ -219,6 +248,25 @@ export default function PlanPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5 pb-10">
+      <TutorialBModal
+        open={showTutorialBModal}
+        onFinish={() => {
+          setShowTutorialBModal(false);
+          setRunCoachmarks(true);
+        }}
+        onSkip={() => {
+          setShowTutorialBModal(false);
+          markTutorialBSeen();
+        }}
+      />
+      <TutorialBCoachmarks
+        active={runCoachmarks}
+        onDone={() => {
+          setRunCoachmarks(false);
+          markTutorialBSeen();
+        }}
+      />
+
       {pendingPayload && (
         <RandomEventModal
           round={pendingPayload.round}
@@ -281,22 +329,24 @@ export default function PlanPage() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-5 items-start">
-        <div className="xl:sticky xl:top-[72px]">
+        <div id="tutorial-dre" className="xl:sticky xl:top-[72px]">
           <PlanDreSummary dre={dre} />
         </div>
 
         <div className="space-y-4">
-          <PlanCategoryTable
-            rows={rows}
-            plan={plan}
-            stockAvailMap={stockAvailMap}
-            editable={editable}
-            saving={saving}
-            onCategoryDecision={handleCategoryDecision}
-            onMutate={handleMutate}
-          />
+          <div id="tutorial-category-table">
+            <PlanCategoryTable
+              rows={rows}
+              plan={plan}
+              stockAvailMap={stockAvailMap}
+              editable={editable}
+              saving={saving}
+              onCategoryDecision={handleCategoryDecision}
+              onMutate={handleMutate}
+            />
+          </div>
 
-          <Card className="shadow-sm">
+          <Card id="tutorial-operators" className="shadow-sm">
             <div className="flex items-center gap-2 px-4 py-3 bg-muted/30">
               <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
                 <Users className="h-3.5 w-3.5 text-primary" />
@@ -322,21 +372,25 @@ export default function PlanPage() {
             </CardContent>
           </Card>
 
-          <PlanCapexList
-            capexDecisions={plan.capexDecisions}
-            planId={plan.id}
-            editable={editable}
-            saving={saving}
-            onMutate={handleMutate}
-          />
+          <div id="tutorial-capex">
+            <PlanCapexList
+              capexDecisions={plan.capexDecisions}
+              planId={plan.id}
+              editable={editable}
+              saving={saving}
+              onMutate={handleMutate}
+            />
+          </div>
 
-          <PlanConfirmButton
-            myRole={myRole}
-            plan={plan}
-            saving={saving}
-            confirmState={confirmState}
-            onConfirm={handleConfirm}
-          />
+          <div id="tutorial-confirm">
+            <PlanConfirmButton
+              myRole={myRole}
+              plan={plan}
+              saving={saving}
+              confirmState={confirmState}
+              onConfirm={handleConfirm}
+            />
+          </div>
         </div>
       </div>
     </div>
