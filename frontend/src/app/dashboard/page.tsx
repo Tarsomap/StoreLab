@@ -107,7 +107,7 @@ export default function DashboardPage() {
       </div>
 
       {sessions.length === 0 ? (
-        <Card className="shadow-sm border">
+        <Card id="tutorial-f-sessions" className="shadow-sm border">
           <CardContent className="py-16 px-6 text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
               <LayoutDashboard className="h-7 w-7" aria-hidden />

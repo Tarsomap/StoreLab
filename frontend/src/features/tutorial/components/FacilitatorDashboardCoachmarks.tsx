@@ -34,7 +34,7 @@ const COACHMARK_STEPS = [
     popover: {
       title: 'Sessões Ativas',
       description:
-        'Todas as partidas em andamento aparecem aqui. Clique em qualquer card para acessar a gestão da sessão — criar lojas, avançar fases e acompanhar os POs.',
+        'Suas partidas em andamento vão aparecer aqui. Clique em qualquer uma para acessar a gestão da sessão — criar lojas, avançar fases e acompanhar os POs.',
       side: 'top' as const,
       align: 'start' as const,
     },
