@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Loader2, RotateCcw, Send, Sparkles, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -26,10 +26,7 @@ const SUGGESTIONS = [
   'O que impactou meu caixa?',
 ];
 
-function providerLabel(message: AssistantMessage) {
-  if (!message.provider || message.provider === 'none') return null;
-  return `${message.provider}${message.model ? ` · ${message.model}` : ''}`;
-}
+
 
 function renderInlineMarkdown(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
@@ -45,43 +42,96 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   });
 }
 
+type Segment =
+  | { type: 'heading'; level: number; text: string; key: string }
+  | { type: 'list'; items: string[]; key: string }
+  | { type: 'para'; text: string; key: string };
+
+function parseSegments(content: string): Segment[] {
+  const lines = content.split('\n');
+  const segments: Segment[] = [];
+  let listBuffer: string[] = [];
+  let segIndex = 0;
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    segments.push({ type: 'list', items: [...listBuffer], key: `seg-${segIndex++}` });
+    listBuffer = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      flushList();
+      segments.push({
+        type: 'heading',
+        level: headingMatch[1].length,
+        text: headingMatch[2],
+        key: `seg-${segIndex++}`,
+      });
+      continue;
+    }
+
+    if (line.startsWith('- ')) {
+      listBuffer.push(line.slice(2));
+      continue;
+    }
+
+    flushList();
+    if (line !== '') {
+      segments.push({ type: 'para', text: line, key: `seg-${segIndex++}` });
+    }
+  }
+
+  flushList();
+  return segments;
+}
+
 function AssistantMarkdown({ content }: { content: string }) {
-  const blocks = content
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
+  const segments = parseSegments(content);
 
   return (
-    <div className="space-y-3 text-sm leading-relaxed">
-      {blocks.map((block, blockIndex) => {
-        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-        const isList = lines.every((line) => line.startsWith('- '));
-        const key = `${blockIndex}-${block.slice(0, 16)}`;
-
-        if (isList) {
+    <div className="space-y-2 text-sm leading-relaxed">
+      {segments.map((seg) => {
+        if (seg.type === 'heading') {
+          const cls =
+            seg.level === 1
+              ? 'font-display text-base font-bold text-foreground mt-1'
+              : seg.level === 2
+                ? 'font-display text-sm font-bold text-foreground mt-1'
+                : 'text-sm font-semibold text-foreground mt-1';
           return (
-            <ul key={key} className="space-y-2 pl-1">
-              {lines.map((line, lineIndex) => (
-                <li key={`${key}-${lineIndex}`} className="flex gap-2">
+            <p key={seg.key} className={cls}>
+              {renderInlineMarkdown(seg.text)}
+            </p>
+          );
+        }
+
+        if (seg.type === 'list') {
+          return (
+            <ul key={seg.key} className="space-y-1.5 pl-1">
+              {seg.items.map((item, i) => (
+                <li key={`${seg.key}-${i}`} className="flex gap-2">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
-                  <span>{renderInlineMarkdown(line.slice(2))}</span>
+                  <span>{renderInlineMarkdown(item)}</span>
                 </li>
               ))}
             </ul>
           );
         }
 
-        const isFormula = block.includes('=') && block.length <= 120;
-
+        const isFormula = seg.text.includes('=') && seg.text.length <= 120;
         return (
           <p
-            key={key}
+            key={seg.key}
             className={cn(
               'whitespace-pre-wrap',
               isFormula && 'rounded-lg bg-muted px-3 py-2 font-mono text-xs text-foreground',
             )}
           >
-            {renderInlineMarkdown(block)}
+            {renderInlineMarkdown(seg.text)}
           </p>
         );
       })}
@@ -188,47 +238,30 @@ export function AssistantPanel({
             </div>
           )}
 
-          {messages.map((message) => {
-            const label = providerLabel(message);
-            return (
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                'flex',
+                message.role === 'user' ? 'justify-end' : 'justify-start',
+              )}
+            >
               <div
-                key={message.id}
                 className={cn(
-                  'flex',
-                  message.role === 'user' ? 'justify-end' : 'justify-start',
+                  'rounded-xl px-3 py-2 shadow-sm',
+                  message.role === 'user'
+                    ? 'max-w-[86%] bg-primary text-sm text-primary-foreground'
+                    : 'max-w-[94%] border bg-card text-card-foreground sm:max-w-[92%]',
                 )}
               >
-                <div
-                  className={cn(
-                    'rounded-xl px-3 py-2 shadow-sm',
-                    message.role === 'user'
-                      ? 'max-w-[86%] bg-primary text-sm text-primary-foreground'
-                      : 'max-w-[94%] border bg-card text-card-foreground sm:max-w-[92%]',
-                  )}
-                >
-                  {message.role === 'assistant' ? (
-                    <AssistantMarkdown content={message.content} />
-                  ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-                  )}
-                  {message.role === 'assistant' && (label || message.fallbackUsed) && (
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/70 pt-2">
-                      {label && (
-                        <Badge variant="secondary" className="font-mono text-[10px] font-medium">
-                          {label}
-                        </Badge>
-                      )}
-                      {message.fallbackUsed && (
-                        <Badge variant="warning" className="text-[10px] font-medium">
-                          fallback
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {message.role === 'assistant' ? (
+                  <AssistantMarkdown content={message.content} />
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                )}
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {isLoading && (
             <div className="flex justify-start">

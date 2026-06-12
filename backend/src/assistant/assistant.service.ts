@@ -111,7 +111,7 @@ export class AssistantService {
     private readonly prisma: PrismaService,
     private readonly resultsService: ResultsService,
     private readonly llmService: LlmService,
-  ) {}
+  ) { }
 
   async ask(
     dto: AskAssistantDto,
@@ -270,11 +270,11 @@ export class AssistantService {
       `Lojas na sessão: ${session.stores.map((store) => store.name).join(", ") || "nenhuma"}`,
       ranking.length > 0
         ? `Ranking atual: ${ranking
-            .map(
-              (entry) =>
-                `${entry.rank}. ${entry.storeName} EBITDA total R$ ${Math.round(entry.totalEbitda)} (${(entry.avgEbitdaPercentage * 100).toFixed(1)}% médio)`,
-            )
-            .join("; ")}`
+          .map(
+            (entry) =>
+              `${entry.rank}. ${entry.storeName} EBITDA total R$ ${Math.round(entry.totalEbitda)} (${(entry.avgEbitdaPercentage * 100).toFixed(1)}% médio)`,
+          )
+          .join("; ")}`
         : "Ranking atual: ainda sem resultados consolidados.",
     ];
 
