@@ -4,7 +4,7 @@
  * Em 401 tenta renovar com `/auth/refresh` uma vez — assim o jogador não cai do app só porque o JWT curto expirou.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
 // Preenchido pelo authStore ao carregar do localStorage, login ou logout.
 

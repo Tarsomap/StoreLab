@@ -25,10 +25,10 @@ export function HelpButton() {
 
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="sm"
       onClick={handleClick}
-      className="border-primary-foreground/30 text-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground gap-1.5 rounded-xl"
+      className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground gap-1.5 rounded-xl"
       aria-label="Ajuda / Tutorial"
     >
       <HelpCircle className="w-4 h-4" />
