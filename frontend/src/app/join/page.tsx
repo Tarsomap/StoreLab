@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useJoinSession } from '@/features/auth/hooks/use-join-session';
+import { TutorialADialog } from '@/features/tutorial/components/TutorialADialog';
 import { OtpInput } from '@/features/auth/components/OtpInput';
 import { JoinSuccessScreen } from '@/features/auth/components/JoinSuccessScreen';
 import { MyStoresList } from '@/features/auth/components/MyStoresList';
@@ -55,6 +56,7 @@ export default function JoinPage() {
 
   return (
     <div className="max-w-lg mx-auto py-4 space-y-7">
+      <TutorialADialog />
       <div className="text-center space-y-2">
         <div
           className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-1"
@@ -93,7 +95,7 @@ export default function JoinPage() {
             </div>
           )}
 
-          <div className="space-y-3">
+          <div id="tutorial-otp" className="space-y-3">
             <Label className="text-sm font-medium text-foreground block text-center">
               Código de acesso
             </Label>
@@ -106,7 +108,7 @@ export default function JoinPage() {
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div id="tutorial-role" className="space-y-1.5">
             <Label htmlFor="store-role" className="text-sm font-medium text-foreground">
               Seu papel na loja
             </Label>
@@ -129,6 +131,7 @@ export default function JoinPage() {
             </div>
           </div>
 
+          <div id="tutorial-submit">
           <Button
             type="submit"
             className="w-full h-11 font-semibold rounded-xl text-sm"
@@ -146,6 +149,7 @@ export default function JoinPage() {
               'Entrar na loja'
             )}
           </Button>
+          </div>
         </form>
       </div>
     </div>
