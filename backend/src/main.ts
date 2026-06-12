@@ -1,8 +1,11 @@
+import { config } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
+
+config({ override: true });
 
 async function bootstrap() {
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
