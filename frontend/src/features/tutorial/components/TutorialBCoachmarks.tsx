@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { Driver } from 'driver.js';
 
 interface TutorialBCoachmarksProps {
   active: boolean;
@@ -71,11 +72,12 @@ export function TutorialBCoachmarks({ active, onDone }: TutorialBCoachmarksProps
     activeRef.current = true;
 
     let destroyed = false;
+    let driverObj: Driver | null = null;
 
     import('driver.js').then(({ driver }) => {
       if (destroyed) return;
 
-      const driverObj = driver({
+      driverObj = driver({
         showProgress: true,
         nextBtnText: 'Próximo →',
         prevBtnText: '← Anterior',
@@ -89,16 +91,12 @@ export function TutorialBCoachmarks({ active, onDone }: TutorialBCoachmarksProps
       });
 
       driverObj.drive();
-
-      return () => {
-        destroyed = true;
-        try { driverObj.destroy(); } catch { /* already destroyed */ }
-      };
     });
 
     return () => {
       destroyed = true;
       activeRef.current = false;
+      try { driverObj?.destroy(); } catch { /* already destroyed */ }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
