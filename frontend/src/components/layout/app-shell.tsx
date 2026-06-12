@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { LayoutDashboard, Store, BookOpen, ArrowLeft, Menu, X, FileText, Settings } from 'lucide-react';
 import { WsStatusDot } from '@/components/layout/ws-status-dot';
+import { HelpButton } from '@/features/tutorial/components/HelpButton';
 
 type UserRole = 'FACILITATOR' | 'PLAYER';
 
@@ -100,6 +101,7 @@ export default function AppShell({ children, userRole }: AppShellProps) {
         </div>
         <div className="flex items-center gap-3">
           <WsStatusDot />
+          <HelpButton />
           <span className="text-sm text-primary-foreground/70 hidden sm:block">
             {user?.name}
           </span>
