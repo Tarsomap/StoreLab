@@ -289,3 +289,38 @@ Ocorre após a Rodada 1, antes das Rodadas 2 e 3.
 - Estrutura de banco de dados → `plan.md`
 - Contratos de API → `plan.md`
 - Autenticação e gerenciamento de sessão → `plan.md`
+
+---
+
+## 11. Assistente de IA sob demanda
+
+O Assistente StoreLab é uma camada de apoio ao aprendizado. Ele responde dúvidas
+sob demanda sobre o funcionamento do jogo, sessões, rodadas, papéis, Plano
+Operacional (PO), indicadores e resultados já gravados.
+
+### 11.1 Escopo permitido
+
+O assistente pode explicar:
+- regras do jogo, fluxo da sessão e responsabilidades do facilitador;
+- papéis dos jogadores e funcionamento das lojas;
+- quiz, CSAT, demanda, disponibilidade, preço da cesta e ranking;
+- EBITDA, caixa, custos, CAPEX, impostos, salários, manutenção, licenças, SLA,
+  quebras e aging;
+- indicadores atuais da loja ou sessão quando esses dados já existirem no banco.
+
+Perguntas fora do escopo do StoreLab devem receber recusa educada.
+
+### 11.2 Regras anti-recálculo
+
+- O motor de cálculo continua sendo a única fonte de verdade dos resultados.
+- A IA nunca recalcula EBITDA, CSAT, demanda, impostos ou qualquer indicador.
+- A IA só interpreta números persistidos em resultados, PO, sessão, loja e ranking.
+- Se faltar dado no contexto, a IA deve dizer que não tem o dado em vez de inventar.
+- O módulo do assistente deve ser isolado do motor e não pode importar nem chamar
+  o `EngineModule`.
+
+### 11.3 Interface esperada
+
+- Backend: endpoint autenticado `POST /assistant/ask`.
+- Frontend: chat flutuante contextual em rotas autenticadas.
+- Provider de IA: OpenAI como principal, Groq como fallback de disponibilidade.
