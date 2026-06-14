@@ -83,6 +83,34 @@ const ALLOWED_TERMS = [
   "transferência",
   "transferencia",
   "varejo",
+  // Termos de domínio adicionais: o filtro é um pré-gate barato; a recusa
+  // final cabe ao modelo. Estes reduzem falsos negativos em perguntas
+  // legítimas que não citam um dos termos acima.
+  "receita",
+  "lucro",
+  "prejuízo",
+  "prejuizo",
+  "custo",
+  "custos",
+  "venda",
+  "vendas",
+  "cliente",
+  "clientes",
+  "satisfação",
+  "satisfacao",
+  "disponibilidade",
+  "cesta",
+  "freezer",
+  "quebra",
+  "quebras",
+  "valor",
+  "valores",
+  "percentual",
+  "financeiro",
+  "financeira",
+  "pontuação",
+  "pontuacao",
+  "storelab",
 ];
 
 const GAME_RULES_PROMPT = [
@@ -111,7 +139,7 @@ export class AssistantService {
     private readonly prisma: PrismaService,
     private readonly resultsService: ResultsService,
     private readonly llmService: LlmService,
-  ) { }
+  ) {}
 
   async ask(
     dto: AskAssistantDto,
@@ -278,7 +306,18 @@ export class AssistantService {
         : "Ranking atual: ainda sem resultados consolidados.",
     ];
 
-    const storesForContext = selectedStore ? [selectedStore] : session.stores;
+    // Jogador só enxerga o detalhamento (PO, CAPEX, resultados por rodada) das
+    // lojas de que é membro. Sem isso, perguntar apenas com sessionId exporia
+    // estoque, margem e estratégia das lojas concorrentes. O ranking acima é
+    // público e segue visível para todos.
+    const visibleStores =
+      user.role === UserRole.PLAYER
+        ? session.stores.filter((store) =>
+            store.members.some((member) => member.userId === user.sub),
+          )
+        : session.stores;
+
+    const storesForContext = selectedStore ? [selectedStore] : visibleStores;
     for (const store of storesForContext) {
       const plan = store.plans[0];
       lines.push(`Loja ${store.name}: ${store.members.length} membros.`);

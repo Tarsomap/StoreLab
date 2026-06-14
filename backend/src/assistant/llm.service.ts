@@ -60,7 +60,7 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 const DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const MAX_RETRY_AFTER_MS = 3_000;
-const DEFAULT_MAX_COMPLETION_TOKENS = 420;
+const DEFAULT_MAX_COMPLETION_TOKENS = 700;
 const REASONING_EFFORTS = new Set<ReasoningEffort>([
   "none",
   "minimal",

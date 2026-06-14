@@ -220,4 +220,47 @@ describe("AssistantService", () => {
       expect.objectContaining({ where: { id: "session-1" } }),
     );
   });
+
+  it("does not leak rival store details to a player asking with sessionId only", async () => {
+    const rivalStore = {
+      id: "store-2",
+      name: "Loja Rival",
+      members: [{ userId: "player-2", role: StoreRole.STORE_MANAGER }],
+      plans: [
+        {
+          configVersion: 1,
+          cashierOperators: 9,
+          serviceOperators: 5,
+          confirmed: true,
+          categoryDecisions: [],
+          capexDecisions: [
+            {
+              implemented: true,
+              capexOption: {
+                name: "SegredoDaLojaRival",
+                acquisitionCost: 99999,
+                monthlyLicenseDelta: 0,
+              },
+            },
+          ],
+        },
+      ],
+      roundResults: [],
+    };
+    prisma.session.findUnique.mockResolvedValue({
+      ...sessionContext,
+      stores: [...sessionContext.stores, rivalStore],
+    });
+
+    await service.ask(
+      { sessionId: "session-1", question: "Como está meu EBITDA na rodada?" },
+      user,
+    );
+
+    const systemPrompt = llmService.ask.mock.calls[0][0].systemPrompt;
+    // A loja do próprio jogador continua detalhada...
+    expect(systemPrompt).toContain("Loja Loja A");
+    // ...mas o PO/CAPEX da loja concorrente não pode vazar no contexto.
+    expect(systemPrompt).not.toContain("SegredoDaLojaRival");
+  });
 });

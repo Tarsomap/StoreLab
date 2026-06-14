@@ -116,7 +116,7 @@ npm run start:dev     # API em http://localhost:3001/api
 Variáveis do assistente no `backend/.env`:
 ```env
 ASSISTANT_PROVIDER_ORDER="openai,groq"
-ASSISTANT_MAX_TOKENS="420"
+ASSISTANT_MAX_TOKENS="700"
 ASSISTANT_TEMPERATURE="0.2"
 ASSISTANT_REASONING_EFFORT="minimal"
 
