@@ -179,8 +179,49 @@ export default function PlanPage() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
+  // Atualização otimista de uma decisão de categoria: escreve os novos valores
+  // no estado imediatamente, antes do round-trip HTTP. Sem isso, um evento
+  // plan:updated de outro jogador chegando enquanto o save está em voo
+  // sobrescreve o prop com dado obsoleto, e o useEffect do StockInput/MarginInput
+  // reseta o draft para o valor antigo. Com o setPlan síncrono o value prop já
+  // reflete o valor digitado, tornando o reset inofensivo.
+  function withOptimisticCategory(
+    current: PlanFullResponse,
+    categoryId: string,
+    stockPurchased: number,
+    priceMargin: number,
+  ): PlanFullResponse {
+    return {
+      ...current,
+      categoryDecisions: current.categoryDecisions.map((d) =>
+        d.categoryId === categoryId
+          ? { ...d, stockPurchased, priceMargin, lineCost: stockPurchased * d.unitCost }
+          : d,
+      ),
+    };
+  }
+
   async function handleMutate(path: string, body: unknown) {
     if (!plan) return;
+    // Mesmo motivo da atualização otimista acima, para os caminhos genéricos:
+    // workforce (operadores) e a margem comercial (que comita via /category-decision).
+    if (path.endsWith("workforce")) {
+      const wf = body as { cashierOperators: number; serviceOperators: number };
+      setPlan({
+        ...plan,
+        cashierOperators: wf.cashierOperators,
+        serviceOperators: wf.serviceOperators,
+      });
+    } else if (path.endsWith("category-decision")) {
+      const cd = body as {
+        categoryId: string;
+        stockPurchased: number;
+        priceMargin: number;
+      };
+      setPlan(
+        withOptimisticCategory(plan, cd.categoryId, cd.stockPurchased, cd.priceMargin),
+      );
+    }
     try {
       const updated = await savePlan(path, body);
       setPlan(updated);
@@ -195,6 +236,7 @@ export default function PlanPage() {
     priceMargin: number,
   ) {
     if (!plan || !store) return;
+    setPlan(withOptimisticCategory(plan, categoryId, stockPurchased, priceMargin));
     try {
       const updated = await saveCategoryDecision({
         planId: plan.id,
