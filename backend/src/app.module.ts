@@ -10,6 +10,7 @@ import { EngineModule } from './engine/engine.module';
 import { ResultsModule } from './results/results.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
+import { AssistantModule } from './assistant/assistant.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuditLogModule } from './audit-log/audit-log.module';
     ResultsModule,
     GatewayModule,
     AuditLogModule,
+    AssistantModule,
   ],
 })
 export class AppModule {}

@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { LayoutDashboard, Store, BookOpen, ArrowLeft, Menu, X, FileText, Settings } from 'lucide-react';
 import { WsStatusDot } from '@/components/layout/ws-status-dot';
 import { HelpButton } from '@/features/tutorial/components/HelpButton';
+import { AssistantLauncher } from '@/features/assistant/components/AssistantLauncher';
 
 type UserRole = 'FACILITATOR' | 'PLAYER';
 
@@ -222,6 +223,7 @@ export default function AppShell({ children, userRole }: AppShellProps) {
           {children}
         </div>
       </div>
+      <AssistantLauncher />
     </div>
   );
 }

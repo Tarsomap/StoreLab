@@ -7,12 +7,12 @@
 
 ## 📌 Sobre o Projeto
 
-Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando decisões operacionais (estoque, pricing, equipe e CAPEX). O motor de cálculo processa CSAT, demanda, quebras, aging, SLA e EBITDA, gerando ranking automático.
+Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando decisões operacionais (estoque, pricing, equipe e CAPEX). O motor de cálculo processa CSAT, demanda, quebras, aging, SLA e EBITDA, gerando ranking automático. O Assistente StoreLab explica regras e indicadores sob demanda sem recalcular resultados.
 
 ### Como funciona em 3 passos
 1. **Facilitador** cria uma sessão, configura parâmetros e cadastra perguntas do quiz
 2. **Times de 5 jogadores** respondem o quiz e preenchem o Plano Operacional (PO) colaborativamente em tempo real
-3. **Motor de cálculo** processa os números ao executar a rodada e atualiza o ranking
+3. **Motor de cálculo** processa os números ao executar a rodada e atualiza o ranking; o assistente contextual ajuda a interpretar o jogo e os indicadores
 
 ---
 
@@ -27,6 +27,7 @@ Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando dec
 | Frontend | Next.js 14 (App Router) |
 | UI | Tailwind CSS + shadcn/ui |
 | Autenticação | JWT + Refresh Token + MFA TOTP |
+| IA | OpenAI SDK com OpenAI primário e Groq como fallback |
 
 ---
 
@@ -37,6 +38,7 @@ Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando dec
 | Backend MVP (10 módulos, 72 testes, 100% cobertura no engine) | ✅ Estabilizado |
 | Frontend completo (6 features colocalizadas, zero `api.*` em `app/`) | ✅ Refatorado (Sprint 2) |
 | MFA / 2FA TOTP + audit log | ✅ Em produção |
+| Assistente explicador com OpenAI/Groq e chat flutuante | ✅ Implementado |
 | CRUD completo de Sessions (DELETE + PATCH) | ✅ Entregue |
 | CRUD de Stores (DELETE + EDIT) | 🔄 Planejado |
 | Features Fase C (eventos aleatórios, timer, PDF, gráficos ao vivo) | ⏳ Aguardando validação com parceiro |
@@ -82,6 +84,7 @@ Carregadas seletivamente conforme o arquivo aberto:
 | [`docs/agent/spec.md`](docs/agent/spec.md) | **Fonte da verdade** — constantes, fórmulas, fluxo do jogo (v1.1, validada com parceiro) |
 | [`docs/agent/plan.md`](docs/agent/plan.md) | Decisões técnicas, schema, contratos REST, eventos WebSocket |
 | [`docs/agent/QUIZ.md`](docs/agent/QUIZ.md) | Spec completa do módulo Quiz |
+| [`docs/ASSISTANT.md`](docs/ASSISTANT.md) | Arquitetura, envs, API e troubleshooting do Assistente StoreLab |
 
 ### Histórico (`docs/archive/`)
 Documentos de processos consumados — referência apenas:
@@ -105,8 +108,26 @@ cp .env.example .env  # preencher JWT_SECRET, JWT_REFRESH_SECRET, DATABASE_URL
 docker compose up -d  # sobe o postgres
 npm install
 npx prisma migrate dev
-npm run db:seed
+npm run seed
+npm run seed:demo     # opcional: dados de demonstração
 npm run start:dev     # API em http://localhost:3001/api
+```
+
+Variáveis do assistente no `backend/.env`:
+```env
+ASSISTANT_PROVIDER_ORDER="openai,groq"
+ASSISTANT_MAX_TOKENS="700"
+ASSISTANT_TEMPERATURE="0.2"
+ASSISTANT_REASONING_EFFORT="minimal"
+
+OPENAI_API_KEY=""
+ASSISTANT_MODEL="gpt-4o-mini"
+ASSISTANT_FALLBACK_MODELS="gpt-4.1-mini,gpt-4o,gpt-4.1-nano,gpt-5-mini,gpt-5.4-mini,gpt-5.4-nano"
+
+GROQ_API_KEY=""
+GROQ_MODEL="llama-3.1-8b-instant"
+GROQ_FALLBACK_MODELS="meta-llama/llama-4-scout-17b-16e-instruct,llama-3.3-70b-versatile,qwen/qwen3-32b,openai/gpt-oss-20b,openai/gpt-oss-120b,groq/compound-mini"
+GROQ_BASE_URL="https://api.groq.com/openai/v1"
 ```
 
 ### Frontend
@@ -117,15 +138,40 @@ npm install
 npm run dev           # UI em http://localhost:3000
 ```
 
+O chatbot fica disponível em rotas autenticadas como painel flutuante contextual.
+
 ### Credenciais do seed demo
 - Facilitador: `facilitador@retail.game` / `senha123`
 - Jogadores: `jogador01@retail.game` até `jogador24@retail.game` / `senha123`
 
-### Sessões criadas pelo `db:seed`
+### Sessões criadas pelo `seed:demo`
 1. **Demo Completa** (FINISHED) — 3 rodadas com ranking pronto
 2. **Em Andamento** (RECONFIGURATION) — rodada 1 concluída
 3. **Aguardando POs** (ROUND_1_CONFIG) — 4 lojas, POs em preenchimento
 4. **Sessão Nova** (SETUP) — vazia, sem lojas
+
+### API do assistente
+```http
+POST /api/assistant/ask
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "sessionId": "opcional",
+  "storeId": "opcional",
+  "question": "Como funciona o CSAT?"
+}
+```
+
+Resposta:
+```json
+{
+  "answer": "Texto do assistente",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "fallbackUsed": false
+}
+```
 
 ---
 

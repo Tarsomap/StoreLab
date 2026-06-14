@@ -28,7 +28,7 @@ Repositório: github.com/Tarsomap/retail-game-platform
 ### ✅ MVP — 100% Implementado e Testado
 Todos os módulos backend (10) e frontend estão implementados, compilando limpo, e testados end-to-end.
 
-**Backend (build limpo, 72 testes no engine):**
+**Backend (build limpo, 72 testes no engine + testes do assistente):**
 - Auth: register, login, refresh, JWT guards, roles
 - Users: findById, findByEmail
 - Sessions: CRUD, state machine (SETUP → ROUND_1_CONFIG → ROUND_1 → RECONFIGURATION → ROUND_2 → ROUND_3 → FINISHED), invite codes
@@ -39,6 +39,7 @@ Todos os módulos backend (10) e frontend estão implementados, compilando limpo
 - Results: round results, ranking por %EBITDA, caixa final
 - Gateway: WebSocket com 7 eventos
 - Transfer: movimentação obrigatória 1-2 jogadores por loja
+- Assistant: explicador sob demanda com OpenAI primário, Groq fallback, escopo fechado e sem dependência do EngineModule
 
 **Frontend (compilando limpo):**
 - Login, Register (toggle Facilitador/Jogador)
@@ -49,6 +50,7 @@ Todos os módulos backend (10) e frontend estão implementados, compilando limpo
 - PO: layout 2 colunas (DRE + decisões), estoque/pricing/operadores/CAPEX
 - Quiz do jogador: responder perguntas, ver score
 - Resultados: ranking final com medalhas, EBITDA%, caixa final, breakdown
+- Assistente StoreLab: chat flutuante contextual no AppShell para rotas autenticadas
 
 **7 correções da empresa parceira já aplicadas.**
 
@@ -138,6 +140,16 @@ NÃO usar logo/nome da empresa parceira em nenhuma tela.
 - docs/agent/spec.md — regras de negócio validadas (fonte da verdade)
 - docs/agent/plan.md — decisões técnicas e schema
 - docs/agent/QUIZ.md — spec do quiz
+- docs/ASSISTANT.md — arquitetura, envs, fallback e troubleshooting do assistente
+
+## Assistente StoreLab
+
+- O assistente é uma camada de apoio ao aprendizado: explica regras, sessões, rodadas, PO, indicadores e resultados já gravados.
+- O backend usa OpenAI como provider principal e Groq como reserva via cliente compatível com OpenAI.
+- O assistente NUNCA recalcula EBITDA, CSAT, demanda, impostos ou qualquer indicador; ele só interpreta dados persistidos.
+- O módulo `assistant` não deve importar nem chamar `EngineModule` ou serviços de cálculo.
+- Chaves de OpenAI/Groq ficam somente no `backend/.env`; nunca expor em frontend, docs com valores reais ou commits.
+- A UI do chat fica em `frontend/src/features/assistant` e é renderizada pelo `AppShell` nas rotas autenticadas.
 
 ## Code Quality Rules
 - Nunca usar `any`

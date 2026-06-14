@@ -51,6 +51,7 @@ retail-game-platform/
 │   │   │   ├── financial.service.ts
 │   │   │   └── sla.service.ts
 │   │   ├── results/        # Round results & ranking
+│   │   ├── assistant/      # IA explicadora sob demanda, isolada do motor
 │   │   ├── gateway/        # Socket.io gateway
 │   │   ├── seed/           # Categories & CAPEX options seed data
 │   │   └── common/         # Shared guards, pipes, DTOs
@@ -61,6 +62,7 @@ retail-game-platform/
     ├── src/
     │   ├── app/             # Next.js App Router
     │   ├── components/      # UI components (shadcn/ui based)
+    │   ├── features/assistant # Chat flutuante contextual do Assistente StoreLab
     │   ├── hooks/           # Custom React hooks (useSocket, usePlan, etc.)
     │   ├── lib/             # API client, socket client, utils
     │   └── stores/          # Zustand global state
@@ -358,6 +360,53 @@ POST   /engine/run-round            → disparar cálculo da rodada (facilitador
 ```
 GET    /results/:sessionId          → todos os resultados por rodada
 GET    /results/:sessionId/ranking  → ranking por % EBITDA
+```
+
+### Assistant
+```
+POST   /assistant/ask                → explicação sob demanda sobre jogo, sessão, loja e indicadores
+```
+
+Request:
+```json
+{
+  "sessionId": "opcional",
+  "storeId": "opcional",
+  "question": "Por que meu EBITDA caiu?"
+}
+```
+
+Response:
+```json
+{
+  "answer": "texto do assistente",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "fallbackUsed": false
+}
+```
+
+Regras:
+- Protegido por JWT.
+- O assistente explica dados já persistidos de sessão, loja, PO, ranking e resultados.
+- Não importa nem chama o `EngineModule`; não recalcula indicadores.
+- Perguntas fora do escopo do jogo recebem recusa educada.
+
+Variáveis de ambiente:
+```env
+ASSISTANT_PROVIDER_ORDER="openai,groq"
+ASSISTANT_MAX_TOKENS="700"
+ASSISTANT_TEMPERATURE="0.2"
+ASSISTANT_REASONING_EFFORT="minimal"
+
+OPENAI_API_KEY=""
+ASSISTANT_MODEL="gpt-4o-mini"
+ASSISTANT_FALLBACK_MODELS="gpt-4.1-mini,gpt-4o,gpt-4.1-nano,gpt-5-mini,gpt-5.4-mini,gpt-5.4-nano"
+
+GROQ_API_KEY=""
+GROQ_MODEL="llama-3.1-8b-instant"
+GROQ_FALLBACK_MODELS="meta-llama/llama-4-scout-17b-16e-instruct,llama-3.3-70b-versatile,qwen/qwen3-32b,openai/gpt-oss-20b,openai/gpt-oss-120b,groq/compound-mini"
+GROQ_BASE_URL="https://api.groq.com/openai/v1"
 ```
 
 ---
