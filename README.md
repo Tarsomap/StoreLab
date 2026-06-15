@@ -3,6 +3,18 @@
 > Plataforma web gamificada que digitaliza a dinâmica presencial de gestão de loja de varejo.
 > **Residência em Software II — Squad 14 | Universidade Tiradentes**
 
+**🔗 Demo ao vivo:** [store-lab-plum.vercel.app](https://store-lab-plum.vercel.app)
+
+![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Socket.io-4-010101?logo=socket.io&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss&logoColor=white)
+![Engine](https://img.shields.io/badge/engine-113%20testes%20%7C%20100%25%20cobertura-3FB950)
+![Deploy](https://img.shields.io/badge/deploy-Railway%20%2B%20Vercel-0B0D0E)
+
 ---
 
 ## 📌 Sobre o Projeto
@@ -27,7 +39,10 @@ Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando dec
 | Frontend | Next.js 14 (App Router) |
 | UI | Tailwind CSS + shadcn/ui |
 | Autenticação | JWT + Refresh Token + MFA TOTP |
-| IA | OpenAI SDK com OpenAI primário e Groq como fallback |
+| IA | OpenAI SDK v6 (OpenAI primário, Groq como fallback) |
+| Onboarding | driver.js (coachmarks/tour guiado) |
+| Gráficos | Recharts |
+| Deploy | Railway (backend + Postgres) + Vercel (frontend) |
 
 ---
 
@@ -35,15 +50,21 @@ Sistema multiplayer em tempo real onde 4 lojas competem em 3 rodadas tomando dec
 
 | Camada | Estado |
 |---|---|
-| Backend MVP (10 módulos, 72 testes, 100% cobertura no engine) | ✅ Estabilizado |
-| Frontend completo (6 features colocalizadas, zero `api.*` em `app/`) | ✅ Refatorado (Sprint 2) |
+| Backend (12 módulos NestJS, 113 testes no engine, 100% cobertura) | ✅ Estabilizado |
+| Frontend completo (10 features colocalizadas, zero `api.*` em `app/`) | ✅ Refatorado (Sprint 2) |
 | MFA / 2FA TOTP + audit log | ✅ Em produção |
 | Assistente explicador com OpenAI/Groq e chat flutuante | ✅ Implementado |
 | CRUD completo de Sessions (DELETE + PATCH) | ✅ Entregue |
-| CRUD de Stores (DELETE + EDIT) | 🔄 Planejado |
-| Features Fase C (eventos aleatórios, timer, PDF, gráficos ao vivo) | ⏳ Aguardando validação com parceiro |
+| CRUD de Stores (DELETE + EDIT) + swap recíproco de jogadores | ✅ Entregue |
+| Eventos aleatórios por rodada (com relação CAPEX ↔ evento) | ✅ Implementado |
+| Timer de rodada em tempo real (WebSocket) | ✅ Implementado |
+| Custos do Plano Operacional na sessão | ✅ Implementado |
+| Gráficos ao vivo (demanda + histórico de performance) | ✅ Implementado |
+| Tutorial/onboarding guiado (facilitador + jogador) | ✅ Implementado |
+| Deploy de produção (Railway + Vercel) | ✅ Preparado |
+| Export de resultados em PDF | ⏳ Planejado |
 
-Última atualização: maio/2026.
+Última atualização: junho/2026.
 
 ---
 
@@ -133,7 +154,9 @@ GROQ_BASE_URL="https://api.groq.com/openai/v1"
 ### Frontend
 ```bash
 cd frontend
-cp .env.example .env.local  # preencher NEXT_PUBLIC_API_URL=http://localhost:3001
+cp .env.example .env.local
+# NEXT_PUBLIC_API_URL=http://localhost:3001/api   (com /api)
+# NEXT_PUBLIC_WS_URL=http://localhost:3001        (sem /api)
 npm install
 npm run dev           # UI em http://localhost:3000
 ```
@@ -172,6 +195,41 @@ Resposta:
   "fallbackUsed": false
 }
 ```
+
+---
+
+## 🧪 Testes
+
+O motor de cálculo (`backend/src/engine`) é o coração do jogo e tem **113 testes (Jest) com 100% de cobertura** — CSAT, demanda, quebras/aging, SLA, financeiro/EBITDA e eventos aleatórios. Qualquer alteração no engine exige TDD (ver [`.claude/rules/engine.md`](.claude/rules/engine.md)).
+
+```bash
+cd backend
+npm test              # roda toda a suíte (Jest)
+npm run test:watch    # modo watch
+npm run test:cov      # cobertura
+npm run test:e2e      # testes end-to-end
+```
+
+> O frontend ainda não possui testes automatizados; a validação é manual + `npm run lint`.
+
+---
+
+## ☁️ Deploy
+
+Produção em duas plataformas (decisão da Fase D):
+
+| Plataforma | O que roda | Root Directory |
+|---|---|---|
+| **Railway** | Backend NestJS + PostgreSQL | `backend` |
+| **Vercel** | Frontend Next.js (free tier) | `frontend` |
+
+- `backend/railway.json`: build via Nixpacks, `prisma migrate deploy` no pre-deploy e `npm run start:prod` na inicialização.
+- `backend/package.json` tem `postinstall: prisma generate` (sem ele o build na plataforma quebra).
+- O backend faz bind em `0.0.0.0:$PORT` e lê CORS HTTP + WS de `FRONTEND_URL`.
+- **Env Railway:** `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`, `FRONTEND_URL` (= URL da Vercel), `OPENAI_API_KEY`, `GROQ_API_KEY`.
+- **Env Vercel:** `NEXT_PUBLIC_API_URL` = `<url-railway>/api` (com `/api`), `NEXT_PUBLIC_WS_URL` = `<url-railway>` (sem `/api`).
+- **Ordem:** backend primeiro → frontend → setar `FRONTEND_URL` no backend (fecha o CORS).
+- Pós-deploy: rodar `npm run seed` no shell da Railway (constantes de negócio: categorias + CAPEX); `seed:demo` é opcional.
 
 ---
 
