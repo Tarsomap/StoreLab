@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { useSessionStatus } from '@/features/transfers/hooks/use-session-status';
 import { useTransfersSummary } from '@/features/transfers/hooks/use-transfers-summary';
 import { useCreateTransfer } from '@/features/transfers/hooks/use-create-transfer';
+import { useCreateSwap } from '@/features/transfers/hooks/use-create-swap';
 import { TransferSummaryCard } from '@/features/transfers/components/TransferSummaryCard';
 import { TransferForm } from '@/features/transfers/components/TransferForm';
+import { SwapForm, type SwapMemberOption } from '@/features/transfers/components/SwapForm';
 
 export default function SessionTransfersPage() {
   const params = useParams<{ id: string }>();
@@ -19,10 +21,14 @@ export default function SessionTransfersPage() {
   const { data: summary, isLoading: loadingSummary, error: summaryError, refetch: refetchSummary } =
     useTransfersSummary(sessionId);
   const { mutate: createTransfer, isLoading: submitting, error: transferError } = useCreateTransfer();
+  const { mutate: createSwap, isLoading: swapping, error: swapError } = useCreateSwap();
 
   const [sourceStoreId, setSourceStoreId] = useState('');
   const [userId, setUserId] = useState('');
   const [targetStoreId, setTargetStoreId] = useState('');
+
+  const [swapUserAId, setSwapUserAId] = useState('');
+  const [swapUserBId, setSwapUserBId] = useState('');
 
   const loading = loadingStatus || loadingSummary;
   const error = statusError ?? summaryError ?? '';
@@ -59,6 +65,41 @@ export default function SessionTransfersPage() {
       await Promise.all([refetchStatus(), refetchSummary()]);
     } catch {
       // error exposed via transferError from hook
+    }
+  }
+
+  // Swap escolhe jogadores (não loja-destino), então achatamos todos os membros transferíveis com a loja de origem.
+  const swapCandidatesA = useMemo<SwapMemberOption[]>(() => {
+    if (!statusData) return [];
+    return statusData.stores.flatMap((store) =>
+      store.members
+        .filter((m) => m.role !== 'STORE_MANAGER')
+        .map((m) => ({ ...m, storeId: store.storeId, storeName: store.storeName })),
+    );
+  }, [statusData]);
+
+  const selectedSwapA = useMemo(
+    () => swapCandidatesA.find((m) => m.userId === swapUserAId) ?? null,
+    [swapCandidatesA, swapUserAId],
+  );
+
+  // Jogador 2: mesmo papel do Jogador 1 e em loja diferente — espelha a regra do backend.
+  const swapCandidatesB = useMemo<SwapMemberOption[]>(() => {
+    if (!selectedSwapA) return [];
+    return swapCandidatesA.filter(
+      (m) => m.role === selectedSwapA.role && m.storeId !== selectedSwapA.storeId,
+    );
+  }, [swapCandidatesA, selectedSwapA]);
+
+  async function handleSwap() {
+    if (!swapUserAId || !swapUserBId) return;
+    try {
+      await createSwap({ sessionId, userAId: swapUserAId, userBId: swapUserBId });
+      setSwapUserAId('');
+      setSwapUserBId('');
+      await Promise.all([refetchStatus(), refetchSummary()]);
+    } catch {
+      // error exposed via swapError from hook
     }
   }
 
@@ -113,6 +154,20 @@ export default function SessionTransfersPage() {
         onUserChange={(v) => { setUserId(v); setTargetStoreId(''); }}
         onTargetChange={setTargetStoreId}
         onTransfer={handleTransfer}
+      />
+
+      <SwapForm
+        candidatesA={swapCandidatesA}
+        candidatesB={swapCandidatesB}
+        userAId={swapUserAId}
+        userBId={swapUserBId}
+        selectedA={selectedSwapA}
+        canTransfer={canTransfer}
+        submitting={swapping}
+        actionError={swapError}
+        onUserAChange={(v) => { setSwapUserAId(v); setSwapUserBId(''); }}
+        onUserBChange={setSwapUserBId}
+        onSwap={handleSwap}
       />
     </div>
   );
