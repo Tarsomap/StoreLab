@@ -1,12 +1,16 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 /**
- * Campo de margem em percentual (0–500 na UI = 0%–500% em decimal no plano); confirma no `blur`.
+ * Campo de margem em percentual (0–500 na UI = 0%–500% em decimal no plano); confirma no `blur` ou ao pressionar Enter.
  * Props: `value` em fração (ex.: 0,15), `disabled`, `onCommit`, classes da categoria.
- * Papel no jogo: o Commercial Manager define markup sobre custo; valores ficam separados do componente da página para reutilizar a mesma lógica de rascunho/commit.
+ * Papel no jogo: o Commercial Manager define markup sobre custo.
+ *
+ * Mesma estratégia do StockInput: `editing` só vale enquanto o campo está focado;
+ * fora do foco o input mostra sempre `value`, evitando que a margem salva "suma"
+ * da célula após um plan:updated.
  */
 export function MarginInput({
   value,
@@ -19,8 +23,16 @@ export function MarginInput({
   onCommit: (v: number) => void;
   catInputClass?: string;
 }) {
-  const [draft, setDraft] = useState(String(Math.round(value * 100)));
-  useEffect(() => setDraft(String(Math.round(value * 100))), [value]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const display = editing ?? String(Math.round(value * 100));
+
+  function commit() {
+    if (editing === null) return;
+    const trimmed = editing.trim();
+    const v = Number(trimmed) / 100;
+    if (trimmed !== '' && !isNaN(v) && v !== value) onCommit(v);
+    setEditing(null);
+  }
 
   return (
     <div className="flex items-center justify-end gap-0.5">
@@ -28,11 +40,12 @@ export function MarginInput({
         type="number"
         min={0}
         max={500}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const v = Number(draft) / 100;
-          if (!isNaN(v) && v !== value) onCommit(v);
+        value={display}
+        onFocus={() => setEditing(String(Math.round(value * 100)))}
+        onChange={(e) => setEditing(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
         }}
         disabled={disabled}
         className={cn(

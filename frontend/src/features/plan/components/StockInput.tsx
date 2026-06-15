@@ -1,12 +1,18 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 /**
- * Campo numérico de compra de estoque por categoria; ao sair do campo (`blur`), envia o valor para o pai se mudou.
+ * Campo numérico de compra de estoque por categoria; confirma no `blur` ou ao pressionar Enter.
  * Props: `value` atual, `disabled` conforme papel/PO confirmado, `onCommit`, `maxAvailable` (estoque compartilhado), `catInputClass` (cor da categoria).
  * Papel no jogo: o Supply Manager ajusta quantidades respeitando o que ainda resta no pool da sessão; aviso visual se passar do disponível.
+ *
+ * `editing` guarda o texto digitado APENAS enquanto o campo está focado. Fora do
+ * foco o input exibe sempre `value` (a fonte da verdade vinda do plano), então o
+ * valor salvo nunca "some" da célula — mesmo que um evento plan:updated chegue
+ * logo após o commit. O padrão anterior (draft local sincronizado por useEffect)
+ * podia desincronizar e limpar a célula.
  */
 export function StockInput({
   value,
@@ -21,11 +27,20 @@ export function StockInput({
   maxAvailable?: number;
   catInputClass?: string;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const display = editing ?? String(value);
 
-  const draftNum = Number(draft);
-  const overLimit = maxAvailable !== undefined && !isNaN(draftNum) && draftNum > maxAvailable;
+  const draftNum = Number(display);
+  const overLimit =
+    maxAvailable !== undefined && !isNaN(draftNum) && draftNum > maxAvailable;
+
+  function commit() {
+    if (editing === null) return;
+    const trimmed = editing.trim();
+    const v = Number(trimmed);
+    if (trimmed !== '' && !isNaN(v) && v !== value) onCommit(v);
+    setEditing(null);
+  }
 
   return (
     <div>
@@ -33,11 +48,12 @@ export function StockInput({
         type="number"
         min={0}
         max={maxAvailable}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const v = Number(draft);
-          if (!isNaN(v) && v !== value) onCommit(v);
+        value={display}
+        onFocus={() => setEditing(String(value))}
+        onChange={(e) => setEditing(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
         }}
         disabled={disabled}
         className={cn(
