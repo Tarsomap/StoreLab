@@ -4,8 +4,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { StoresService } from './stores.service';
+import { SwapDto } from './dto/swap.dto';
 import { TransferDto } from './dto/transfer.dto';
-import { TransferResponse, TransferSessionSummary } from './interfaces/store.interface';
+import {
+  SwapResponse,
+  TransferResponse,
+  TransferSessionSummary,
+} from './interfaces/store.interface';
 
 /**
  * Endpoint REST aninhado na sessão: `POST /sessions/:sessionId/transfers`.
@@ -28,6 +33,19 @@ export class SessionTransferController {
     @Body() dto: TransferDto,
   ): Promise<TransferResponse> {
     return this.storesService.transfer(sessionId, dto);
+  }
+
+  /**
+   * Troca recíproca de dois jogadores de mesmo papel entre duas lojas (caso de lojas cheias), só na RECONFIGURATION.
+   * Espelha o padrão do endpoint de transferência, mas resolve o impasse de swap movendo os dois ao mesmo tempo.
+   */
+  @Post(':sessionId/swaps')
+  @Roles(UserRole.FACILITATOR)
+  swap(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: SwapDto,
+  ): Promise<SwapResponse> {
+    return this.storesService.swap(sessionId, dto);
   }
 
   /**

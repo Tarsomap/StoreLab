@@ -56,6 +56,27 @@ export interface TransferResponse {
 }
 
 /**
+ * Um dos dois sentidos registrados numa troca recíproca (A→B e B→A).
+ */
+export interface SwapMovement {
+  transferId: string;
+  userId: string;
+  fromStoreId: string;
+  toStoreId: string;
+  transferredAt: Date;
+}
+
+/**
+ * Confirmação após o facilitador trocar dois jogadores de mesmo papel entre duas lojas (swap atômico).
+ * Os dois sentidos viram dois registros de transferência — assim a regra de saídas por loja continua contando certo.
+ */
+export interface SwapResponse {
+  /** Papel compartilhado pelos dois jogadores trocados (o swap exige papéis iguais). */
+  role: StoreRole;
+  transfers: SwapMovement[];
+}
+
+/**
  * Status de transferências por loja para validar regra obrigatória na fase de reconfiguração.
  */
 export interface TransferSummaryEntry {
