@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatBrl } from '@/lib/format-brl';
 import { RandomEventOccurrence } from '../types';
+import { getProtectingCapexLabels } from '../capex-protection';
 
 interface RandomEventModalProps {
   round: number;
@@ -77,6 +78,7 @@ export function RandomEventModal({ round, events, onClose }: RandomEventModalPro
         <div className="space-y-3 py-2">
           {events.map((event, idx) => {
             const positive = isPositiveEvent(event.type);
+            const protectingCapex = getProtectingCapexLabels(event.type);
             return (
               <div key={event.type}>
                 {idx > 0 && <Separator className="mb-3" />}
@@ -96,6 +98,14 @@ export function RandomEventModal({ round, events, onClose }: RandomEventModalPro
                       {event.description}
                     </p>
                     <ImpactLines impact={event.impact} />
+                    {!positive && protectingCapex.length > 0 && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        💡 Mitigável com CAPEX:{' '}
+                        <span className="font-medium text-foreground">
+                          {protectingCapex.join(', ')}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
