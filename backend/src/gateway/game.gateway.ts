@@ -52,10 +52,10 @@ interface TimerUpdatePayload {
  * Salas (rooms): `session:{id}` reúne quem acompanha a partida; `facilitator:{id}` é um subconjunto só dos facilitadores
  * daquela sessão; `store:{id}` reúne quem está focado naquela loja (time editando PO ou quiz).
  *
- * CORS `origin: '*'` deixa qualquer origem conectar no desenvolvimento; em produção costuma-se restringir ao domínio do front.
+ * CORS: em produção restringimos ao domínio do front (`FRONTEND_URL`); sem essa variável (dev local), liberamos qualquer origem.
  */
 @Injectable()
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({ cors: { origin: process.env.FRONTEND_URL ?? '*' } })
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
