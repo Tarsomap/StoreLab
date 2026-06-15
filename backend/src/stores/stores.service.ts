@@ -9,11 +9,13 @@ import { SessionStatus, StoreRole } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { JoinStoreDto } from './dto/join-store.dto';
+import { SwapDto } from './dto/swap.dto';
 import { TransferDto } from './dto/transfer.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import {
   StoreMembersResponse,
   StoreSummary,
+  SwapResponse,
   TransferResponse,
   TransferSessionSummary,
   UserStoreEntry,
@@ -291,6 +293,160 @@ export class StoresService {
       toStoreId: dto.toStoreId,
       role: member.role,
       transferredAt: playerTransfer.transferredAt,
+    };
+  }
+
+  /**
+   * Troca recíproca de dois jogadores de **mesmo papel** entre duas lojas da sessão, somente em RECONFIGURATION.
+   *
+   * Por que existe separado do transfer(): quando as duas lojas estão cheias (cinco papéis), mover um único jogador
+   * falha porque o papel já está ocupado no destino — um impasse de troca. O swap move os dois ao mesmo tempo,
+   * de forma atômica, sem nunca relaxar o invariante de papel único por loja (por isso exige papéis iguais).
+   *
+   * Validações (em ordem), todas antes de gravar:
+   * - Jogadores distintos.
+   * - Sessão em RECONFIGURATION (mesma janela do transfer).
+   * - Ambos são membros de alguma loja DESTA sessão.
+   * - Estão em lojas DIFERENTES.
+   * - Nenhum é Gerente da Loja (âncora intransferível da unidade).
+   * - Têm o MESMO papel — caso contrário a troca quebraria a unicidade de papel por loja.
+   * - Cada loja envolvida ainda tem espaço na regra de “máx 2 saídas por loja na sessão” (o swap conta 1 saída para cada).
+   *
+   * Execução: a constraint @@unique([storeId, role]) é imediata, então não dá para mover por `update` sem colidir
+   * com o slot ocupado do outro lado. A transação libera os dois slots (delete) e recria os vínculos já trocados,
+   * preservando `joinedAt`. Em seguida grava dois PlayerTransfer (um por sentido) para a contagem de saídas continuar correta.
+   */
+  async swap(sessionId: string, dto: SwapDto): Promise<SwapResponse> {
+    // ── 0. Não faz sentido trocar um jogador por ele mesmo ────────────────────
+    if (dto.userAId === dto.userBId) {
+      throw new BadRequestException('Os dois jogadores da troca devem ser diferentes');
+    }
+
+    // ── 1. Sessão deve estar em RECONFIGURATION ───────────────────────────────
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { stores: { select: { id: true } } },
+    });
+    if (!session) throw new NotFoundException('Sessão não encontrada');
+    if (session.status !== SessionStatus.RECONFIGURATION) {
+      throw new BadRequestException(
+        'Trocas só são permitidas durante a RECONFIGURAÇÃO',
+      );
+    }
+    const sessionStoreIds = session.stores.map((s) => s.id);
+
+    // ── 2. Os dois precisam ser membros de alguma loja desta sessão ───────────
+    const [memberA, memberB] = await Promise.all([
+      this.prisma.storeMember.findFirst({
+        where: { userId: dto.userAId, storeId: { in: sessionStoreIds } },
+      }),
+      this.prisma.storeMember.findFirst({
+        where: { userId: dto.userBId, storeId: { in: sessionStoreIds } },
+      }),
+    ]);
+    if (!memberA) {
+      throw new NotFoundException('Primeiro jogador não está em nenhuma loja desta sessão');
+    }
+    if (!memberB) {
+      throw new NotFoundException('Segundo jogador não está em nenhuma loja desta sessão');
+    }
+
+    // ── 3. Têm de estar em lojas diferentes ───────────────────────────────────
+    if (memberA.storeId === memberB.storeId) {
+      throw new BadRequestException('Os dois jogadores precisam estar em lojas diferentes');
+    }
+
+    // ── 4. Gerente da loja nunca troca ────────────────────────────────────────
+    if (
+      memberA.role === StoreRole.STORE_MANAGER ||
+      memberB.role === StoreRole.STORE_MANAGER
+    ) {
+      throw new BadRequestException('O Gerente da Loja não pode ser trocado');
+    }
+
+    // ── 5. Mesmo papel — preserva papel único por loja ────────────────────────
+    if (memberA.role !== memberB.role) {
+      throw new BadRequestException(
+        'A troca recíproca exige que os dois jogadores tenham o mesmo papel, para manter um único papel por loja',
+      );
+    }
+
+    // ── 6. Limite de 2 saídas por loja (o swap conta 1 saída para cada loja) ───
+    const [outboundA, outboundB] = await Promise.all([
+      this.prisma.playerTransfer.count({
+        where: { sessionId, fromStoreId: memberA.storeId },
+      }),
+      this.prisma.playerTransfer.count({
+        where: { sessionId, fromStoreId: memberB.storeId },
+      }),
+    ]);
+    if (outboundA >= 2) {
+      throw new BadRequestException(
+        'A loja do primeiro jogador já atingiu o limite de 2 transferências de saída',
+      );
+    }
+    if (outboundB >= 2) {
+      throw new BadRequestException(
+        'A loja do segundo jogador já atingiu o limite de 2 transferências de saída',
+      );
+    }
+
+    // ── 7. Execução atômica: vínculos trocados + duas auditorias de movimento ──
+    const role = memberA.role;
+    const storeA = memberA.storeId;
+    const storeB = memberB.storeId;
+
+    const { transferA, transferB } = await this.prisma.$transaction(async (tx) => {
+      // A unicidade (storeId, role) é checada linha a linha, então `update` colidiria
+      // com o slot ocupado do outro lado. Liberamos os dois slots e recriamos já trocados.
+      await tx.storeMember.delete({ where: { id: memberA.id } });
+      await tx.storeMember.delete({ where: { id: memberB.id } });
+      await tx.storeMember.create({
+        data: { storeId: storeB, userId: memberA.userId, role, joinedAt: memberA.joinedAt },
+      });
+      await tx.storeMember.create({
+        data: { storeId: storeA, userId: memberB.userId, role, joinedAt: memberB.joinedAt },
+      });
+
+      const movementA = await tx.playerTransfer.create({
+        data: {
+          sessionId,
+          userId: memberA.userId,
+          fromStoreId: storeA,
+          toStoreId: storeB,
+          role,
+        },
+      });
+      const movementB = await tx.playerTransfer.create({
+        data: {
+          sessionId,
+          userId: memberB.userId,
+          fromStoreId: storeB,
+          toStoreId: storeA,
+          role,
+        },
+      });
+      return { transferA: movementA, transferB: movementB };
+    });
+
+    return {
+      role,
+      transfers: [
+        {
+          transferId: transferA.id,
+          userId: memberA.userId,
+          fromStoreId: storeA,
+          toStoreId: storeB,
+          transferredAt: transferA.transferredAt,
+        },
+        {
+          transferId: transferB.id,
+          userId: memberB.userId,
+          fromStoreId: storeB,
+          toStoreId: storeA,
+          transferredAt: transferB.transferredAt,
+        },
+      ],
     };
   }
 
