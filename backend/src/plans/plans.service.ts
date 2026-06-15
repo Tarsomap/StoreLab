@@ -80,7 +80,14 @@ export class PlansService {
           },
         },
         include: {
-          categoryDecisions: { include: { category: true } },
+          categoryDecisions: {
+            include: { category: true },
+            // Ordem determinística (ordem do enum: Perecíveis, Mercearia, Eletro,
+            // Hipel). Sem isso, o Postgres devolve as linhas em ordem física e a
+            // categoria recém-atualizada "pula" para o fim, embaralhando as
+            // colunas da tabela no frontend.
+            orderBy: { category: { name: "asc" } },
+          },
           capexDecisions: { include: { capexOption: true } },
         },
       });
@@ -282,7 +289,13 @@ export class PlansService {
     return this.prisma.operationalPlan.findUnique({
       where: { storeId_configVersion: { storeId, configVersion } },
       include: {
-        categoryDecisions: { include: { category: true } },
+        categoryDecisions: {
+          include: { category: true },
+          // Ordem determinística (ordem do enum: Perecíveis, Mercearia, Eletro,
+          // Hipel). Sem isso, a categoria recém-atualizada "pula" para o fim e
+          // embaralha as colunas da tabela no frontend.
+          orderBy: { category: { name: "asc" } },
+        },
         capexDecisions: { include: { capexOption: true } },
       },
     });
@@ -292,7 +305,13 @@ export class PlansService {
     const plan = await this.prisma.operationalPlan.findUnique({
       where: { id: planId },
       include: {
-        categoryDecisions: { include: { category: true } },
+        categoryDecisions: {
+          include: { category: true },
+          // Ordem determinística (ordem do enum: Perecíveis, Mercearia, Eletro,
+          // Hipel). Sem isso, a categoria recém-atualizada "pula" para o fim e
+          // embaralha as colunas da tabela no frontend.
+          orderBy: { category: { name: "asc" } },
+        },
         capexDecisions: { include: { capexOption: true } },
       },
     });
